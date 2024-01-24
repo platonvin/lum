@@ -1,0 +1,23 @@
+{
+    "files.associations": {
+        "stdbool.h": "c",
+        "render.h": "c",
+        "stdio.h": "c",
+        "vulkan.h": "c",
+        "volk.h": "c",
+        "window.h": "c",
+        "functional": "c",
+        "vk_enum_string_helper.h": "c",
+        "stdlib.h": "c",
+        "glfw3.h": "c",
+        "string.h": "c",
+        "algorithm": "c",
+        "assert.h": "c",
+        "array": "c",
+        "malloc.h": "c",
+        "limits.h": "c",
+        "vulkan.hpp": "c"
+    },
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.default.compilerPath": "C:\\msys64\\mingw64\\bin\\gcc.exe",
+}

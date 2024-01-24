@@ -1,0 +1,4 @@
+obj/main.o
+obj/render.o
+obj/window.o
+client.exe
