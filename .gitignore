@@ -2,3 +2,9 @@ obj/main.o
 obj/render.o
 obj/window.o
 client.exe
+shaders/frag.spv
+shaders/vert.spv
+.vscode/c_cpp_properties.json
+.vscode/settings.json
+test.exe
+test.cpp

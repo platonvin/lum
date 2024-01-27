@@ -8,5 +8,3 @@ typedef struct Window{
     int width;
     int height;
 } Window;
-
-Window create_window();
