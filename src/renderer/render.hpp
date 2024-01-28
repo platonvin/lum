@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <tuple>
 #include <set>
 #include <string.h>
 #include <optional>
@@ -63,6 +64,8 @@ public:
     }
 } SwapChainSupportDetails;
 
+const int MAX_FRAMES_IN_FLIGHT = 2;
+
 class Renderer {
 public:
     void init(){
@@ -85,17 +88,19 @@ public:
         create_Image_Views();
 
         create_Render_Pass();
-        create_Compute_Pipeline();
+        // create_Compute_Pipeline();
         create_Graphics_Pipeline();
         create_Framebuffers();
         create_Command_Pool();
-        create_Command_Buffer();
+        create_Command_Buffers();
         create_Sync_Objects();
     }
     void cleanup(){
-        vkDestroySemaphore(device, imageAvailableSemaphore, NULL);
-        vkDestroySemaphore(device, renderFinishedSemaphore, NULL);
-        vkDestroyFence(device, inFlightFence, NULL);
+        for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
+            vkDestroySemaphore(device, imageAvailableSemaphores[i], NULL);
+            vkDestroySemaphore(device, renderFinishedSemaphores[i], NULL);
+            vkDestroyFence(device, inFlightFences[i], NULL);
+        }
         vkDestroyCommandPool(device, commandPool, NULL);
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, NULL);
@@ -104,7 +109,8 @@ public:
         vkDestroyPipeline(device, graphicsPipeline, NULL);
         vkDestroyPipelineLayout(device, pipelineLayout, NULL);
         vkDestroyShaderModule(device, vertShaderModule, NULL);
-        vkDestroyShaderModule(device, fragShaderModule, NULL);
+        vkDestroyShaderModule(device, fragShaderModule, NULL); 
+        vkDestroyShaderModule(device, compShaderModule, NULL); 
         for (auto imageView : swapChainImageViews) {
             vkDestroyImageView(device, imageView, NULL);
         }
@@ -125,6 +131,7 @@ private:
 
     SwapChainSupportDetails query_Swapchain_Support(VkPhysicalDevice);
     QueueFamilyIndices find_Queue_Families(VkPhysicalDevice);
+    bool check_Format_Support(VkPhysicalDevice device, VkFormat format, VkFormatFeatureFlags features);
     bool is_PhysicalDevice_Suitable(VkPhysicalDevice);
     //call get_PhysicalDevice_Extensions first
     bool check_PhysicalDevice_Extension_Support(VkPhysicalDevice);
@@ -137,12 +144,16 @@ private:
     void create_Image_Views();
     void create_Render_Pass();
     void create_Graphics_Pipeline(); 
+    void create_Descriptor_Set_Layout();
+    void create_Descriptor_Pool();
+    void allocate_Descriptors();
+    // void update_Descriptors();
     void create_Compute_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
 
     void create_Framebuffers();
     void create_Command_Pool();
-    void create_Command_Buffer();
+    void create_Command_Buffers();
     void record_Command_Buffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void create_Sync_Objects();
 
@@ -173,6 +184,7 @@ public:
 
     VkShaderModule vertShaderModule;
     VkShaderModule fragShaderModule;
+    VkShaderModule compShaderModule;
 
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
@@ -181,11 +193,20 @@ public:
     vector<VkFramebuffer> swapChainFramebuffers;
 
     VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
+    vector<VkCommandBuffer> commandBuffers;
 
-    VkSemaphore imageAvailableSemaphore;
-    VkSemaphore renderFinishedSemaphore;
-    VkFence inFlightFence;
+    vector<VkSemaphore> imageAvailableSemaphores;
+    vector<VkSemaphore> renderFinishedSemaphores;
+    vector<VkFence> inFlightFences;
+
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorPool descriptorPool;
+    //basically just MAX_FRAMES_IN_FLIGHT of same descriptors 
+    vector<VkDescriptorSet> descriptorSets;
+    VkPipelineLayout computeLayout;
+    VkPipeline computePipeline;
+    //wraps around MAX_FRAMES_IN_FLIGHT
+    uint32_t currentFrame = 0;
 private:
     VkDebugUtilsMessengerEXT debugMessenger;
 };
