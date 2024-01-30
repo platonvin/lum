@@ -88,14 +88,32 @@ public:
         create_Image_Views();
 
         create_Render_Pass();
-        // create_Compute_Pipeline();
         create_Graphics_Pipeline();
+
+        create_Image_Storages();
+        create_Descriptor_Pool();
+        create_Descriptor_Set_Layout();
+        allocate_Descriptors();
+        create_Compute_Pipeline();
+
         create_Framebuffers();
         create_Command_Pool();
         create_Command_Buffers();
         create_Sync_Objects();
     }
     void cleanup(){
+
+        for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+            vkDestroyImageView(device, computeImageViews[i], NULL);
+            vkFreeMemory(device, imagesMemory[i], NULL);
+            vkDestroyImage(device, computeImages[i], NULL);
+        }
+
+        vkDestroyDescriptorPool(device, descriptorPool, NULL);
+        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
+        vkDestroyShaderModule(device, compShaderModule, NULL); 
+        vkDestroyPipeline(device, computePipeline, NULL);
+        vkDestroyPipelineLayout(device, computeLayout, NULL);
         for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroySemaphore(device, imageAvailableSemaphores[i], NULL);
             vkDestroySemaphore(device, renderFinishedSemaphores[i], NULL);
@@ -107,10 +125,9 @@ public:
         }
         vkDestroyRenderPass(device, renderPass, NULL);
         vkDestroyPipeline(device, graphicsPipeline, NULL);
-        vkDestroyPipelineLayout(device, pipelineLayout, NULL);
+        vkDestroyPipelineLayout(device, graphicsLayout, NULL);
         vkDestroyShaderModule(device, vertShaderModule, NULL);
         vkDestroyShaderModule(device, fragShaderModule, NULL); 
-        vkDestroyShaderModule(device, compShaderModule, NULL); 
         for (auto imageView : swapChainImageViews) {
             vkDestroyImageView(device, imageView, NULL);
         }
@@ -148,6 +165,7 @@ private:
     void create_Descriptor_Pool();
     void allocate_Descriptors();
     // void update_Descriptors();
+    void create_Image_Storages();
     void create_Compute_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
 
@@ -155,6 +173,7 @@ private:
     void create_Command_Pool();
     void create_Command_Buffers();
     void record_Command_Buffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void record_Command_Buffer_Compute(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void create_Sync_Objects();
 
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
@@ -187,7 +206,7 @@ public:
     VkShaderModule compShaderModule;
 
     VkRenderPass renderPass;
-    VkPipelineLayout pipelineLayout;
+    VkPipelineLayout graphicsLayout;
     VkPipeline graphicsPipeline;
 
     vector<VkFramebuffer> swapChainFramebuffers;
@@ -199,6 +218,10 @@ public:
     vector<VkSemaphore> renderFinishedSemaphores;
     vector<VkFence> inFlightFences;
 
+    vector<VkImage    > computeImages;
+    vector<VkDeviceMemory> imagesMemory;
+    
+    vector<VkImageView> computeImageViews;
     VkDescriptorSetLayout descriptorSetLayout;
     VkDescriptorPool descriptorPool;
     //basically just MAX_FRAMES_IN_FLIGHT of same descriptors 

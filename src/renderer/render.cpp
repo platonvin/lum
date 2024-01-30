@@ -404,7 +404,6 @@ void Renderer::create_Image_Views(){
         createInfo.subresourceRange.levelCount = 1;
         createInfo.subresourceRange.baseArrayLayer = 0;
         createInfo.subresourceRange.layerCount = 1;
-        // createInfo.flags = VK_IMAGE_USAGE_FLAG_BITS_MAX_ENUM
 
         VK_CHECK(vkCreateImageView(device, &createInfo, NULL, &swapChainImageViews[i]));
     }
@@ -586,7 +585,7 @@ void Renderer::create_Graphics_Pipeline(){
         pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
         pipelineLayoutInfo.pPushConstantRanges = NULL; // Optional
 
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &pipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &graphicsLayout));
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -601,7 +600,7 @@ void Renderer::create_Graphics_Pipeline(){
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;
         
-        pipelineInfo.layout = pipelineLayout;
+        pipelineInfo.layout = graphicsLayout;
         
         pipelineInfo.renderPass = renderPass;
         pipelineInfo.subpass = 0;
@@ -629,9 +628,7 @@ void Renderer::create_Framebuffers(){
         framebufferInfo.height = swapChainExtent.height;
         framebufferInfo.layers = 1;
 
-        if (vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapChainFramebuffers[i]) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create framebuffer!");
-        }
+        VK_CHECK(vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapChainFramebuffers[i]));
     }
 }
 
@@ -704,6 +701,53 @@ void Renderer::record_Command_Buffer(VkCommandBuffer commandBuffer, uint32_t ima
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 }
 
+void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer, uint32_t imageIndex){
+    VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0; // Optional
+        beginInfo.pInheritanceInfo = NULL; // Optional
+
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    VkClearValue clearColor = {{{0.222f, 0.666f, 0.111f, 1.0f}}};
+    VkRenderPassBeginInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = renderPass;
+        renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = swapChainExtent;
+        renderPassInfo.clearValueCount = 1;
+        renderPassInfo.pClearValues = &clearColor;
+    
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+    // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeLayout, 0, 1, &descriptorSets[currentFrame], 0, 0);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    // vkCmdDispatch(commandBuffer, 1920/8, 1080/8, 1);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
+}
+
 void Renderer::create_Sync_Objects(){
     imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
@@ -732,6 +776,7 @@ void Renderer::draw_Frame(){
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 
     record_Command_Buffer(commandBuffers[currentFrame], imageIndex);
+    // record_Command_Buffer_Compute(commandBuffers[currentFrame], imageIndex);
 
     VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
     VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
@@ -749,6 +794,7 @@ void Renderer::draw_Frame(){
         submitInfo.pSignalSemaphores = signalSemaphores;
 
     VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]));
+    // VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, inFlightFences[currentFrame]));
 
     VkSwapchainKHR swapchains[] = {swapchain};
     VkPresentInfoKHR presentInfo = {};
@@ -764,8 +810,62 @@ void Renderer::draw_Frame(){
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
+
+void Renderer::create_Image_Storages(){
+    vector<VkImageCreateInfo> imageInfos(MAX_FRAMES_IN_FLIGHT);
+    computeImages.resize(MAX_FRAMES_IN_FLIGHT);
+    imagesMemory.resize(MAX_FRAMES_IN_FLIGHT);
+    computeImageViews.resize(MAX_FRAMES_IN_FLIGHT);
+
+    int i=0;
+    for (auto &info : imageInfos){
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        info.imageType = VK_IMAGE_TYPE_2D;
+        info.format = VK_FORMAT_R8G8B8A8_UNORM;
+        info.mipLevels = 1;
+        info.arrayLayers = 1;
+        info.samples = VK_SAMPLE_COUNT_1_BIT;
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        info.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        info.extent.height = swapChainExtent.height;
+        info.extent.width = swapChainExtent.width;
+        info.extent.depth = 1;
+        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        // VkImage image;
+        VK_CHECK(vkCreateImage(device, &info, nullptr, &computeImages[i]));
+
+        VkMemoryRequirements memRequirements;
+        vkGetImageMemoryRequirements(device, computeImages[i], &memRequirements);
+        VkMemoryAllocateInfo allocInfo = {};
+            allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            allocInfo.allocationSize = memRequirements.size;
+            allocInfo.memoryTypeIndex = find_Memory_Type(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &imagesMemory[i]));
+        VK_CHECK(vkBindImageMemory(device, computeImages[i], imagesMemory[i], 0));
+
+        VkImageViewCreateInfo createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            createInfo.image = computeImages[i];
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format = swapChainImageFormat;
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel = 0;
+            createInfo.subresourceRange.levelCount = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount = 1;
+        VK_CHECK(vkCreateImageView(device, &createInfo, nullptr, &computeImageViews[i]));
+
+        i++;
+    }
+}
+
 void Renderer::create_Descriptor_Set_Layout(){
-    VkDescriptorSetLayoutBinding layoutBinding ={};
+    VkDescriptorSetLayoutBinding layoutBinding = {};
         layoutBinding.binding = 0;
         layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         layoutBinding.descriptorCount = 1;
@@ -780,35 +880,37 @@ void Renderer::create_Descriptor_Set_Layout(){
 void Renderer::create_Descriptor_Pool(){
     VkDescriptorPoolSize poolSize = {};
         poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        poolSize.descriptorCount = swapChainImageViews.size();
+        poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
     VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = 1;
         poolInfo.pPoolSizes = &poolSize;
-        poolInfo.maxSets = swapChainImageViews.size();
+        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, NULL, &descriptorPool));
 }
 
 void Renderer::allocate_Descriptors(){
-    //basically just swapchain_size of same descriptors
-    vector<VkDescriptorSetLayout> layouts(swapChainImageViews.size(), descriptorSetLayout);
+    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    //basically just MAX_FRAMES_IN_FLIGHT of same descriptors
+    vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo = {};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = descriptorPool;
         allocInfo.descriptorSetCount = layouts.size();
         allocInfo.pSetLayouts = layouts.data();
+        // allocInfo.p
     VK_CHECK(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()));
 }
 
 void Renderer::create_Compute_Pipeline(){
     //move away
-    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo storageImageInfo = {};
-            storageImageInfo.imageView = swapChainImageViews[i];
-            storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            storageImageInfo.imageView = computeImageViews[i];
+            storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             storageImageInfo.sampler = 0;
-        VkWriteDescriptorSet descriptorWrite{};
+        VkWriteDescriptorSet descriptorWrite = {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrite.dstSet = descriptorSets[i];
             descriptorWrite.dstBinding = 0;
@@ -817,11 +919,11 @@ void Renderer::create_Compute_Pipeline(){
             descriptorWrite.descriptorCount = 1;
             descriptorWrite.pImageInfo = &storageImageInfo; // Optional
             descriptorWrite.pTexelBufferView = nullptr; // Optional
+            // descriptorWrite.pImageInfo
         vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
     }
 
-
-    auto compShaderCode = read_Shader("shaders/frag.spv");
+    auto compShaderCode = read_Shader("shaders/comp.spv");
 
     compShaderModule = create_Shader_Module(compShaderCode);
     
@@ -841,7 +943,7 @@ void Renderer::create_Compute_Pipeline(){
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &computeLayout));
 
     VkComputePipelineCreateInfo pipelineInfo = {};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
         pipelineInfo.layout = computeLayout;
 

@@ -8,3 +8,4 @@ shaders/vert.spv
 .vscode/settings.json
 test.exe
 test.cpp
+shaders/comp.spv
