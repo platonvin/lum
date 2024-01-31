@@ -17,6 +17,13 @@
 
 using namespace std;
 
+#ifdef NDEBUG
+#define VKNDEBUG
+#endif
+
+// #define VKNDEBUG
+
+
 #define KEND  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
@@ -78,8 +85,10 @@ public:
 
         create_Instance();
         volkLoadInstance(instance);   
-
+        
+#ifndef VKNDEBUG
         setup_Debug_Messenger();
+#endif
 
         create_Surface();
         pick_Physical_Device();
@@ -90,22 +99,24 @@ public:
         create_Render_Pass();
         create_Graphics_Pipeline();
 
+        create_Framebuffers();
+        create_Command_Pool();
+        create_Command_Buffers(graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+        create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+
         create_Image_Storages();
         create_Descriptor_Pool();
         create_Descriptor_Set_Layout();
         allocate_Descriptors();
+        setup_Compute_Descriptors();
         create_Compute_Pipeline();
-
-        create_Framebuffers();
-        create_Command_Pool();
-        create_Command_Buffers();
         create_Sync_Objects();
     }
     void cleanup(){
 
         for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroyImageView(device, computeImageViews[i], NULL);
-            vkFreeMemory(device, imagesMemory[i], NULL);
+            vkFreeMemory(device, computeImagesMemory[i], NULL);
             vkDestroyImage(device, computeImages[i], NULL);
         }
 
@@ -115,9 +126,11 @@ public:
         vkDestroyPipeline(device, computePipeline, NULL);
         vkDestroyPipelineLayout(device, computeLayout, NULL);
         for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
-            vkDestroySemaphore(device, imageAvailableSemaphores[i], NULL);
-            vkDestroySemaphore(device, renderFinishedSemaphores[i], NULL);
-            vkDestroyFence(device, inFlightFences[i], NULL);
+            vkDestroySemaphore(device,  imageAvailableSemaphores[i], NULL);
+            vkDestroySemaphore(device,  renderFinishedSemaphores[i], NULL);
+            vkDestroySemaphore(device, computeFinishedSemaphores[i], NULL);
+            vkDestroyFence(device, graphicalInFlightFences[i], NULL);
+            vkDestroyFence(device,   computeInFlightFences[i], NULL);
         }
         vkDestroyCommandPool(device, commandPool, NULL);
         for (auto framebuffer : swapChainFramebuffers) {
@@ -135,7 +148,9 @@ public:
         vkDestroyDevice(device, NULL);
         //"unpicking" physical device is unnessesary :)
         vkDestroySurfaceKHR(instance, surface, NULL);
+#ifndef VKNDEBUG
         vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, NULL);
+#endif
         vkDestroyInstance(instance, NULL);
         glfwDestroyWindow(window.pointer);
     }
@@ -164,6 +179,7 @@ private:
     void create_Descriptor_Set_Layout();
     void create_Descriptor_Pool();
     void allocate_Descriptors();
+    void setup_Compute_Descriptors();
     // void update_Descriptors();
     void create_Image_Storages();
     void create_Compute_Pipeline(); 
@@ -171,13 +187,17 @@ private:
 
     void create_Framebuffers();
     void create_Command_Pool();
-    void create_Command_Buffers();
-    void record_Command_Buffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void record_Command_Buffer_Compute(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, uint32_t size);
+    void record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void record_Command_Buffer_Compute  (VkCommandBuffer commandBuffer);
     void create_Sync_Objects();
 
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
     uint32_t find_Memory_Type(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    VkCommandBuffer begin_Single_Time_Commands();
+    void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
+    void transition_Image_Layout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
+        VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
 
     void get_Layers();
     void get_Instance_Extensions();
@@ -194,6 +214,7 @@ public:
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     VkQueue computeQueue;
+    VkCommandPool commandPool;
 
     VkSwapchainKHR swapchain;
     VkFormat   swapChainImageFormat;
@@ -211,16 +232,17 @@ public:
 
     vector<VkFramebuffer> swapChainFramebuffers;
 
-    VkCommandPool commandPool;
-    vector<VkCommandBuffer> commandBuffers;
+    vector<VkCommandBuffer> graphicalCommandBuffers;
+    vector<VkCommandBuffer>   computeCommandBuffers;
 
-    vector<VkSemaphore> imageAvailableSemaphores;
-    vector<VkSemaphore> renderFinishedSemaphores;
-    vector<VkFence> inFlightFences;
-
-    vector<VkImage    > computeImages;
-    vector<VkDeviceMemory> imagesMemory;
+    vector<VkSemaphore>  imageAvailableSemaphores;
+    vector<VkSemaphore>  renderFinishedSemaphores;
+    vector<VkSemaphore> computeFinishedSemaphores;
+    vector<VkFence> graphicalInFlightFences;
+    vector<VkFence>   computeInFlightFences;
     
+    vector<VkImage    > computeImages;
+    vector<VkDeviceMemory> computeImagesMemory;
     vector<VkImageView> computeImageViews;
     VkDescriptorSetLayout descriptorSetLayout;
     VkDescriptorPool descriptorPool;
