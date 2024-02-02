@@ -15,25 +15,15 @@
 #include <GLFW/glfw3.h>
 #include "window.hpp"
 
+#include <defines.hpp>
+
 using namespace std;
 
 #ifdef NDEBUG
 #define VKNDEBUG
 #endif
 
-// #define VKNDEBUG
-
-
-#define KEND  "\x1B[0m"
-#define KRED  "\x1B[31m"
-#define KGRN  "\x1B[32m"
-#define KYEL  "\x1B[33m"
-#define KBLU  "\x1B[34m"
-#define KMAG  "\x1B[35m"
-#define KCYN  "\x1B[36m"
-#define KWHT  "\x1B[37m"
-
-#define print printf("L:%d %s\n", __LINE__, __FUNCTION__);
+#define VKNDEBUG
 
 #define VK_CHECK(func)                                                                        \
 do {                                                                                          \
@@ -97,19 +87,22 @@ public:
         create_Image_Views();
 
         create_Render_Pass();
-        create_Graphics_Pipeline();
 
         create_Framebuffers();
         create_Command_Pool();
         create_Command_Buffers(graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
         create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
+        create_samplers();
+    
         create_Image_Storages();
         create_Descriptor_Pool();
-        create_Descriptor_Set_Layout();
+        create_Descriptor_Set_Layouts();
         allocate_Descriptors();
         setup_Compute_Descriptors();
+        setup_Graphical_Descriptors();
         create_Compute_Pipeline();
+        create_Graphics_Pipeline();
         create_Sync_Objects();
     }
     void cleanup(){
@@ -118,10 +111,12 @@ public:
             vkDestroyImageView(device, computeImageViews[i], NULL);
             vkFreeMemory(device, computeImagesMemory[i], NULL);
             vkDestroyImage(device, computeImages[i], NULL);
-        }
+            vkDestroySampler(device, computeImageSamplers[i], NULL);
+        } 
 
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
+        vkDestroyDescriptorSetLayout(device,   computeDescriptorSetLayout, NULL);
+        vkDestroyDescriptorSetLayout(device, graphicalDescriptorSetLayout, NULL);
         vkDestroyShaderModule(device, compShaderModule, NULL); 
         vkDestroyPipeline(device, computePipeline, NULL);
         vkDestroyPipelineLayout(device, computeLayout, NULL);
@@ -176,10 +171,12 @@ private:
     void create_Image_Views();
     void create_Render_Pass();
     void create_Graphics_Pipeline(); 
-    void create_Descriptor_Set_Layout();
+    void create_Descriptor_Set_Layouts();
     void create_Descriptor_Pool();
     void allocate_Descriptors();
     void setup_Compute_Descriptors();
+    void setup_Graphical_Descriptors();
+    void create_samplers();
     // void update_Descriptors();
     void create_Image_Storages();
     void create_Compute_Pipeline(); 
@@ -196,7 +193,9 @@ private:
     uint32_t find_Memory_Type(uint32_t typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
-    void transition_Image_Layout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
+    void transition_Image_Layout_Singletime(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
+        VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
+    void transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
 
     void get_Layers();
@@ -240,14 +239,18 @@ public:
     vector<VkSemaphore> computeFinishedSemaphores;
     vector<VkFence> graphicalInFlightFences;
     vector<VkFence>   computeInFlightFences;
-    
     vector<VkImage    > computeImages;
+    vector<VkSampler>  computeImageSamplers;
     vector<VkDeviceMemory> computeImagesMemory;
     vector<VkImageView> computeImageViews;
-    VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorSetLayout computeDescriptorSetLayout;
+    VkDescriptorSetLayout graphicalDescriptorSetLayout;
     VkDescriptorPool descriptorPool;
+    
     //basically just MAX_FRAMES_IN_FLIGHT of same descriptors 
-    vector<VkDescriptorSet> descriptorSets;
+    vector<VkDescriptorSet> computeDescriptorSets;
+    vector<VkDescriptorSet> graphicalDescriptorSets;
+
     VkPipelineLayout computeLayout;
     VkPipeline computePipeline;
     //wraps around MAX_FRAMES_IN_FLIGHT
@@ -256,4 +259,4 @@ private:
     VkDebugUtilsMessengerEXT debugMessenger;
 };
 
-void a();
+// void a();

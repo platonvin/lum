@@ -9,15 +9,20 @@ void main()
 {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 	ivec2 size = imageSize(frame);
+    vec4 color = vec4(vec3(0), 1);
 
     if(texelCoord.x < size.x && texelCoord.y < size.y){
-        vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
-
-        if(gl_LocalInvocationID.x != 0 && gl_LocalInvocationID.y != 0){
-            color.x = sin(float(texelCoord.x)/(size.x));
-            color.y = cos(float(texelCoord.y)/(size.y));	
-        }
-    
-        imageStore(frame, texelCoord, color);
+        // color.x = float(texelCoord.x )/(1920);
+        // if (texelCoord.x <= 1300){
+        // } else {
+        //     // color.x = sin(float(texelCoord.x)/(1920));
+        //     color.y = 0.666;	
+        // }
+        color.x = float(texelCoord.x) / size.x;
+        color.y = float(texelCoord.y) / size.y;
+        // color = vec4(0.222, 0.333, 0.666, 1);
+        ivec2 coord = texelCoord;
+        // coord.x -= 100;
+        imageStore(frame, coord, color);
     }
 }
