@@ -1,17 +1,18 @@
 #version 450
 
 //descriptor bindings for the pipeline
-layout(set = 0, binding = 0, rgba8) writeonly uniform image2D frame;
+layout(set = 0, binding = 0, rgba32f) readonly uniform image2D posMat;
+layout(set = 0, binding = 1, rgba32f) readonly uniform image2D Norm;
+layout(set = 0, binding = 2, rgba8)  writeonly uniform image2D frame;
 
-layout (local_size_x = 8, local_size_y = 8, local_size_z = 2) in;
+layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
-layout( push_constant ) uniform constants
-{
-	float x;
-	float y;
-} PushConstants;
+// layout( push_constant ) uniform constants
+// {
+// 	float x;
+// 	float y;
+// } PushConstants;
 
-// vec2 PushConstants = vec2(100);
 
 void main()
 {
@@ -20,25 +21,8 @@ void main()
     vec4 color = vec4(vec3(0), 1);
 
     if(texelCoord.x < size.x && texelCoord.y < size.y){
-        // color.x = float(texelCoord.x )/(1920);
-        // if (texelCoord.x <= 1300){
-        // } else {
-        //     // color.x = sin(float(texelCoord.x)/(1920));
-        //     color.y = 0.666;	
-        // }
-        color.x = float(10*texelCoord.x) / size.x;
-        color.y = float(10*texelCoord.y) / size.y;
-        // color = vec4(0.222, 0.333, 0.666, 1);
-        ivec2 coord = texelCoord;
-        coord += ivec2(PushConstants.x,PushConstants.y);
-        // coord.x -= 100;
-        imageStore(frame, coord, color);
+        vec4 posMat = imageLoad(posMat, texelCoord);
 
-    } else {
-        // color = vec4(1);
-        // imageStore(frame, coord + ivec2(1,1), color);
-        // imageStore(frame, coord - ivec2(1,1), color);
-        // imageStore(frame, coord + ivec2(-1,1), color);
-        // imageStore(frame, coord - ivec2(-1,1), color);
+        imageStore(frame, texelCoord, posMat);
     }
 }

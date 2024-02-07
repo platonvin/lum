@@ -21,7 +21,7 @@ void main() {
     vec3 clip_coords;
     clip_coords.x = dot(vertexRelativeToCameraPos, horizline) / view_width  / 3;
     clip_coords.y = dot(vertexRelativeToCameraPos, vertiline) / view_height / 3;
-    clip_coords.z = dot(vertexRelativeToCameraPos, ray_dir) / 3;
+    clip_coords.z = dot(vertexRelativeToCameraPos, ray_dir) / 1000 + 0.5; //TEMP
 
     gl_Position  = vec4(clip_coords, 1.0);
 

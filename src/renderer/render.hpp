@@ -109,16 +109,19 @@ public:
         create_samplers();
     
         create_Image_Storages(computeImages, computeImagesMemory, computeImageViews,
+            VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT);
         create_Image_Storages(rayGenPosMatImages, rayGenPosMatImagesMemory, rayGenPosMatImageViews,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT);
         create_Image_Storages(rayGenNormImages, rayGenNormImagesMemory, rayGenNormImageViews,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -211,6 +214,7 @@ public:
     }
     void draw_Frame();
 private:
+    void recreate_Swapchain();
     void create_Window();
     void create_Instance();
     void setup_Debug_Messenger();
@@ -242,7 +246,7 @@ private:
     // void update_Descriptors();
     void create_RayGen_VertexBuffers();
     void create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMemory> &memory, vector<VkImageView> &views, 
-        VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access);
+        VkFormat format, VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access);
     void create_Compute_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
     //creates framebuffers that point to attachments view specified views
@@ -325,16 +329,16 @@ public:
     
     
     vector<VkImage> rayGenPosMatImages;
-    vector<VkImage> rayGenNormImages;
-    vector<VkImage> computeImages;
-    vector<VkImage> swapChainImages;
+    vector<VkImage>   rayGenNormImages;
+    vector<VkImage>      computeImages;
+    vector<VkImage>    swapChainImages;
     vector<VkDeviceMemory> rayGenPosMatImagesMemory;
-    vector<VkDeviceMemory> rayGenNormImagesMemory;
-    vector<VkDeviceMemory> computeImagesMemory;
+    vector<VkDeviceMemory>   rayGenNormImagesMemory;
+    vector<VkDeviceMemory>      computeImagesMemory;
     vector<VkImageView> rayGenPosMatImageViews;
-    vector<VkImageView> rayGenNormImageViews;
-    vector<VkImageView> computeImageViews;
-    vector<VkImageView> swapChainImageViews;
+    vector<VkImageView>   rayGenNormImageViews;
+    vector<VkImageView>      computeImageViews;
+    vector<VkImageView>    swapChainImageViews;
     vector<VkSampler>  computeImageSamplers;
 
     VkDescriptorSetLayout RayGenDescriptorSetLayout;

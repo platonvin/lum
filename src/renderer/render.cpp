@@ -93,7 +93,17 @@ void Renderer::create_Instance(){
         app_info.engineVersion = VK_MAKE_VERSION(1,0,0);
         app_info.apiVersion = VK_API_VERSION_1_3;
 
+    vector<VkValidationFeatureEnableEXT> enabledFeatures = {VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT};
+
+    VkValidationFeaturesEXT features = {};
+        features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        features.enabledValidationFeatureCount = enabledFeatures.size();
+        features.pEnabledValidationFeatures    = enabledFeatures.data();
+
     VkInstanceCreateInfo createInfo = {};
+    #ifndef VKNDEBUG 
+        // createInfo.pNext = &features; // according to spec
+    #endif 
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &app_info;
         createInfo.enabledExtensionCount   = instanceExtensions.size();
@@ -392,6 +402,58 @@ void Renderer::create_Swapchain(){
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
 }
+void Renderer::recreate_Swapchain(){
+    vkDeviceWaitIdle(device);
+
+    for (auto framebuffer : swapChainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, NULL);}
+    for (auto imageView : swapChainImageViews) {
+        vkDestroyImageView(device, imageView, NULL);}
+    vkDestroySwapchainKHR(device, swapchain, NULL);
+
+    for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+        vkDestroyImageView(device,      computeImageViews[i], NULL);
+        vkDestroyImageView(device, rayGenPosMatImageViews[i], NULL);
+        vkDestroyImageView(device,   rayGenNormImageViews[i], NULL);
+        vkFreeMemory(device,      computeImagesMemory[i], NULL);
+        vkFreeMemory(device, rayGenPosMatImagesMemory[i], NULL);
+        vkFreeMemory(device,   rayGenNormImagesMemory[i], NULL);
+        vkDestroyImage(device,      computeImages[i], NULL);
+        vkDestroyImage(device, rayGenPosMatImages[i], NULL);
+        vkDestroyImage(device,   rayGenNormImages[i], NULL);
+
+        vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
+    }
+
+    create_Swapchain();
+    create_Image_Views();
+
+    create_Image_Storages(computeImages, computeImagesMemory, computeImageViews,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT);
+    create_Image_Storages(rayGenPosMatImages, rayGenPosMatImagesMemory, rayGenPosMatImageViews,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT);
+    create_Image_Storages(rayGenNormImages, rayGenNormImagesMemory, rayGenNormImageViews,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT);
+
+    vector<vector<VkImageView>> swapViews = {swapChainImageViews};
+    create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
+
+    vector<vector<VkImageView>> rayVeiws = {rayGenPosMatImageViews, rayGenNormImageViews};
+    create_N_Framebuffers(rayGenFramebuffers, rayVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+
+}
 
 void Renderer::create_Image_Views(){
     swapChainImageViews.resize(swapChainImages.size());
@@ -486,23 +548,23 @@ void Renderer::create_RenderPass_Graphical(){
 }
 void Renderer::create_RenderPass_RayGen(){
     VkAttachmentDescription colorAttachmentPosMat = {};
-        colorAttachmentPosMat.format = swapChainImageFormat;
+        colorAttachmentPosMat.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         colorAttachmentPosMat.samples = VK_SAMPLE_COUNT_1_BIT;
         colorAttachmentPosMat.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachmentPosMat.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         colorAttachmentPosMat.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachmentPosMat.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachmentPosMat.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachmentPosMat.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        colorAttachmentPosMat.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription colorAttachmentNorm = {};
-        colorAttachmentNorm.format = swapChainImageFormat;
+        colorAttachmentNorm.format = VK_FORMAT_R32G32B32A32_SFLOAT;
         colorAttachmentNorm.samples = VK_SAMPLE_COUNT_1_BIT;
         colorAttachmentNorm.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachmentNorm.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         colorAttachmentNorm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachmentNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachmentNorm.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachmentNorm.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        colorAttachmentNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     //position, palette intex
     VkAttachmentReference colorAttachmentPosMatRef = {};
@@ -850,7 +912,7 @@ void Renderer::create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector
             framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferInfo.renderPass = renderPass;
             framebufferInfo.attachmentCount = attachments.size();
-            framebufferInfo.pAttachments = attachments.data();
+            framebufferInfo.pAttachments    = attachments.data();
             framebufferInfo.width  = Width;
             framebufferInfo.height = Height;
             framebufferInfo.layers = 1;
@@ -1019,14 +1081,14 @@ void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer){
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
 
     // vkCmdDispatch(commandBuffer, 1920/8, 1080/4, 1);
-    float data[32] = {111, 222};
-    for(int i=0; i<100; i++){
-        vkCmdPushConstants(commandBuffer, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)*2 , &data);
-        vkCmdDispatch(commandBuffer, 5, 5, 45);
-        data[0]++;
-        data[1]++;
-    }
-    // vkCmdDispatch(commandBuffer, window.width/8, window.height/4, 1);
+    // float data[32] = {111, 222};
+    // for(int i=0; i<100; i++){
+    //     vkCmdPushConstants(commandBuffer, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)*2 , &data);
+    //     vkCmdDispatch(commandBuffer, 5, 5, 45);
+    //     data[0]++;
+    //     data[1]++;
+    // }
+    vkCmdDispatch(commandBuffer, window.width/8, window.height/4, 1);
 
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 }
@@ -1096,11 +1158,18 @@ void Renderer::draw_Frame(){
 
 
     // showing everything on screen submission
-    vkWaitForFences(device, 1, &graphicalInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-    vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
 
     u32 imageIndex;
-    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        recreate_Swapchain();
+        return; // can be avoided, but it is just 1 frame 
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        cout << KRED"failed to acquire swap chain image!\n"KEND;
+        exit(result);
+    }
+    vkWaitForFences(device, 1, &graphicalInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+    vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
 
     vkResetCommandBuffer(graphicalCommandBuffers[currentFrame], 0);
     record_Command_Buffer_Graphical(graphicalCommandBuffers[currentFrame], imageIndex);
@@ -1132,13 +1201,19 @@ void Renderer::draw_Frame(){
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = NULL; // Optional
 
-    vkQueuePresentKHR(presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        recreate_Swapchain();
+    } else if (result != VK_SUCCESS) {
+        cout << KRED"failed to present swap chain image!\n"KEND;
+        exit(result);
+    }
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMemory> &memory, vector<VkImageView> &views, 
-    VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access){
+    VkFormat format, VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access){
     vector<VkImageCreateInfo> imageInfos(MAX_FRAMES_IN_FLIGHT);
     images.resize(MAX_FRAMES_IN_FLIGHT);
     memory.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1148,7 +1223,7 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMem
     for (auto &info : imageInfos){
         info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         info.imageType = VK_IMAGE_TYPE_2D;
-        info.format = VK_FORMAT_R8G8B8A8_UNORM;
+        info.format = format;
         info.mipLevels = 1;
         info.arrayLayers = 1;
         info.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1175,7 +1250,7 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMem
             createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             createInfo.image = images[i];
             createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format = swapChainImageFormat;
+            createInfo.format = format;
             createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
             createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
             createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -1187,7 +1262,7 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMem
             createInfo.subresourceRange.layerCount = 1;
         VK_CHECK(vkCreateImageView(device, &createInfo, NULL, &views[i]));
 
-        transition_Image_Layout_Singletime(images[i], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, layout,
+        transition_Image_Layout_Singletime(images[i], format, VK_IMAGE_LAYOUT_UNDEFINED, layout,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pipeStage,
             0, access
         );
@@ -1242,31 +1317,43 @@ printl(cs.unitedMesh.indices.size());
 }
 
 void Renderer::create_Descriptor_Set_Layouts(){
-    VkDescriptorSetLayoutBinding layoutBinding = {};
-        layoutBinding.binding = 0;
-        layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        layoutBinding.descriptorCount = 1;
-        layoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    VkDescriptorSetLayoutBinding inPosMatBinding = {};
+        inPosMatBinding.binding = 0;
+        inPosMatBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        inPosMatBinding.descriptorCount = 1;
+        inPosMatBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    VkDescriptorSetLayoutBinding inNormBinding = {};
+        inNormBinding.binding = 1;
+        inNormBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        inNormBinding.descriptorCount = 1;
+        inNormBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    VkDescriptorSetLayoutBinding outFrameBinding = {};
+        outFrameBinding.binding = 2;
+        outFrameBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        outFrameBinding.descriptorCount = 1;
+        outFrameBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    vector<VkDescriptorSetLayoutBinding> layoutBindings = {inPosMatBinding, inNormBinding, outFrameBinding};
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &layoutBinding;
+        layoutInfo.bindingCount = layoutBindings.size();
+        layoutInfo.pBindings    = layoutBindings.data();
     VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, NULL, &computeDescriptorSetLayout));
 
-    layoutBinding = {};
-        layoutBinding.binding = 0;
-        layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        layoutBinding.descriptorCount = 1;
-        layoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    outFrameBinding = {};
+        outFrameBinding.binding = 0;
+        outFrameBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        outFrameBinding.descriptorCount = 1;
+        outFrameBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     layoutInfo = {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &layoutBinding;
+        layoutInfo.pBindings = &outFrameBinding;
     VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, NULL, &graphicalDescriptorSetLayout));
 
     // layoutBinding = {};
     //     layoutBinding.binding = 0;
-    //     layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    //     layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     //     layoutBinding.descriptorCount = 1;
     //     layoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     // layoutInfo = {};
@@ -1324,21 +1411,43 @@ void Renderer::allocate_Descriptors(){
 
 void Renderer::setup_Compute_Descriptors(){
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkDescriptorImageInfo storageImageInfo = {};
-            storageImageInfo.imageView = computeImageViews[i];
-            storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            storageImageInfo.sampler = 0;
-        VkWriteDescriptorSet descriptorWrite = {};
-            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrite.dstSet = computeDescriptorSets[i];
-            descriptorWrite.dstBinding = 0;
-            descriptorWrite.dstArrayElement = 0;
-            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            descriptorWrite.descriptorCount = 1;
-            descriptorWrite.pImageInfo = &storageImageInfo; // Optional
-            descriptorWrite.pTexelBufferView = NULL; // Optional
-            // descriptorWrite.pImageInfo
-        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
+        VkDescriptorImageInfo inputPosMatInfo = {};
+            inputPosMatInfo.imageView = rayGenPosMatImageViews[i];
+            inputPosMatInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputNormInfo = {};
+            inputNormInfo.imageView = rayGenNormImageViews[i];
+            inputNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo outputFrameInfo = {};
+            outputFrameInfo.imageView = computeImageViews[i];
+            outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        VkWriteDescriptorSet PosMatWrite = {};
+            PosMatWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            PosMatWrite.dstSet = computeDescriptorSets[i];
+            PosMatWrite.dstBinding = 0;
+            PosMatWrite.dstArrayElement = 0;
+            PosMatWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            PosMatWrite.descriptorCount = 1;
+            PosMatWrite.pImageInfo = &inputPosMatInfo;
+        VkWriteDescriptorSet NormWrite = {};
+            NormWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            NormWrite.dstSet = computeDescriptorSets[i];
+            NormWrite.dstBinding = 1;
+            NormWrite.dstArrayElement = 0;
+            NormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            NormWrite.descriptorCount = 1;
+            NormWrite.pImageInfo = &inputNormInfo;
+        VkWriteDescriptorSet outWrite = {};
+            outWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            outWrite.dstSet = computeDescriptorSets[i];
+            outWrite.dstBinding = 2 ;
+            outWrite.dstArrayElement = 0;
+            outWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            outWrite.descriptorCount = 1;
+            outWrite.pImageInfo = &outputFrameInfo;
+        vector<VkWriteDescriptorSet > descriptorWrites = {PosMatWrite, NormWrite, outWrite};
+
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
 }
 
@@ -1409,10 +1518,10 @@ void Renderer::create_Compute_Pipeline(){
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
         pipelineLayoutInfo.pSetLayouts = &computeDescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
-        // pipelineLayoutInfo.pushConstantRangeCount = 0;
-        // pipelineLayoutInfo.pPushConstantRanges = NULL;
+        // pipelineLayoutInfo.pushConstantRangeCount = 1;
+        // pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pPushConstantRanges = NULL;
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &computeLayout));
 
     VkComputePipelineCreateInfo pipelineInfo = {};

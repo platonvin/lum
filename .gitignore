@@ -12,3 +12,5 @@ shaders/comp.spv
 r.cpp
 .vscode
 todo.txt
+shaders/rayGenVert.spv
+vk_layer_settings.txt
