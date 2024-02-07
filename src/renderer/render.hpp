@@ -8,23 +8,34 @@
 #include <iostream>
 #include <stdio.h>
 #include <limits>
-#include <algorithm>
+// #include <clamp>
 #include <fstream>
 #include <Volk/volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 #include <GLFW/glfw3.h>
+// #include <algorithm>
+#include <glm/glm.hpp>
 #include "window.hpp"
-
 #include <defines.hpp>
 
 using namespace std;
+using namespace glm;
 
 #ifdef NDEBUG
 #define VKNDEBUG
 #endif
 
-#define VKNDEBUG
+// #define VKNDEBUG
 
+#ifdef NDEBUG
+#define VK_CHECK(func)                                                                        \
+do {                                                                                          \
+    VkResult result = func;                                                                   \
+    if (result != VK_SUCCESS) {                                                               \
+        exit(result);                                                                         \
+    }                                                                                         \
+} while (0)
+#else
 #define VK_CHECK(func)                                                                        \
 do {                                                                                          \
     VkResult result = func;                                                                   \
@@ -33,16 +44,17 @@ do {                                                                            
         exit(1);                                                                              \
     }                                                                                         \
 } while (0)
+#endif
 
 // typedef struct FamilyIndex {
 //     bool exists;
-//     uint32_t index;
+//     u32 index;
 // } FamilyIndex;
 
 typedef struct QueueFamilyIndices {
-    optional<uint32_t> graphicalAndCompute;
-    optional<uint32_t> present;
-    // optional<uint32_t> compute;
+    optional<u32> graphicalAndCompute;
+    optional<u32> present;
+    // optional<u32> compute;
 
 public:
     bool isComplete(){
@@ -86,56 +98,104 @@ public:
         create_Swapchain();
         create_Image_Views();
 
-        create_Render_Pass();
+        create_RenderPass_Graphical();
+        create_RenderPass_RayGen();
 
-        create_Framebuffers();
         create_Command_Pool();
         create_Command_Buffers(graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+        create_Command_Buffers(   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
         create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
         create_samplers();
     
-        create_Image_Storages();
+        create_Image_Storages(computeImages, computeImagesMemory, computeImageViews,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT);
+        create_Image_Storages(rayGenPosMatImages, rayGenPosMatImagesMemory, rayGenPosMatImageViews,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT);
+        create_Image_Storages(rayGenNormImages, rayGenNormImagesMemory, rayGenNormImageViews,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT);
+
+        vector<vector<VkImageView>> swapViews = {swapChainImageViews};
+        create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
+        vector<vector<VkImageView>> rayVeiws = {rayGenPosMatImageViews, rayGenNormImageViews};
+// printl(swapChainImages.size());
+        create_N_Framebuffers(rayGenFramebuffers, rayVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+        
+        create_RayGen_VertexBuffers();
         create_Descriptor_Pool();
         create_Descriptor_Set_Layouts();
         allocate_Descriptors();
         setup_Compute_Descriptors();
         setup_Graphical_Descriptors();
+        // setup_RayGen_Descriptors();
         create_Compute_Pipeline();
         create_Graphics_Pipeline();
+        create_RayGen_Pipeline();
         create_Sync_Objects();
     }
     void cleanup(){
 
         for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-            vkDestroyImageView(device, computeImageViews[i], NULL);
-            vkFreeMemory(device, computeImagesMemory[i], NULL);
-            vkDestroyImage(device, computeImages[i], NULL);
+            vkDestroyImageView(device,      computeImageViews[i], NULL);
+            vkDestroyImageView(device, rayGenPosMatImageViews[i], NULL);
+            vkDestroyImageView(device,   rayGenNormImageViews[i], NULL);
+            vkFreeMemory(device,      computeImagesMemory[i], NULL);
+            vkFreeMemory(device, rayGenPosMatImagesMemory[i], NULL);
+            vkFreeMemory(device,   rayGenNormImagesMemory[i], NULL);
+            vkDestroyImage(device,      computeImages[i], NULL);
+            vkDestroyImage(device, rayGenPosMatImages[i], NULL);
+            vkDestroyImage(device,   rayGenNormImages[i], NULL);
             vkDestroySampler(device, computeImageSamplers[i], NULL);
-        } 
+
+            vkFreeMemory(device, rayGenVertexBuffersMemory[i], NULL);
+            vkFreeMemory(device,  rayGenIndexBuffersMemory[i], NULL);
+            vkDestroyBuffer(device, rayGenVertexBuffers[i], NULL);
+            vkDestroyBuffer(device,  rayGenIndexBuffers[i], NULL);
+
+            vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
+        }
 
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
         vkDestroyDescriptorSetLayout(device,   computeDescriptorSetLayout, NULL);
         vkDestroyDescriptorSetLayout(device, graphicalDescriptorSetLayout, NULL);
-        vkDestroyShaderModule(device, compShaderModule, NULL); 
-        vkDestroyPipeline(device, computePipeline, NULL);
-        vkDestroyPipelineLayout(device, computeLayout, NULL);
         for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroySemaphore(device,  imageAvailableSemaphores[i], NULL);
             vkDestroySemaphore(device,  renderFinishedSemaphores[i], NULL);
             vkDestroySemaphore(device, computeFinishedSemaphores[i], NULL);
+            vkDestroySemaphore(device,  rayGenFinishedSemaphores[i], NULL);
             vkDestroyFence(device, graphicalInFlightFences[i], NULL);
             vkDestroyFence(device,   computeInFlightFences[i], NULL);
+            vkDestroyFence(device,    rayGenInFlightFences[i], NULL);
         }
         vkDestroyCommandPool(device, commandPool, NULL);
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, NULL);
         }
-        vkDestroyRenderPass(device, renderPass, NULL);
+        vkDestroyRenderPass(device, graphicalRenderPass, NULL);
+        vkDestroyRenderPass(device, rayGenRenderPass, NULL);
+
+        vkDestroyPipeline(device,  computePipeline, NULL);
         vkDestroyPipeline(device, graphicsPipeline, NULL);
+        vkDestroyPipeline(device,   rayGenPipeline, NULL);
+
+        vkDestroyPipelineLayout(device, computeLayout, NULL);
         vkDestroyPipelineLayout(device, graphicsLayout, NULL);
-        vkDestroyShaderModule(device, vertShaderModule, NULL);
-        vkDestroyShaderModule(device, fragShaderModule, NULL); 
+        vkDestroyPipelineLayout(device, rayGenPipelineLayout, NULL);
+
+        vkDestroyShaderModule(device, rayGenVertShaderModule, NULL);
+        vkDestroyShaderModule(device, rayGenFragShaderModule, NULL); 
+        vkDestroyShaderModule(device, compShaderModule, NULL); 
+        vkDestroyShaderModule(device, graphicsVertShaderModule, NULL);
+        vkDestroyShaderModule(device, graphicsFragShaderModule, NULL); 
         for (auto imageView : swapChainImageViews) {
             vkDestroyImageView(device, imageView, NULL);
         }
@@ -169,8 +229,10 @@ private:
     VkPresentModeKHR choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes);
     VkExtent2D choose_Swap_Extent(VkSurfaceCapabilitiesKHR capabilities);
     void create_Image_Views();
-    void create_Render_Pass();
+    void create_RenderPass_Graphical();
+    void create_RenderPass_RayGen();
     void create_Graphics_Pipeline(); 
+    void create_RayGen_Pipeline();
     void create_Descriptor_Set_Layouts();
     void create_Descriptor_Pool();
     void allocate_Descriptors();
@@ -178,19 +240,23 @@ private:
     void setup_Graphical_Descriptors();
     void create_samplers();
     // void update_Descriptors();
-    void create_Image_Storages();
+    void create_RayGen_VertexBuffers();
+    void create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMemory> &memory, vector<VkImageView> &views, 
+        VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access);
     void create_Compute_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
-
-    void create_Framebuffers();
+    //creates framebuffers that point to attachments view specified views
+    void create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector<vector<VkImageView>> &views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height);
     void create_Command_Pool();
-    void create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, uint32_t size);
-    void record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, u32 size);
+    void record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u32 imageIndex);
+    void record_Command_Buffer_RayGen(VkCommandBuffer commandBuffer);
     void record_Command_Buffer_Compute  (VkCommandBuffer commandBuffer);
     void create_Sync_Objects();
 
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    uint32_t find_Memory_Type(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
     void transition_Image_Layout_Singletime(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
@@ -202,6 +268,8 @@ private:
     void get_Instance_Extensions();
     void get_PhysicalDevice_Extensions();
 public:
+
+
     Window window;
     VkInstance instance;
     //picked one. Maybe will be multiple in future 
@@ -218,31 +286,58 @@ public:
     VkSwapchainKHR swapchain;
     VkFormat   swapChainImageFormat;
     VkExtent2D swapChainExtent;
-    vector<VkImage    > swapChainImages;
-    vector<VkImageView> swapChainImageViews;
 
-    VkShaderModule vertShaderModule;
-    VkShaderModule fragShaderModule;
+    VkShaderModule graphicsVertShaderModule;
+    VkShaderModule graphicsFragShaderModule;
+
+    VkShaderModule rayGenVertShaderModule;
+    VkShaderModule rayGenFragShaderModule;
     VkShaderModule compShaderModule;
 
-    VkRenderPass renderPass;
+    VkRenderPass rayGenRenderPass;
+    VkPipelineLayout rayGenPipelineLayout;
+    VkPipeline rayGenPipeline;
+
+    VkRenderPass graphicalRenderPass;
     VkPipelineLayout graphicsLayout;
     VkPipeline graphicsPipeline;
 
     vector<VkFramebuffer> swapChainFramebuffers;
+    vector<VkFramebuffer>    rayGenFramebuffers;
 
     vector<VkCommandBuffer> graphicalCommandBuffers;
+    vector<VkCommandBuffer>    rayGenCommandBuffers;
     vector<VkCommandBuffer>   computeCommandBuffers;
 
     vector<VkSemaphore>  imageAvailableSemaphores;
     vector<VkSemaphore>  renderFinishedSemaphores;
     vector<VkSemaphore> computeFinishedSemaphores;
+    vector<VkSemaphore>  rayGenFinishedSemaphores;
     vector<VkFence> graphicalInFlightFences;
-    vector<VkFence>   computeInFlightFences;
-    vector<VkImage    > computeImages;
-    vector<VkSampler>  computeImageSamplers;
+    vector<VkFence> computeInFlightFences;
+    vector<VkFence> rayGenInFlightFences;
+
+    vector<VkBuffer> rayGenVertexBuffers;
+    vector<VkBuffer> rayGenIndexBuffers;
+    vector<VkDeviceMemory> rayGenVertexBuffersMemory;
+    vector<VkDeviceMemory> rayGenIndexBuffersMemory;
+    // VkBuffer rayGenVertexBuffer_Staging;
+    
+    
+    vector<VkImage> rayGenPosMatImages;
+    vector<VkImage> rayGenNormImages;
+    vector<VkImage> computeImages;
+    vector<VkImage> swapChainImages;
+    vector<VkDeviceMemory> rayGenPosMatImagesMemory;
+    vector<VkDeviceMemory> rayGenNormImagesMemory;
     vector<VkDeviceMemory> computeImagesMemory;
+    vector<VkImageView> rayGenPosMatImageViews;
+    vector<VkImageView> rayGenNormImageViews;
     vector<VkImageView> computeImageViews;
+    vector<VkImageView> swapChainImageViews;
+    vector<VkSampler>  computeImageSamplers;
+
+    VkDescriptorSetLayout RayGenDescriptorSetLayout;
     VkDescriptorSetLayout computeDescriptorSetLayout;
     VkDescriptorSetLayout graphicalDescriptorSetLayout;
     VkDescriptorPool descriptorPool;
@@ -254,9 +349,9 @@ public:
     VkPipelineLayout computeLayout;
     VkPipeline computePipeline;
     //wraps around MAX_FRAMES_IN_FLIGHT
-    uint32_t currentFrame = 0;
+    u32 currentFrame = 0;
 private:
     VkDebugUtilsMessengerEXT debugMessenger;
 };
 
-// void a();
+// void a();1

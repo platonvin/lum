@@ -3,8 +3,11 @@
 #libs are -lglfw3 -lglew32s -lopengl32 -lgdi32 -lccd -lenet64 -lws2_32 -lwinmm
 # G++ = C:\msys64\mingw64\bin\g++.exe
 
-I = -I./src -I${VULKAN_SDK}/Include
+I = -I./src -I${VULKAN_SDK}/Include -IC:\prog\sl-vector -I./common
 L = -L${VULKAN_SDK}/Lib
+F = -pipe -fno-exceptions
+A = $(I) $(F) $(args)
+
 objs := \
 	obj/main.o\
 	obj/render.o\
@@ -13,33 +16,46 @@ objs := \
 srcs := \
 	src/main.cpp\
 	src/renderer/render.cpp\
-	src/renderer/window.cpp
+	src/renderer/window.cpp\
 
 headers:= \
 	src/renderer/render.hpp\
-	src/renderer/window.hpp
+	src/renderer/window.hpp\
 
+_shaders:= \
+	shaders/vert.spv \
+	shaders/frag.spv \
+	shaders/rayGenVert.spv \
+	shaders/rayGenFrag.spv \
+	shaders/comp.spv 
 # flags = 
 
-obj/render.o: src/renderer/render.cpp src/renderer/render.hpp
-	g++ src/renderer/render.cpp -c -o obj/render.o -pipe $(I) $(args)
+obj/render.o: src/renderer/render.cpp src/renderer/temp.cpp src/renderer/render.hpp
+	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
 
 obj/window.o: src/renderer/window.cpp src/renderer/window.hpp
-	g++ src/renderer/window.cpp -c -o obj/window.o -pipe $(I) $(args)
+	g++ src/renderer/window.cpp -c -o obj/window.o $(F) $(I) $(args)
 
 obj/main.o: src/main.cpp $(headers)
-	g++ src/main.cpp -c -o obj/main.o -pipe $(I) $(args)
+	g++ src/main.cpp -c -o obj/main.o $(F) $(I) $(args)
 
-client: $(objs) shaders/vert.spv shaders/frag.spv shaders/comp.spv
-	g++ $(objs) -o client.exe -pipe $(I) $(L) -lglfw3 -lvolk $(args)
+client: $(objs) $(_shaders)
+	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk $(args)
 
-client_opt: $(src) $(headers) shaders/vert.spv shaders/frag.spv shaders/comp.spv
-	g++ $(srcs) -pipe $(I) $(L) -lglfw3 -lvolk -Oz -fdata-sections -ffunction-sections -o client.exe -Wl,--gc-sections $(args)
+client_opt: $(src) $(headers) $(_shaders)
+	g++ $(srcs) $(F) $(I) $(L) -lglfw3 -lvolk -Oz -fdata-sections -ffunction-sections -o client.exe -Wl,--gc-sections -DNDEBUG $(args)
+
+temp:
+	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)
 
 shaders/vert.spv: shaders/vert.vert
 	glslc shaders/vert.vert -o shaders/vert.spv
 shaders/frag.spv: shaders/frag.frag
 	glslc shaders/frag.frag -o shaders/frag.spv
+shaders/rayGenVert.spv: shaders/rayGen.vert
+	glslc shaders/rayGen.vert -o shaders/rayGenVert.spv
+shaders/rayGenFrag.spv: shaders/rayGen.frag
+	glslc shaders/rayGen.frag -o shaders/rayGenFrag.spv
 shaders/comp.spv: shaders/comp.comp
 	glslc shaders/comp.comp -o shaders/comp.spv
 

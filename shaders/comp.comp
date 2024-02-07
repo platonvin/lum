@@ -3,7 +3,15 @@
 //descriptor bindings for the pipeline
 layout(set = 0, binding = 0, rgba8) writeonly uniform image2D frame;
 
-layout (local_size_x = 8, local_size_y = 4) in;
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 2) in;
+
+layout( push_constant ) uniform constants
+{
+	float x;
+	float y;
+} PushConstants;
+
+// vec2 PushConstants = vec2(100);
 
 void main()
 {
@@ -18,11 +26,19 @@ void main()
         //     // color.x = sin(float(texelCoord.x)/(1920));
         //     color.y = 0.666;	
         // }
-        color.x = float(texelCoord.x) / size.x;
-        color.y = float(texelCoord.y) / size.y;
+        color.x = float(10*texelCoord.x) / size.x;
+        color.y = float(10*texelCoord.y) / size.y;
         // color = vec4(0.222, 0.333, 0.666, 1);
         ivec2 coord = texelCoord;
+        coord += ivec2(PushConstants.x,PushConstants.y);
         // coord.x -= 100;
         imageStore(frame, coord, color);
+
+    } else {
+        // color = vec4(1);
+        // imageStore(frame, coord + ivec2(1,1), color);
+        // imageStore(frame, coord - ivec2(1,1), color);
+        // imageStore(frame, coord + ivec2(-1,1), color);
+        // imageStore(frame, coord - ivec2(-1,1), color);
     }
 }
