@@ -7,9 +7,12 @@
 
 // #include <slmath/sources/
 
+VisualWorld world = {};
+Renderer render = {};
 int main() {
     // init();
-    Renderer render = {};
+    world.init();
+    // cout << world.unitedBlocks.size().x <<" "<< world.unitedBlocks.size().y <<" "<< world.unitedBlocks.size().z <<"\n";
     render.init();
 
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){

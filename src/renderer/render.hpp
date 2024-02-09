@@ -12,14 +12,19 @@
 #include <fstream>
 #include <Volk/volk.h>
 #include <vulkan/vk_enum_string_helper.h>
+#include <vma/vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
 // #include <algorithm>
 #include <glm/glm.hpp>
 #include "window.hpp"
+#include "visible_world.hpp"
+
 #include <defines.hpp>
 
 using namespace std;
 using namespace glm;
+
+extern VisualWorld world;
 
 #ifdef NDEBUG
 #define VKNDEBUG
@@ -78,7 +83,10 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 class Renderer {
 public:
     void init(){
+    // void init(VisualWorld &_world){
+        // _world = world;
         create_Window();
+
         VK_CHECK(volkInitialize());
 
         get_Layers();
@@ -95,6 +103,10 @@ public:
         create_Surface();
         pick_Physical_Device();
         create_Logical_Device();
+
+        //AMD VMA 
+        create_Allocator();
+        
         create_Swapchain();
         create_Image_Views();
 
@@ -108,24 +120,38 @@ public:
 
         create_samplers();
     
-        create_Image_Storages(computeImages, computeImagesMemory, computeImageViews,
+        create_Image_Storages(computeImages, computeImageAllocations, computeImageViews,
+            VK_IMAGE_TYPE_2D,
             VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT);
-        create_Image_Storages(rayGenPosMatImages, rayGenPosMatImagesMemory, rayGenPosMatImageViews,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            swapChainExtent.width, swapChainExtent.height, 1);
+        create_Image_Storages(rayGenPosMatImages, rayGenPosMatImageAllocations, rayGenPosMatImageViews,
+            VK_IMAGE_TYPE_2D,
             VK_FORMAT_R32G32B32A32_SFLOAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT);
-        create_Image_Storages(rayGenNormImages, rayGenNormImagesMemory, rayGenNormImageViews,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            swapChainExtent.width, swapChainExtent.height, 1);
+        create_Image_Storages(rayGenNormImages, rayGenNormImageAllocations, rayGenNormImageViews,
+            VK_IMAGE_TYPE_2D,
             VK_FORMAT_R32G32B32A32_SFLOAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT);
+            VK_ACCESS_SHADER_WRITE_BIT,
+            swapChainExtent.width, swapChainExtent.height, 1);
+        create_Image_Storages(computeBlocksImages, computeBlocksImageAllocations, computeBlocksImageViews,
+            VK_IMAGE_TYPE_3D,
+            VK_FORMAT_R8_UNORM,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            world.unitedBlocks.size().x, world.unitedBlocks.size().y, world.unitedBlocks.size().z);
 
         vector<vector<VkImageView>> swapViews = {swapChainImageViews};
         create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
@@ -148,21 +174,19 @@ public:
     void cleanup(){
 
         for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-            vkDestroyImageView(device,      computeImageViews[i], NULL);
-            vkDestroyImageView(device, rayGenPosMatImageViews[i], NULL);
-            vkDestroyImageView(device,   rayGenNormImageViews[i], NULL);
-            vkFreeMemory(device,      computeImagesMemory[i], NULL);
-            vkFreeMemory(device, rayGenPosMatImagesMemory[i], NULL);
-            vkFreeMemory(device,   rayGenNormImagesMemory[i], NULL);
-            vkDestroyImage(device,      computeImages[i], NULL);
-            vkDestroyImage(device, rayGenPosMatImages[i], NULL);
-            vkDestroyImage(device,   rayGenNormImages[i], NULL);
+            vkDestroyImageView(device,       computeImageViews[i], NULL);
+            vkDestroyImageView(device,  rayGenPosMatImageViews[i], NULL);
+            vkDestroyImageView(device,    rayGenNormImageViews[i], NULL);
+            vkDestroyImageView(device, computeBlocksImageViews[i], NULL);
+            vmaDestroyImage(VMAllocator,       computeImages[i],       computeImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,  rayGenPosMatImages[i],  rayGenPosMatImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,    rayGenNormImages[i],    rayGenNormImageAllocations[i]);
+            vmaDestroyImage(VMAllocator, computeBlocksImages[i], computeBlocksImageAllocations[i]);
             vkDestroySampler(device, computeImageSamplers[i], NULL);
+            
+            vmaDestroyBuffer(VMAllocator, rayGenVertexBuffers[i], rayGenVertexAllocations[i]);
+            vmaDestroyBuffer(VMAllocator,  rayGenIndexBuffers[i],  rayGenIndexAllocations[i]);
 
-            vkFreeMemory(device, rayGenVertexBuffersMemory[i], NULL);
-            vkFreeMemory(device,  rayGenIndexBuffersMemory[i], NULL);
-            vkDestroyBuffer(device, rayGenVertexBuffers[i], NULL);
-            vkDestroyBuffer(device,  rayGenIndexBuffers[i], NULL);
 
             vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
         }
@@ -203,6 +227,8 @@ public:
             vkDestroyImageView(device, imageView, NULL);
         }
         vkDestroySwapchainKHR(device, swapchain, NULL);
+        //do before destroyDevice
+        vmaDestroyAllocator(VMAllocator);
         vkDestroyDevice(device, NULL);
         //"unpicking" physical device is unnessesary :)
         vkDestroySurfaceKHR(instance, surface, NULL);
@@ -212,9 +238,14 @@ public:
         vkDestroyInstance(instance, NULL);
         glfwDestroyWindow(window.pointer);
     }
+
     void draw_Frame();
+
 private:
     void recreate_Swapchain();
+
+    void create_Allocator();
+    
     void create_Window();
     void create_Instance();
     void setup_Debug_Messenger();
@@ -245,8 +276,9 @@ private:
     void create_samplers();
     // void update_Descriptors();
     void create_RayGen_VertexBuffers();
-    void create_Image_Storages(vector<VkImage> &images, vector<VkDeviceMemory> &memory, vector<VkImageView> &views, 
-        VkFormat format, VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access);
+    void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access, 
+    u32 width, u32 height, u32 depth);
     void create_Compute_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
     //creates framebuffers that point to attachments view specified views
@@ -322,23 +354,28 @@ public:
     vector<VkFence> rayGenInFlightFences;
 
     vector<VkBuffer> rayGenVertexBuffers;
-    vector<VkBuffer> rayGenIndexBuffers;
-    vector<VkDeviceMemory> rayGenVertexBuffersMemory;
-    vector<VkDeviceMemory> rayGenIndexBuffersMemory;
+    vector<VkBuffer>  rayGenIndexBuffers;
+    vector<VmaAllocation> rayGenVertexAllocations;
+    vector<VmaAllocation>  rayGenIndexAllocations;
+    // vector<VkDeviceMemory> rayGenVertexBuffersMemory;
+    // vector<VkDeviceMemory> rayGenIndexBuffersMemory;
     // VkBuffer rayGenVertexBuffer_Staging;
     
     
-    vector<VkImage> rayGenPosMatImages;
-    vector<VkImage>   rayGenNormImages;
-    vector<VkImage>      computeImages;
-    vector<VkImage>    swapChainImages;
-    vector<VkDeviceMemory> rayGenPosMatImagesMemory;
-    vector<VkDeviceMemory>   rayGenNormImagesMemory;
-    vector<VkDeviceMemory>      computeImagesMemory;
-    vector<VkImageView> rayGenPosMatImageViews;
-    vector<VkImageView>   rayGenNormImageViews;
-    vector<VkImageView>      computeImageViews;
-    vector<VkImageView>    swapChainImageViews;
+    vector<VkImage>  rayGenPosMatImages;
+    vector<VkImage>    rayGenNormImages;
+    vector<VkImage> computeBlocksImages;
+    vector<VkImage>       computeImages;
+    vector<VkImage>     swapChainImages;
+    vector<VmaAllocation>  rayGenPosMatImageAllocations;
+    vector<VmaAllocation>    rayGenNormImageAllocations;
+    vector<VmaAllocation> computeBlocksImageAllocations;
+    vector<VmaAllocation>       computeImageAllocations;
+    vector<VkImageView>  rayGenPosMatImageViews;
+    vector<VkImageView>    rayGenNormImageViews;
+    vector<VkImageView> computeBlocksImageViews;
+    vector<VkImageView>       computeImageViews;
+    vector<VkImageView>     swapChainImageViews;
     vector<VkSampler>  computeImageSamplers;
 
     VkDescriptorSetLayout RayGenDescriptorSetLayout;
@@ -353,9 +390,13 @@ public:
     VkPipelineLayout computeLayout;
     VkPipeline computePipeline;
     //wraps around MAX_FRAMES_IN_FLIGHT
-    u32 currentFrame = 0;
+
 private:
+    u32 currentFrame = 0;
+    VisualWorld &_world = world;
+    VmaAllocator VMAllocator; 
     VkDebugUtilsMessengerEXT debugMessenger;
 };
 
 // void a();1
+

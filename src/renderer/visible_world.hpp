@@ -1,7 +1,8 @@
 #pragma once
 
-
 #include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 #include <defines.hpp>
 #include <stdio.h>
 #include <io.h>
@@ -9,8 +10,6 @@
 #include <vector>
 #include <tuple>
 
-#define VOX_IMPLEMENTATION 
-#define OGT_VOXEL_MESHIFY_IMPLEMENTATION 
 namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
     #include <ogt_vox.h>
     #include <ogt_voxel_meshify.hpp>
@@ -47,6 +46,7 @@ typedef struct Vertex {
 typedef struct Mesh {
     vector<Vertex> vertices;
     vector<u32> indices;
+    mat4 transform;
 } Mesh;
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
@@ -71,29 +71,33 @@ typedef struct ChunkInTable {
 
 template <typename Type>
 class table3d {
+private:
     vector<Type> chunksMem;
-    u32 lenx, leny, lenz;
+    uvec3 _size;
 public:
     void resize(u32 x, u32 y, u32 z) {
+        _size = uvec3(x,y,z);
         this->chunksMem.resize(x*y*z);
     }
-    tuple<u32, u32, u32> size(u32 x, u32 y, u32 z) {
-        return {lenx, leny, lenz};
+    uvec3 size() {
+        return _size;
     }
     Type& operator()(u32 x, u32 y, u32 z) {
-        return this->chunksMem [x + lenx*y + lenx*lenz*z];
+        return this->chunksMem [x + _size.x*y + (_size.x*_size.z)*z];
     }
 };
 /*
-concept is: chunks are independend, when loaded chunks change we just copy from loaded once to united. Might change*/
-class ChunkSystem {
-public:
-    //size might change in runtime so vectors. Overhead is insignificant
-    table3d<ChunkInMem> chunks;
-    // table<int>;
+concept is: chunks are independend, when loaded chunks change we just copy from loaded once to united. Might change
+*/
+// class b {
 
-    //Changes all the time
-    Mesh unitedMesh  ; // used to gen rays
+// }
+class VisualWorld {
+public:
+    vec3 worldShift;
+    //size might change in runtime so dynamic. Overhead is insignificant
+    table3d<ChunkInMem> loadedChunks;
+    vector<Mesh> objects;
     table3d<BlockID_t> unitedBlocks; // used to traversal rays 
 
     Material matPalette[MATERIAL_PALETTE_SIZE];
@@ -103,114 +107,9 @@ public:
     void update();
     void cleanup();
 };
-
-template<typename Type> tuple<Type*, u32> readFileBuffer(const char* path) {
-    FILE* fp = fopen(path, "rb");
-    u32 buffer_size = _filelength(_fileno(fp));
-    Type* buffer = new Type[buffer_size];
-    fread(buffer, buffer_size, 1, fp);
-    fclose(fp);
-
-    return {buffer, buffer_size};
-}
-
-void ChunkSystem::init(){
-    auto [buffer, buffer_size] = readFileBuffer<u8>("assets/scene.vox");
-    const ogt::vox_scene* scene = ogt::vox_read_scene(buffer, buffer_size);
-    delete[] buffer;
-
-        printl(scene->num_cameras);
-        printl(scene->num_groups);
-        printl(scene->num_instances);
-        printl(scene->num_layers);
-        printl(scene->num_models);
-
-    assert(scene->num_models < BLOCK_PALETTE_SIZE-1);
-    for(i32 i=0; i<scene->num_models; i++){
-    //    this->blocksPalette[i+1] = scene->models[i]->voxel_data;
-        assert(scene->models[i]->size_x == BLOCK_SIZE);
-        assert(scene->models[i]->size_y == BLOCK_SIZE);
-        assert(scene->models[i]->size_z == BLOCK_SIZE);
-        u32 sizeToCopy = BLOCK_SIZE*BLOCK_SIZE*BLOCK_SIZE;
-        memcpy(&this->blocksPalette[i+1], scene->models[i]->voxel_data, sizeToCopy);
-    }
-    //i=0 alwaus empty mat/color
-    for(i32 i=0; i<MATERIAL_PALETTE_SIZE; i++){
-        this->matPalette[i].color = vec4(
-            scene->palette.color[i].r,
-            scene->palette.color[i].g,
-            scene->palette.color[i].b,
-            scene->palette.color[i].a
-        );
-        this->matPalette[i].emmit = scene->materials.matl[i].emit;
-        this->matPalette[i].rough = scene->materials.matl[i].rough;
-    }
-
-    //Chunks is just 3d psewdo dynamic array. Same as united blocks. Might change on settings change
-    this->chunks.resize(1,1,1);
-    this->unitedBlocks.resize(1,1,1);
-
-    ChunkInMem singleChunk = {};
-    singleChunk.blocks[0][0][0] = 1;
-    ogt::ogt_voxel_meshify_context ctx = {};
-    ogt::ogt_mesh_rgba rgbaPalette[256] = {};
-    //comepletely unnesessary but who cares
-    for(i32 i=0; i<256; i++){
-        ivec4 icolor = ivec4(this->matPalette->color);
-        rgbaPalette[i].r = icolor.r;
-        rgbaPalette[i].g = icolor.g;
-        rgbaPalette[i].b = icolor.b;
-        rgbaPalette[i].a = icolor.a;
-    }
-    // rgbaPalette.a
-    ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[1].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
-    Mesh singleBlockMesh = {};
-printl(mesh->vertex_count);
-printl(mesh->index_count);
-    for(i32 i=0; i<mesh->vertex_count; i++){
-        Vertex v = {};
-            v.pos.x = mesh->vertices[i].pos.x;
-            v.pos.y = mesh->vertices[i].pos.y;
-            v.pos.z = mesh->vertices[i].pos.z;
-
-            v.norm.x = mesh->vertices[i].normal.x;
-            v.norm.y = mesh->vertices[i].normal.y;
-            v.norm.z = mesh->vertices[i].normal.z;
-
-        assert(mesh->vertices[i].palette_index < 256);
-        assert(mesh->vertices[i].palette_index != 0);
-        v.matID = mesh->vertices[i].palette_index;
-
-        singleBlockMesh.vertices.push_back(v);
-    }
-    for(i32 i=0; i<mesh->index_count; i++){
-        u32 index = mesh->indices[i];
-        singleBlockMesh.indices.push_back(index);
-    }
-    //so we have a mesh in indexed vertex form
-    
-    singleChunk.blocks[0][0][0] = 1;
-    singleChunk.mesh = singleBlockMesh;
-    this->chunks(0,0,0) = singleChunk;
-    this->unitedBlocks(0,0,0) = 1; //so 1 from block palette. For testing
-    this->unitedMesh = singleChunk.mesh;
-}
-
-void ChunkSystem::update(){
-/*
-nothing here... Yet
-*/
-}
-
-void ChunkSystem::cleanup(){
-/*
-nothing here... Yet
-*/
-}
-
 // int main() {
 //     // loader l = {};
-//     ChunkSystem cs = {};
+//     VisualWorld cs = {};
 //     cs.init();
 // }
 

@@ -2,8 +2,9 @@
 
 //descriptor bindings for the pipeline
 layout(set = 0, binding = 0, rgba32f) readonly uniform image2D posMat;
-layout(set = 0, binding = 1, rgba32f) readonly uniform image2D Norm;
-layout(set = 0, binding = 2, rgba8)  writeonly uniform image2D frame;
+layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norm;
+layout(set = 0, binding = 2, r8     ) readonly uniform image3D blocks;
+layout(set = 0, binding = 3, rgba8)  writeonly uniform image2D frame;
 
 layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
 
