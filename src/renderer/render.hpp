@@ -8,23 +8,23 @@
 #include <iostream>
 #include <stdio.h>
 #include <limits>
-// #include <clamp>
 #include <fstream>
+
 #include <Volk/volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vma/vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
-// #include <algorithm>
 #include <glm/glm.hpp>
-#include "window.hpp"
-#include "visible_world.hpp"
 
+#include "window.hpp"
+#include "primitives.hpp"
+// #include "visible_world.hpp"
 #include <defines.hpp>
 
 using namespace std;
 using namespace glm;
 
-extern VisualWorld world;
+// extern VisualWorld world;
 
 #ifdef NDEBUG
 #define VKNDEBUG
@@ -151,7 +151,7 @@ public:
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT,
-            world.unitedBlocks.size().x, world.unitedBlocks.size().y, world.unitedBlocks.size().z);
+            8, 8, 8); //TODO dynamic
 
         vector<vector<VkImageView>> swapViews = {swapChainImageViews};
         create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
@@ -159,7 +159,6 @@ public:
 // printl(swapChainImages.size());
         create_N_Framebuffers(rayGenFramebuffers, rayVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
         
-        create_RayGen_VertexBuffers();
         create_Descriptor_Pool();
         create_Descriptor_Set_Layouts();
         allocate_Descriptors();
@@ -184,8 +183,8 @@ public:
             vmaDestroyImage(VMAllocator, computeBlocksImages[i], computeBlocksImageAllocations[i]);
             vkDestroySampler(device, computeImageSamplers[i], NULL);
             
-            vmaDestroyBuffer(VMAllocator, rayGenVertexBuffers[i], rayGenVertexAllocations[i]);
-            vmaDestroyBuffer(VMAllocator,  rayGenIndexBuffers[i],  rayGenIndexAllocations[i]);
+            // vmaDestroyBuffer(VMAllocator, rayGenVertexBuffers[i], rayGenVertexAllocations[i]);
+            // vmaDestroyBuffer(VMAllocator,  rayGenIndexBuffers[i],  rayGenIndexAllocations[i]);
 
 
             vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
@@ -239,7 +238,19 @@ public:
         glfwDestroyWindow(window.pointer);
     }
 
-    void draw_Frame();
+    // void draw_Frame();
+
+    void start_Frame();
+        void start_RayGen();
+        void draw_RayGen_Mesh(Mesh &mesh);
+        void   end_RayGen();
+        void start_RayTrace();
+        void   end_RayTrace();
+        void start_Present();
+        void   end_Present();
+    void end_Frame();
+
+    MeshData create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices);
 
 private:
     void recreate_Swapchain();
@@ -275,7 +286,7 @@ private:
     void setup_Graphical_Descriptors();
     void create_samplers();
     // void update_Descriptors();
-    void create_RayGen_VertexBuffers();
+
     void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access, 
     u32 width, u32 height, u32 depth);
@@ -353,10 +364,10 @@ public:
     vector<VkFence> computeInFlightFences;
     vector<VkFence> rayGenInFlightFences;
 
-    vector<VkBuffer> rayGenVertexBuffers;
-    vector<VkBuffer>  rayGenIndexBuffers;
-    vector<VmaAllocation> rayGenVertexAllocations;
-    vector<VmaAllocation>  rayGenIndexAllocations;
+    // vector<VkBuffer> rayGenVertexBuffers;
+    // vector<VkBuffer>  rayGenIndexBuffers;
+    // vector<VmaAllocation> rayGenVertexAllocations;
+    // vector<VmaAllocation>  rayGenIndexAllocations;
     // vector<VkDeviceMemory> rayGenVertexBuffersMemory;
     // vector<VkDeviceMemory> rayGenIndexBuffersMemory;
     // VkBuffer rayGenVertexBuffer_Staging;
@@ -391,10 +402,11 @@ public:
     VkPipeline computePipeline;
     //wraps around MAX_FRAMES_IN_FLIGHT
 
-private:
-    u32 currentFrame = 0;
-    VisualWorld &_world = world;
     VmaAllocator VMAllocator; 
+private:
+    u32 imageIndex = 0;
+    u32 currentFrame = 0;
+    // VisualWorld &_world = world;
     VkDebugUtilsMessengerEXT debugMessenger;
 };
 

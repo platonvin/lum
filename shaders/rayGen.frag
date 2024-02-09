@@ -8,8 +8,8 @@ layout(location = 0) out vec4 outPosMat;
 layout(location = 1) out vec3 outNorm;
 
 void main() {
-    outPosMat.xyz = posOut;
-    outPosMat.w = MatIDOut;
+    outPosMat.xyz = sin(posOut * MatIDOut);
+    outPosMat.w = 1;
 
     outNorm = normOut;
 }

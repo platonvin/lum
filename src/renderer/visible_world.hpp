@@ -10,47 +10,25 @@
 #include <vector>
 #include <tuple>
 
+#include "render.hpp"
+
+#include <vulkan/vulkan.h>
+#include <VMA/vk_mem_alloc.h>
+
 namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
     #include <ogt_vox.h>
     #include <ogt_voxel_meshify.hpp>
 } //so we'll have to use ogt::ogt_func :(
 
+#include "primitives.hpp"
+
 using namespace glm; 
 using namespace std;
 
 //Everything is X -> Y -> Z order in arrays (vectors)
-#define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
+#define VISIBLE_WORLD_SIZE 8  // visible world is !![maximum] WORLD_SIZE x WORLD_SIZE x WORLD_SIZE size in chunks. Typically smaller
 #define CHUNK_SIZE 8  // each chunk in world is CHUNK_SIZE x CHUNK_SIZE x CHUNK_SIZE
 // #define WORLD_SIZE... cannot be defined :/
-#define VISIBLE_WORLD_SIZE 8  // visible world is !![maximum] WORLD_SIZE x WORLD_SIZE x WORLD_SIZE size in chunks. Typically smaller
-#define MATERIAL_PALETTE_SIZE 256 //0 always empty
-#define    BLOCK_PALETTE_SIZE 256 //0 always empty
-
-typedef   u8 MatID_t;
-typedef char BlockID_t;
-
-typedef struct Material {
-    // glm::vec4<u8> casd;
-    vec4 color; //colo   r AND transparancy
-    f32 emmit; //emmits same color as reflect
-    f32 rough;
-} Material;
-typedef struct Voxel {
-    MatID_t matID;
-} Voxel;
-typedef struct Vertex {
-    vec3 pos;
-    vec3 norm;
-    MatID_t matID;
-} Vertex;
-typedef struct Mesh {
-    vector<Vertex> vertices;
-    vector<u32> indices;
-    mat4 transform;
-} Mesh;
-typedef struct Block {
-    Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
-} Block;
 
 // typedef struct MatPalette {
 //     Material mats[MATERIAL_PALETTE_SIZE];

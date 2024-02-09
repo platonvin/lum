@@ -2,6 +2,8 @@
 #define OGT_VOXEL_MESHIFY_IMPLEMENTATION 
 #include "visible_world.hpp"
 
+extern Renderer render;
+
 template<typename Type> tuple<Type*, u32> readFileBuffer(const char* path) {
     FILE* fp = fopen(path, "rb");
     u32 buffer_size = _filelength(_fileno(fp));
@@ -61,7 +63,10 @@ void VisualWorld::init(){
     }
     // rgbaPalette.a
     ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[1].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
-    Mesh singleBlockMesh = {};
+
+    vector<Vertex> vertices;
+    vector<u32   >  indices;
+    
 printl(mesh->vertex_count);
 printl(mesh->index_count);
     for(i32 i=0; i<mesh->vertex_count; i++){
@@ -78,29 +83,31 @@ printl(mesh->index_count);
         assert(mesh->vertices[i].palette_index != 0);
         v.matID = mesh->vertices[i].palette_index;
 
-        singleBlockMesh.vertices.push_back(v);
+        vertices.push_back(v);
     }
     for(i32 i=0; i<mesh->index_count; i++){
         u32 index = mesh->indices[i];
-        singleBlockMesh.indices.push_back(index);
+        indices.push_back(index);
     }
     //so we have a mesh in indexed vertex form
     //without transformations
     singleChunk.blocks[0][0][0] = 1;
-    singleChunk.mesh = singleBlockMesh;
+    singleChunk.mesh.data = render.create_RayGen_VertexBuffers(vertices, indices);
+    singleChunk.mesh.data.icount = indices.size();
 
     float rotationX = glm::radians(45.0f);
     float rotationY = glm::radians(30.0f);
     float rotationZ = glm::radians(20.0f);
-    singleBlockMesh.transform = mat4(1);
-    //applying rotation
-    singleBlockMesh.transform = rotate(singleBlockMesh.transform, rotationZ, vec3(0.0f, 0.0f, 1.0f));
-    singleBlockMesh.transform = rotate(singleBlockMesh.transform, rotationY, vec3(0.0f, 1.0f, 0.0f));
-    singleBlockMesh.transform = rotate(singleBlockMesh.transform, rotationX, vec3(1.0f, 0.0f, 0.0f));
-    //applying position
-    singleBlockMesh.transform = translate(singleBlockMesh.transform, vec3(0.0f, 0.0f, 0.0f));
 
-    this->objects.push_back(singleBlockMesh);
+    singleChunk.mesh.transform = mat4(1);
+    //applying rotation
+    singleChunk.mesh.transform = rotate(singleChunk.mesh.transform, rotationZ, vec3(0.0f, 0.0f, 1.0f));
+    singleChunk.mesh.transform = rotate(singleChunk.mesh.transform, rotationY, vec3(0.0f, 1.0f, 0.0f));
+    singleChunk.mesh.transform = rotate(singleChunk.mesh.transform, rotationX, vec3(1.0f, 0.0f, 0.0f));
+    //applying position
+    singleChunk.mesh.transform = translate(singleChunk.mesh.transform, vec3(0.0f, 0.0f, 0.0f));
+
+    this->objects.push_back(singleChunk.mesh);
     
     this->loadedChunks(0,0,0) = singleChunk;
 

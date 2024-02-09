@@ -22,8 +22,8 @@ void main()
     vec4 color = vec4(vec3(0), 1);
 
     if(texelCoord.x < size.x && texelCoord.y < size.y){
-        vec4 posMat = imageLoad(posMat, texelCoord);
+        vec4 posMatv = imageLoad(posMat, texelCoord);
 
-        imageStore(frame, texelCoord, posMat);
+        imageStore(frame, texelCoord, posMatv);
     }
 }

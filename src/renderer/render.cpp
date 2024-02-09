@@ -110,8 +110,8 @@ void Renderer::create_Window(){
     assert(glfwRes != NULL);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    window.width  = mode->width  / 2;
-    window.height = mode->height / 2;
+    window.width  = mode->width  / 1;
+    window.height = mode->height / 1;
     
     // window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", glfwGetPrimaryMonitor(), 0);
     window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", 0, 0);
@@ -1042,60 +1042,60 @@ void Renderer::record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u3
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 }
 
-void Renderer::record_Command_Buffer_RayGen(VkCommandBuffer commandBuffer){
-    VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0; // Optional
-        beginInfo.pInheritanceInfo = NULL; // Optional
+// void Renderer::record_Command_Buffer_RayGen(VkCommandBuffer commandBuffer){
+//     VkCommandBufferBeginInfo beginInfo = {};
+//         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//         beginInfo.flags = 0; // Optional
+//         beginInfo.pInheritanceInfo = NULL; // Optional
 
-    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+//     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    //TODO - change layout
-    // transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    //     0, VK_ACCESS_SHADER_READ_BIT
-    // );graphic
+//     //TODO - change layout
+//     // transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+//     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+//     //     0, VK_ACCESS_SHADER_READ_BIT
+//     // );graphic
 
-    VkClearValue clearColors[] = {{{0.111f, 0.666f, 0.111f, 1.0f}}, {{0.111f, 0.666f, 0.111f, 1.0f}}};
-    VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = rayGenRenderPass;
-        renderPassInfo.framebuffer = rayGenFramebuffers[currentFrame];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = swapChainExtent;
-        renderPassInfo.clearValueCount = 2;
-        renderPassInfo.pClearValues = clearColors;
+//     VkClearValue clearColors[] = {{{0.111f, 0.666f, 0.111f, 1.0f}}, {{0.111f, 0.666f, 0.111f, 1.0f}}};
+//     VkRenderPassBeginInfo renderPassInfo = {};
+//         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+//         renderPassInfo.renderPass = rayGenRenderPass;
+//         renderPassInfo.framebuffer = rayGenFramebuffers[currentFrame];
+//         renderPassInfo.renderArea.offset = {0, 0};
+//         renderPassInfo.renderArea.extent = swapChainExtent;
+//         renderPassInfo.clearValueCount = 2;
+//         renderPassInfo.pClearValues = clearColors;
     
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+//     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipeline);
+//     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipeline);
 
-    VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width  = (float)(swapChainExtent.width );
-        viewport.height = (float)(swapChainExtent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+//     VkViewport viewport = {};
+//         viewport.x = 0.0f;
+//         viewport.y = 0.0f;
+//         viewport.width  = (float)(swapChainExtent.width );
+//         viewport.height = (float)(swapChainExtent.height);
+//         viewport.minDepth = 0.0f;
+//         viewport.maxDepth = 1.0f;
+//     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    VkRect2D scissor = {};
-        scissor.offset = {0, 0};
-        scissor.extent = swapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+//     VkRect2D scissor = {};
+//         scissor.offset = {0, 0};
+//         scissor.extent = swapChainExtent;
+//     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        VkBuffer vertexBuffers[] = {rayGenVertexBuffers[currentFrame]};
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+//         VkBuffer vertexBuffers[] = {rayGenVertexBuffers[currentFrame]};
+//         VkDeviceSize offsets[] = {0};
+//         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-        vkCmdBindIndexBuffer(commandBuffer, rayGenIndexBuffers[currentFrame], 0, VK_INDEX_TYPE_UINT32);
+//         vkCmdBindIndexBuffer(commandBuffer, rayGenIndexBuffers[currentFrame], 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(commandBuffer, world.loadedChunks(0,0,0).mesh.indices.size(), 1, 0, 0, 0);
+//         vkCmdDrawIndexed(commandBuffer, world.loadedChunks(0,0,0).mesh.indices.size(), 1, 0, 0, 0);
 
-    vkCmdEndRenderPass(commandBuffer);
+//     vkCmdEndRenderPass(commandBuffer);
 
-    VK_CHECK(vkEndCommandBuffer(commandBuffer));
-}
+//     VK_CHECK(vkEndCommandBuffer(commandBuffer));
+// }
 
 void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer){
     VkCommandBufferBeginInfo beginInfo = {};
@@ -1159,32 +1159,193 @@ void Renderer::create_Sync_Objects(){
     }
 }
 
-void Renderer::draw_Frame(){
-    VkSubmitInfo submitInfo = {};
+// void Renderer::draw_Frame(){
+//     VkSubmitInfo submitInfo = {};
 
+//     //raygen submission    
+//     vkWaitForFences(device, 1, &rayGenInFlightFences[currentFrame], VK_TRUE, 1000000);
+//     vkResetFences  (device, 1, &rayGenInFlightFences[currentFrame]);
+
+//     vkResetCommandBuffer(rayGenCommandBuffers[currentFrame], 0);
+//     record_Command_Buffer_RayGen(rayGenCommandBuffers[currentFrame]);
+//     submitInfo = {};
+//         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+//         submitInfo.commandBufferCount = 1;
+//         submitInfo.pCommandBuffers = &rayGenCommandBuffers[currentFrame];
+//         submitInfo.signalSemaphoreCount = 1;
+//         submitInfo.pSignalSemaphores = &rayGenFinishedSemaphores[currentFrame];
+//     VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, rayGenInFlightFences[currentFrame]));
+
+//     // RT submission
+//     vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+//     vkResetFences  (device, 1, &computeInFlightFences[currentFrame]);
+    
+//     vkResetCommandBuffer(computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
+//     record_Command_Buffer_Compute(computeCommandBuffers[currentFrame]);
+//     vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
+//     VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+//     submitInfo = {};
+//         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+//         submitInfo.pWaitDstStageMask = computeWaitStages;
+//         submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
+//         submitInfo.pWaitSemaphores    = computeWaitSemaphores.data();
+//         submitInfo.commandBufferCount = 1;
+//         submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+//         submitInfo.signalSemaphoreCount = 1;
+//         submitInfo.pSignalSemaphores = &computeFinishedSemaphores[currentFrame];
+//     VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame]));
+
+
+//     // showing everything on screen submission
+
+//     u32 imageIndex;
+//     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+//     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+//         recreate_Swapchain();
+//         return; // can be avoided, but it is just 1 frame 
+//     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+//         cout << KRED"failed to acquire swap chain image!\n"KEND;
+//         exit(result);
+//     }
+//     vkWaitForFences(device, 1, &graphicalInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+//     vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
+
+//     vkResetCommandBuffer(graphicalCommandBuffers[currentFrame], 0);
+//     record_Command_Buffer_Graphical(graphicalCommandBuffers[currentFrame], imageIndex);
+//     // vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
+//     vector<VkSemaphore> waitSemaphores = {computeFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
+//     vector<VkSemaphore> signalSemaphores = {renderFinishedSemaphores[currentFrame]};
+//     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+//     // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+//     // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+//     submitInfo = {};
+//         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+//         submitInfo.waitSemaphoreCount = waitSemaphores.size();
+//         submitInfo.pWaitSemaphores    = waitSemaphores.data();
+//         submitInfo.pWaitDstStageMask = waitStages;
+//         submitInfo.commandBufferCount = 1;
+//         submitInfo.pCommandBuffers = &graphicalCommandBuffers[currentFrame];
+//         submitInfo.signalSemaphoreCount = signalSemaphores.size();
+//         submitInfo.pSignalSemaphores    = signalSemaphores.data();
+
+//     VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, graphicalInFlightFences[currentFrame]));
+
+//     VkSwapchainKHR swapchains[] = {swapchain};
+//     VkPresentInfoKHR presentInfo = {};
+//         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+//         presentInfo.waitSemaphoreCount = signalSemaphores.size();
+//         presentInfo.pWaitSemaphores = signalSemaphores.data();
+//         presentInfo.swapchainCount = 1;
+//         presentInfo.pSwapchains = swapchains;
+//         presentInfo.pImageIndices = &imageIndex;
+//         presentInfo.pResults = NULL; // Optional
+
+//     result = vkQueuePresentKHR(presentQueue, &presentInfo);
+//     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+//         recreate_Swapchain();
+//     } else if (result != VK_SUCCESS) {
+//         cout << KRED"failed to present swap chain image!\n"KEND;
+//         exit(result);
+//     }
+
+//     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+// }
+
+void Renderer::start_Frame(){
+    //nothing here... 
+}
+
+void Renderer::start_RayGen(){
     vkWaitForFences(device, 1, &rayGenInFlightFences[currentFrame], VK_TRUE, 1000000);
     vkResetFences  (device, 1, &rayGenInFlightFences[currentFrame]);
 
-    //raygen submission    
-    vkResetCommandBuffer(rayGenCommandBuffers[currentFrame], 0);
-    record_Command_Buffer_RayGen(rayGenCommandBuffers[currentFrame]);
-    submitInfo = {};
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+    vkResetCommandBuffer(commandBuffer, 0);
+    VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0; // Optional
+        beginInfo.pInheritanceInfo = NULL; // Optional
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    VkClearValue clearColors[] = {{{0.111f, 0.666f, 0.111f, 1.0f}}, {{0.111f, 0.666f, 0.111f, 1.0f}}};
+    VkRenderPassBeginInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = rayGenRenderPass;
+        renderPassInfo.framebuffer = rayGenFramebuffers[currentFrame];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = swapChainExtent;
+        renderPassInfo.clearValueCount = 2;
+        renderPassInfo.pClearValues = clearColors;
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipeline);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+void Renderer::draw_RayGen_Mesh(Mesh &mesh){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+        VkBuffer vertexBuffers[] = {mesh.data.vertices[currentFrame]};
+        VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, mesh.data.indices[currentFrame], 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, mesh.data.icount, 1, 0, 0, 0);
+}
+void Renderer::end_RayGen(){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+    vkCmdEndRenderPass(commandBuffer);
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
+
+    VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &rayGenCommandBuffers[currentFrame];
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &rayGenFinishedSemaphores[currentFrame];
     VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, rayGenInFlightFences[currentFrame]));
+}
 
-    // RT submission
+void Renderer::start_RayTrace(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
     vkResetFences  (device, 1, &computeInFlightFences[currentFrame]);
     
     vkResetCommandBuffer(computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-    record_Command_Buffer_Compute(computeCommandBuffers[currentFrame]);
+    VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0; // Optional
+        beginInfo.pInheritanceInfo = NULL; // Optional
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+
+    transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0, VK_ACCESS_SHADER_WRITE_BIT
+    );
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
+}
+void Renderer::end_RayTrace(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    vkCmdDispatch(commandBuffer, window.width/8, window.height/4, 1);
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
+
     vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
     VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo = {};
+    VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.pWaitDstStageMask = computeWaitStages;
         submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
@@ -1194,13 +1355,14 @@ void Renderer::draw_Frame(){
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = &computeFinishedSemaphores[currentFrame];
     VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame]));
+}
 
+void Renderer::start_Present(){
+    VkCommandBuffer &commandBuffer = graphicalCommandBuffers[currentFrame];
 
-    // showing everything on screen submission
-
-    u32 imageIndex;
     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        cout << KRED"failed to present swap chain image!\n"KEND;
         recreate_Swapchain();
         return; // can be avoided, but it is just 1 frame 
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
@@ -1211,14 +1373,64 @@ void Renderer::draw_Frame(){
     vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
 
     vkResetCommandBuffer(graphicalCommandBuffers[currentFrame], 0);
-    record_Command_Buffer_Graphical(graphicalCommandBuffers[currentFrame], imageIndex);
+    VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0; // Optional
+        beginInfo.pInheritanceInfo = NULL; // Optional
+
+    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, VK_ACCESS_SHADER_READ_BIT
+    );
+
+    VkClearValue clearColor = {{{0.111f, 0.444f, 0.666f, 1.0f}}};
+    VkRenderPassBeginInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = graphicalRenderPass;
+        renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = swapChainExtent;
+        renderPassInfo.clearValueCount = 1;
+        renderPassInfo.pClearValues = &clearColor;
+    
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsLayout, 0, 1, &graphicalDescriptorSets[currentFrame], 0, NULL);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+void Renderer::end_Present(){
+    VkCommandBuffer &commandBuffer = graphicalCommandBuffers[currentFrame];
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
+
     // vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
     vector<VkSemaphore> waitSemaphores = {computeFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
     vector<VkSemaphore> signalSemaphores = {renderFinishedSemaphores[currentFrame]};
+    //TODO: replace with VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo = {};
+    VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.waitSemaphoreCount = waitSemaphores.size();
         submitInfo.pWaitSemaphores    = waitSemaphores.data();
@@ -1240,14 +1452,17 @@ void Renderer::draw_Frame(){
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = NULL; // Optional
 
-    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+    VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        cout << KRED"failed to present swap chain image!\n"KEND;
         recreate_Swapchain();
     } else if (result != VK_SUCCESS) {
         cout << KRED"failed to present swap chain image!\n"KEND;
         exit(result);
     }
+}
 
+void Renderer::end_Frame(){
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -1301,14 +1516,14 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocati
 }
 //TODO: need to find memory, verify flags
 //make so each chunk is stored in staging buffer and then copied to fast memory
-void Renderer::create_RayGen_VertexBuffers(){
-    VkDeviceSize bufferSizeV = sizeof(Vertex) * world.loadedChunks(0,0,0).mesh.vertices.size();
-    VkDeviceSize bufferSizeI = sizeof(u32   ) * world.loadedChunks(0,0,0).mesh.indices.size();
+MeshData Renderer::create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices){
+    VkDeviceSize bufferSizeV = sizeof(Vertex)*vertices.size();
+    VkDeviceSize bufferSizeI = sizeof(u32   )* indices.size();
 
-    rayGenVertexBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-     rayGenIndexBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    rayGenVertexAllocations.resize(MAX_FRAMES_IN_FLIGHT);
-     rayGenIndexAllocations.resize(MAX_FRAMES_IN_FLIGHT);
+    vector<VkBuffer> vertexBuffers(MAX_FRAMES_IN_FLIGHT);
+    vector<VkBuffer>  indexBuffers(MAX_FRAMES_IN_FLIGHT);
+    vector<VmaAllocation> vertexAllocations(MAX_FRAMES_IN_FLIGHT);
+    vector<VmaAllocation>  indexAllocations(MAX_FRAMES_IN_FLIGHT);
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSizeV;
@@ -1326,11 +1541,11 @@ void Renderer::create_RayGen_VertexBuffers(){
 
     void* data;
     vmaMapMemory(VMAllocator, stagingAllocationV, &data);
-        memcpy(data, world.loadedChunks(0,0,0).mesh.vertices.data(), bufferSizeV);
+        memcpy(data, vertices.data(), bufferSizeV);
     vmaUnmapMemory(VMAllocator, stagingAllocationV);
 
     vmaMapMemory(VMAllocator, stagingAllocationI, &data);
-        memcpy(data, world.loadedChunks(0,0,0).mesh.indices.data(), bufferSizeI);
+        memcpy(data, indices.data(), bufferSizeI);
     vmaUnmapMemory(VMAllocator, stagingAllocationI);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
@@ -1339,17 +1554,22 @@ void Renderer::create_RayGen_VertexBuffers(){
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         VmaAllocationCreateInfo allocInfo = {};
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &rayGenVertexBuffers[i], &rayGenVertexAllocations[i], NULL);
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &vertexBuffers[i], &vertexAllocations[i], NULL);
             bufferInfo.size = bufferSizeI;
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &rayGenIndexBuffers[i], &rayGenIndexAllocations[i], NULL);
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &indexBuffers[i], &indexAllocations[i], NULL);
                
-        copy_Buffer(stagingBufferV, rayGenVertexBuffers[i], bufferSizeV);
-        copy_Buffer(stagingBufferI,  rayGenIndexBuffers[i], bufferSizeI);
+        copy_Buffer(stagingBufferV, vertexBuffers[i], bufferSizeV);
+        copy_Buffer(stagingBufferI,  indexBuffers[i], bufferSizeI);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBufferV, stagingAllocationV);
     vmaDestroyBuffer(VMAllocator, stagingBufferI, stagingAllocationI);
+
+    return {
+        vertexBuffers, indexBuffers,
+        vertexAllocations, indexAllocations
+    };
 }
 
 void Renderer::create_Descriptor_Set_Layouts(){
@@ -1527,9 +1747,7 @@ void Renderer::setup_Graphical_Descriptors(){
             descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             descriptorWrite.descriptorCount = 1;
             descriptorWrite.pImageInfo = &storageImageInfo;
-println
         vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
-println
     }
 }
 
@@ -1604,7 +1822,7 @@ void Renderer::create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemo
 }
 
 void Renderer::copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-    VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
+    VkCommandBuffer commandBuffer= begin_Single_Time_Commands();
 
     VkBufferCopy copyRegion{};
     copyRegion.size = size;
@@ -1648,7 +1866,7 @@ void Renderer::end_Single_Time_Commands(VkCommandBuffer commandBuffer) {
 void Renderer::transition_Image_Layout_Singletime(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) {
 
-    VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
+    VkCommandBuffer commandBuffer= begin_Single_Time_Commands();
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
