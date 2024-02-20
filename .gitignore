@@ -3,8 +3,10 @@ obj/*.o
 obj/*.o
 client.exe
 shaders/*.spv
-.vscode/c_cpp_properties.json
-.vscode/settings.json
+# .vscode/c_cpp_properties.json
+# .vscode/settings.json
+.vscode
+.idea
 test.exe
 test.cpp
 r.cpp

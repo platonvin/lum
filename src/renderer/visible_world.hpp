@@ -47,23 +47,6 @@ typedef struct ChunkInTable {
     //offset, size, file, etc./...
 } ChunkInTable;
 
-template <typename Type>
-class table3d {
-private:
-    vector<Type> chunksMem;
-    uvec3 _size;
-public:
-    void resize(u32 x, u32 y, u32 z) {
-        _size = uvec3(x,y,z);
-        this->chunksMem.resize(x*y*z);
-    }
-    uvec3 size() {
-        return _size;
-    }
-    Type& operator()(u32 x, u32 y, u32 z) {
-        return this->chunksMem [x + _size.x*y + (_size.x*_size.z)*z];
-    }
-};
 /*
 concept is: chunks are independend, when loaded chunks change we just copy from loaded once to united. Might change
 */
@@ -75,7 +58,7 @@ public:
     vec3 worldShift;
     //size might change in runtime so dynamic. Overhead is insignificant
     table3d<ChunkInMem> loadedChunks;
-    vector<Mesh> objects;
+    // vector<Mesh> objects;
     table3d<BlockID_t> unitedBlocks; // used to traversal rays 
 
     Material matPalette[MATERIAL_PALETTE_SIZE];

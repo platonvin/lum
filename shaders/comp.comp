@@ -1,29 +1,517 @@
-#version 450
+#version 450 core
 
+precision highp int;
+precision highp float;
+// precision highp vec3;
+
+layout(push_constant) uniform constants
+{
+    int timeSeed;
+} PushConstants;
 //descriptor bindings for the pipeline
 layout(set = 0, binding = 0, rgba32f) readonly uniform image2D posMat;
-layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norm;
-layout(set = 0, binding = 2, r8     ) readonly uniform image3D blocks;
-layout(set = 0, binding = 3, rgba8)  writeonly uniform image2D frame;
+layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norms;
+layout(set = 0, binding = 2, r8) readonly uniform image3D blocks;
+layout(set = 0, binding = 3, r8ui) readonly uniform uimage3D blockPalette;
+layout(set = 0, binding = 4, r32f) readonly uniform image2D voxelPalette;
+layout(set = 0, binding = 5, rgba8) uniform image2D frame;
 
-layout (local_size_x = 8, local_size_y = 4, local_size_z = 1) in;
+vec3 cameraRayDir = normalize(vec3(12, 21, 7));
+vec3 horizline = normalize(vec3(1, -1, 0));
+vec3 vertiline = normalize(cross(cameraRayDir, horizline));
+vec3 cameraPos = vec3(-13, -22, -8) * 1.5;
+// vec3 globalLightDir = normalize(vec3(10, 25, -6));
+vec3 globalLightDir = -cameraRayDir;
 
-// layout( push_constant ) uniform constants
-// {
-// 	float x;
-// 	float y;
-// } PushConstants;
+#define MAX_DEPTH 5
+#define NUM_SAMPLES 1
+#define PI 3.1415926535
+#define FAR_DISTANCE 100000.0
+#define nIN 1.0
+#define nOUT 1.0
+#define WIDTH  16
+#define LENGTH 16
+#define HEIGHT 16
 
+vec2 randvec;
 
-void main()
+float view_width;
+float view_height;
+
+struct Material
 {
-    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 size = imageSize(frame);
-    vec4 color = vec4(vec3(0), 1);
+    vec3 color; //for each color
+    float emmitance;
+    float smoothness;
+    float transparancy;
+};
 
-    if(texelCoord.x < size.x && texelCoord.y < size.y){
-        vec4 posMatv = imageLoad(posMat, texelCoord);
+float RandomNoise(vec2 co)
+{
+    float res = fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    randvec.x = randvec.y;
+    randvec.y = res;
+    return res;
+}
 
-        imageStore(frame, texelCoord, posMatv);
+float RandomFloat_0to1()
+{
+    return RandomNoise(randvec);
+}
+
+vec2 Random2D()
+{
+    return normalize(vec2(RandomNoise(randvec), RandomNoise(randvec)));
+}
+
+vec3 Random3D()
+{
+    return normalize(vec3(RandomNoise(randvec), RandomNoise(randvec), RandomNoise(randvec)));
+}
+
+vec3 RandomHemispherePoint(vec2 rand)
+{
+    float cosTheta = sqrt(1.0 - rand.x);
+    float sinTheta = sqrt(rand.x);
+    float phi = 2.0 * PI * rand.y;
+    return vec3(
+        cos(phi) * sinTheta,
+        sin(phi) * sinTheta,
+        cosTheta);
+}
+
+vec3 NormalOrientedHemispherePoint(vec2 rand, vec3 n)
+{
+    vec3 v = RandomHemispherePoint(rand);
+    return dot(v, n) < 0.0 ? -v : v;
+}
+
+int GetBlock(in ivec3 pos){
+    int block;
+
+    if (pos.x < 0 || pos.x >= WIDTH) return 0;
+    if (pos.y < 0 || pos.y >= LENGTH) return 0;
+    if (pos.z < 0 || pos.z >= HEIGHT) return 0;
+
+    block = int((imageLoad(blockPalette, pos).r));
+
+    return block;
+}
+int GetVoxel(in ivec3 pos){
+    int voxel;
+
+    if (pos.x < 0 || pos.x >= WIDTH) return 0;
+    if (pos.y < 0 || pos.y >= LENGTH) return 0;
+    if (pos.z < 0 || pos.z >= HEIGHT) return 0;
+
+    voxel = int((imageLoad(blockPalette, pos).r));
+
+    return voxel;
+}
+
+Material GetMat(in int voxel)
+{
+    Material mat;
+
+    mat.color = vec3(1);
+    mat.emmitance = 0.0;
+    mat.smoothness = 0.5;
+    mat.transparancy = 0.0;
+
+    if (voxel == 163) {
+        mat.color = vec3(255, 0, 0) / 256.0;
+        mat.emmitance = 0.5;
+        mat.smoothness = 0.97;
+        mat.transparancy = 0.8;
+    } else
+    if (voxel == 165) {
+        mat.color = vec3(12, 255, 34) / 256.0;
+        mat.emmitance = 0.9;
+        mat.smoothness = 0.5;
+    } else
+    if (voxel == 156) {
+        mat.color = vec3(50, 50, 255) / 256.0;
+        mat.emmitance = 0.5;
+        mat.smoothness = 0.2;
     }
+    // mat.smoothness = 1.0;
+
+    return mat;
+}
+
+bool InsideScene(in vec3 rayOrigin)
+{
+    vec3 corner_1 = vec3(0, 0, 0);
+    vec3 corner_2 = vec3(WIDTH, LENGTH, HEIGHT);
+
+    vec3 s = step(corner_1, rayOrigin) - step(corner_2, rayOrigin); //if we are inside of the box
+
+    if (s.x * s.y * s.z == 0.0) return false;
+
+    return true;
+}
+
+bool InsideScene_byBlockPos(in ivec3 block_pos)
+{
+    ivec3 corner_1 = ivec3(0, 0, 0);
+    ivec3 corner_2 = ivec3(WIDTH, LENGTH, HEIGHT);
+
+    vec3 s = step(corner_1, block_pos) - step(corner_2, block_pos); //if we are inside of the box
+
+    if (s.x * s.y * s.z == 0) return false;
+
+    return true;
+}
+
+bool IntersectWithScene(in vec3 rayOrigin, in vec3 rayDirection, out float fraction)
+{
+    vec3 corner_1 = vec3(0, 0, 0);
+    vec3 corner_2 = vec3(WIDTH, LENGTH, HEIGHT);
+
+    vec3 planes_1 = (corner_1 - rayOrigin) / rayDirection;
+    vec3 planes_2 = (corner_2 - rayOrigin) / rayDirection;
+
+    vec3 planes_near = min(planes_1, planes_2);
+    vec3 planes_far = max(planes_1, planes_2);
+
+    float fraction_near = max(max(planes_near.x, planes_near.y), planes_near.z);
+    float fraction_far = min(min(planes_far.x, planes_far.y), planes_far.z);
+
+    fraction = fraction_near;
+
+    if ((fraction_far > fraction_near) && (fraction_near > 0.0)) {
+        return true;
+    }
+    else return false;
+}
+//if(!initTvals(tMax, tDelta, block_pos, rayOrigin, rayDirection, extra_fraction)) return false; //does not intersect with scene
+bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOrigin, in vec3 rayDirection)
+{
+    vec3 effective_origin = rayOrigin;
+    // extra_fraction = 0;
+    // if(!InsideScene(rayOrigin))
+    // {
+    // 	float fraction_to_get_to_scene = 0.0;
+    // 	if (IntersectWithScene(rayOrigin, rayDirection, fraction_to_get_to_scene)){
+    // 		extra_fraction = fraction_to_get_to_scene - 0.001;
+    // 		effective_origin = rayOrigin + rayDirection*extra_fraction;
+    // 	}
+    // 	else { //does intersect with scene
+    // 		return false;
+    // 	}
+    // }
+
+    vec3 block_corner1 = floor(effective_origin); //not real center
+    vec3 block_corner2 = block_corner1 + vec3(1.0); //now real center
+
+    blockPos = ivec3(block_corner1); //round origin to block pos
+
+    block_corner1 -= effective_origin; //now corners are relative vectors
+    block_corner2 -= effective_origin;
+
+    block_corner1 /= rayDirection; //now corners are in relative direction vectors
+    block_corner2 /= rayDirection;
+
+    tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+    tMax.y = max(block_corner1.y, block_corner2.y);
+    tMax.z = max(block_corner1.z, block_corner2.z);
+
+    tDelta = 1.0 / abs(rayDirection); //how many dir vectors needeed to move 1.0 across each axys
+
+    return true;
+}
+
+void CollideInsideBlock(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, in ivec3 block_pos)
+{
+    vec3 corner_1 = vec3(block_pos);
+    vec3 corner_2 = vec3(block_pos) + vec3(1.0);
+
+    vec3 planes_1 = (corner_1 - rayOrigin) / rayDirection;
+    vec3 planes_2 = (corner_2 - rayOrigin) / rayDirection;
+
+    vec3 fractionsForAxis;
+    fractionsForAxis.x = max(planes_1.x, planes_2.x);
+    fractionsForAxis.y = max(planes_1.y, planes_2.y);
+    fractionsForAxis.z = max(planes_1.z, planes_2.z);
+
+    ivec3 steps;
+    steps.x = (rayDirection.x < 0) ? -1 : +1;
+    steps.y = (rayDirection.y < 0) ? -1 : +1;
+    steps.z = (rayDirection.z < 0) ? -1 : +1;
+
+    if (fractionsForAxis.x < fractionsForAxis.y) {
+        if (fractionsForAxis.x < fractionsForAxis.z) {
+            fraction = fractionsForAxis.x;
+            normal = vec3(-1.0, 0, 0) * float(steps.x);
+        }
+        else { //z is the lowest
+            fraction = fractionsForAxis.z;
+            normal = vec3(0, 0, -1.0) * float(steps.z);
+        }
+    } else {
+        if (fractionsForAxis.y < fractionsForAxis.z) {
+            fraction = fractionsForAxis.y;
+            normal = vec3(0, -1.0, 0) * float(steps.y);
+        }
+        else { //z is the lowest
+            fraction = fractionsForAxis.z;
+            normal = vec3(0, 0, -1.0) * float(steps.z);
+        }
+    }
+}
+bool Cast_Ray(in vec3 origin, in vec3 dir, out float fraction, out vec3 normal, out Material mat) {
+    bool hit = false;
+    ivec3 isteps;
+    isteps.x = int(dir.x > 0.0);
+    isteps.y = int(dir.y > 0.0);
+    isteps.z = int(dir.z > 0.0);
+    isteps = ivec3(2) * isteps - ivec3(1);
+    vec3 fsteps;
+    fsteps.x = float(dir.x > 0.0);
+    fsteps.y = float(dir.y > 0.0);
+    fsteps.z = float(dir.z > 0.0);
+    fsteps = 2.0 * fsteps - 1.0;
+
+    vec3 tMax = vec3(0);
+    vec3 tDelta = vec3(0);
+    vec3 fcurrentStepDiretion = vec3(0);
+    ivec3 icurrentStepDiretion = ivec3(0);
+    ivec3 currentVoxelPos = ivec3(0);
+    int currentVoxel = 0;
+    fraction = 0;
+
+    if (!initTvals(origin, dir, tMax, tDelta, currentVoxelPos)) return false; //does not intersect with scene
+
+    currentVoxel = GetVoxel(currentVoxelPos);
+    int iterations = 0;
+    while (true) {
+        icurrentStepDiretion.x = int(tMax.x < tMax.y && tMax.x < tMax.z);
+        icurrentStepDiretion.y = int(tMax.x > tMax.y && tMax.y < tMax.z);
+        icurrentStepDiretion.z = int(tMax.z < tMax.x && tMax.z < tMax.y);
+
+        fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
+        fcurrentStepDiretion.y = float(int((tMax.x >= tMax.y) && (tMax.y <= tMax.z)));
+        fcurrentStepDiretion.z = float(int((tMax.z <= tMax.x) && (tMax.z <= tMax.y)));
+
+        currentVoxelPos += isteps * icurrentStepDiretion;
+        fraction += dot(tDelta, fcurrentStepDiretion);
+        tMax += (tDelta * fcurrentStepDiretion);
+
+        currentVoxel = GetVoxel(currentVoxelPos);
+        // currentBlock = Get_Block(currentVoxelPos);
+
+        if (currentVoxel != 0) {
+            hit = true;
+            break;
+        }
+
+        if (iterations++ > 128) {
+            hit = false;
+            break;
+        }
+    }
+    ;
+
+    normal = -(fsteps * fcurrentStepDiretion);
+    mat = GetMat(currentVoxel);
+
+    return hit;
+}
+bool CastRay(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, out Material material)
+{
+    bool block_hit = false;
+
+    ivec3 steps;
+    steps.x = int(rayDirection.x > 0.0);
+    steps.y = int(rayDirection.y > 0.0);
+    steps.z = int(rayDirection.z > 0.0);
+    steps = 2 * steps - 1;
+
+    vec3 fsteps = vec3(steps);
+
+    vec3 tMax = vec3(0);
+    vec3 tDelta = vec3(0);
+    ivec3 block_pos = ivec3(0);
+    float block_fraction = 0.0;
+
+    lowp int What_Is_Step = 0;
+    ivec3 istep_Diretion = ivec3(0);
+    vec3 fcurrentStepDiretion = vec3(0);
+
+    if (!initTvals(tMax, tDelta, block_pos, rayOrigin, rayDirection)) return false; //does not intersect with scene
+
+    int current_block = GetVoxel(block_pos);
+    int iterations = 0;
+    while (true) {
+        // fstep_Diretion =  vec3(0);
+        fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
+        fcurrentStepDiretion.y = float(int((tMax.x >= tMax.y) && (tMax.y <= tMax.z)));
+        fcurrentStepDiretion.z = float(int((tMax.z <= tMax.x) && (tMax.z <= tMax.y)));
+
+        block_pos += steps * ivec3(fcurrentStepDiretion);
+        tMax += tDelta * fcurrentStepDiretion;
+
+        current_block = GetVoxel(block_pos);
+
+        if (current_block != 0) {
+            block_hit = true;
+            break;
+        }
+        if (iterations++ > 128) {
+            block_hit = false;
+            break;
+        }
+    }
+    ;
+    normal = -(fsteps * fcurrentStepDiretion);
+    vec3 tFinal = tMax - tDelta;
+    block_fraction += dot(tFinal, fcurrentStepDiretion);
+    // block_fraction = dot(tFinal, fcurrentStepDiretion);
+
+    material = GetMat(current_block);
+    fraction = block_fraction;
+
+    return (block_hit);
+}
+
+float FresnelSchlick(in vec3 direction, in vec3 normal)
+{
+    float nIn = nIN;
+    float nOut = nOUT;
+    float R0 = ((nOut - nIn) * (nOut - nIn)) / ((nOut + nIn) * (nOut + nIn));
+    float fresnel = R0 + (1.0 - R0) * pow((1.0 - abs(dot(direction, normal))), 5.0);
+    return fresnel;
+}
+vec3 IdealRefract(vec3 direction, vec3 normal, float nIn, float nOut)
+{
+    // проверим, находимся ли мы внутри объекта
+    // если да - учтем это при расчете сред и направления луча
+    bool fromOutside = dot(normal, direction) < 0.0;
+    float ratio = fromOutside ? nOut / nIn : nIn / nOut;
+
+    vec3 refraction, reflection;
+    refraction = fromOutside ? refract(direction, normal, ratio) : -refract(-direction, normal, ratio);
+    reflection = reflect(direction, normal);
+
+    // в случае полного внутренного отражения refract вернет нам 0.0
+    return refraction == vec3(0.0) ? reflection : refraction;
+}
+bool IsRefracted(in vec3 rayDirection, in vec3 normal, in float transparancy)
+{
+    float fresnel = FresnelSchlick(rayDirection, normal);
+    float rand = RandomFloat_0to1();
+    return (transparancy > rand) && (fresnel < rand); // && transparancy == 0.0;
+}
+
+vec3 TraceRay(in vec3 rayOrigin, in vec3 rayDirection, out vec4 normal_out)
+{
+    vec3 accumulated_light = vec3(0.0);
+    vec3 accumulated_reflection = vec3(1.0);
+
+    float fraction = 0;
+    vec3 normal = vec3(0);
+    Material material;
+
+    normal_out = vec4(0);
+
+    for (int i = 0; i < MAX_DEPTH; i++)
+    {
+        bool hit = CastRay(rayOrigin, rayDirection, fraction, normal, material);
+
+        if (hit)
+        {
+            vec3 newRayOrigin = rayOrigin + (fraction * rayDirection);
+
+            vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random2D(), normal);
+            vec3 randomVec = normalize(2.0 * Random3D() - 1.0);
+
+            vec3 tangent = cross(randomVec, normal);
+            vec3 bitangent = cross(normal, tangent);
+            mat3 transform = mat3(tangent, bitangent, normal);
+
+            vec3 newRayDirection = transform * hemisphereDistributedDirection;
+
+            bool refracted = IsRefracted(rayDirection, normal, material.transparancy);
+
+            if (refracted)
+            {
+                vec3 idealRefraction = IdealRefract(rayDirection, normal, nIN, nOUT);
+                newRayDirection = normalize(mix(-newRayDirection, idealRefraction, material.smoothness));
+                // newRayDirection = normalize(mix(idealRefraction, -newRayDirection, material.smoothness));
+                newRayOrigin += normal * (dot(newRayDirection, normal) < 0.0 ? -0.001 : 0.001);
+            }
+            else
+            {
+                vec3 idealReflection = reflect(rayDirection, normal);
+                newRayDirection = normalize(mix(newRayDirection, idealReflection, material.smoothness));
+                newRayOrigin += normal * 0.001;
+                accumulated_light += accumulated_reflection * material.emmitance * material.color;
+                accumulated_reflection *= material.color;
+                accumulated_light += vec3(0.8) * 0.03 * accumulated_reflection;
+            }
+
+            // newRayOrigin += normal * 0.002;
+
+            rayDirection = newRayDirection;
+            rayOrigin = newRayOrigin;
+
+            if (i == 0)
+            {
+                normal_out.xyz = normal;
+                normal_out.w = 1.0;
+            }
+        }
+        else {
+            break;
+        }
+    }
+    float global_light_participance = -dot(globalLightDir, rayDirection);
+    if (global_light_participance > 0.9) {
+        accumulated_light += vec3(0.99, 0.98, 0.83) * accumulated_reflection;
+    }
+
+    return accumulated_light;
+}
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
+    return mix(dot(axis, p) * axis, p, cos(angle)) + cross(axis, p) * sin(angle);
+}
+
+void main(void)
+{
+    ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(frame);
+    if (pix.x >= size.x || pix.y >= size.y) {
+        return;
+    }
+
+    vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
+
+    randvec = pos / PushConstants.timeSeed;
+
+    vec3 camera_unit_x = horizline / 2;
+    vec3 camera_unit_y = vertiline / 2;
+
+    view_width = size.x / 16.0; //in blocks
+    view_height = size.y / 16.0; //in blocks
+
+    vec3 ray_origin = imageLoad(posMat, pix).xyz;
+    vec3 init_normal = imageLoad(norms, pix).xyz;
+    ray_origin -= init_normal * 0.001;
+
+    vec4 normal;
+    vec4 color = vec4(0);
+    for (int samplei = 0; samplei < NUM_SAMPLES; samplei++)
+    {
+        vec2 posShift = 2.0 * (Random2D() - vec2(0.5)) / vec2(size);
+        vec2 newpos = pos;
+        // ray_origin = cameraPos + camera_unit_x * (newpos.x - 0.5) * view_width + camera_unit_y * (newpos.y - 0.5) * view_height;
+        color += vec4(TraceRay(ray_origin, cameraRayDir, normal), 1) / NUM_SAMPLES;
+    }
+
+    color = mix(color, imageLoad(frame, pix), 0.98);
+    imageStore(frame, pix, color);
+    // imageStore(normalbuffer, pix, normal);
 }

@@ -19,20 +19,15 @@ void VisualWorld::init(){
     const ogt::vox_scene* scene = ogt::vox_read_scene(buffer, buffer_size);
     delete[] buffer;
 
-        printl(scene->num_cameras);
-        printl(scene->num_groups);
-        printl(scene->num_instances);
-        printl(scene->num_layers);
-        printl(scene->num_models);
-
-    assert(scene->num_models < BLOCK_PALETTE_SIZE-1);
+    assert(scene->num_models <= BLOCK_PALETTE_SIZE);
+    //relies on 16^3 size and single-copy of everything
     for(i32 i=0; i<scene->num_models; i++){
     //    this->blocksPalette[i+1] = scene->models[i]->voxel_data;
         assert(scene->models[i]->size_x == BLOCK_SIZE);
         assert(scene->models[i]->size_y == BLOCK_SIZE);
         assert(scene->models[i]->size_z == BLOCK_SIZE);
         u32 sizeToCopy = BLOCK_SIZE*BLOCK_SIZE*BLOCK_SIZE;
-        memcpy(&this->blocksPalette[i+1], scene->models[i]->voxel_data, sizeToCopy);
+        memcpy(&this->blocksPalette[i], scene->models[i]->voxel_data, sizeToCopy*sizeof(MatID_t));
     }
     //i=0 alwaus empty mat/color
     for(i32 i=0; i<MATERIAL_PALETTE_SIZE; i++){
@@ -46,14 +41,14 @@ void VisualWorld::init(){
         this->matPalette[i].rough = scene->materials.matl[i].rough;
     }
 
-    //Chunks is just 3d psewdo dynamic array. Same as united blocks. Might change on settings change
+    // Chunks is just 3d psewdo dynamic array. Same as united blocks. Might change on settings change
     this->loadedChunks.resize(1,1,1);
-    this->unitedBlocks.resize(3,3,3);
+    this->unitedBlocks.resize(8,8,8);
 
     ChunkInMem singleChunk = {};
     ogt::ogt_voxel_meshify_context ctx = {};
     ogt::ogt_mesh_rgba rgbaPalette[256] = {};
-    //comepletely unnesessary but who cares
+    // comepletely unnesessary but who cares
     for(i32 i=0; i<256; i++){
         ivec4 icolor = ivec4(this->matPalette->color);
         rgbaPalette[i].r = icolor.r;
@@ -62,13 +57,11 @@ void VisualWorld::init(){
         rgbaPalette[i].a = icolor.a;
     }
     // rgbaPalette.a
-    ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[1].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
+    ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[0].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
 
-    vector<Vertex> vertices;
-    vector<u32   >  indices;
+    vector<Vertex> vertices = {};
+    vector<u32   >  indices = {};
     
-printl(mesh->vertex_count);
-printl(mesh->index_count);
     for(i32 i=0; i<mesh->vertex_count; i++){
         Vertex v = {};
             v.pos.x = mesh->vertices[i].pos.x;
@@ -82,7 +75,6 @@ printl(mesh->index_count);
         assert(mesh->vertices[i].palette_index < 256);
         assert(mesh->vertices[i].palette_index != 0);
         v.matID = mesh->vertices[i].palette_index;
-
         vertices.push_back(v);
     }
     for(i32 i=0; i<mesh->index_count; i++){
@@ -92,8 +84,13 @@ printl(mesh->index_count);
     //so we have a mesh in indexed vertex form
     //without transformations
     singleChunk.blocks[0][0][0] = 1;
-    singleChunk.mesh.data = render.create_RayGen_VertexBuffers(vertices, indices);
-    singleChunk.mesh.data.icount = indices.size();
+    tie(singleChunk.mesh.vertexes, singleChunk.mesh.indexes) = render.create_RayGen_VertexBuffers(vertices, indices);
+    singleChunk.mesh.icount = indices.size();
+
+    // for (auto index: indices) {
+    //     printf("%3d: %.1f %.1f %.1f\n", index, vertices[index].pos.x, vertices[index].pos.y, vertices[index].pos.z);
+    //     if(index > 100) break;
+    // }
 
     float rotationX = glm::radians(45.0f);
     float rotationY = glm::radians(30.0f);
@@ -107,7 +104,7 @@ printl(mesh->index_count);
     //applying position
     singleChunk.mesh.transform = translate(singleChunk.mesh.transform, vec3(0.0f, 0.0f, 0.0f));
 
-    this->objects.push_back(singleChunk.mesh);
+    // this->objects.push_back(singleChunk.mesh);
     
     this->loadedChunks(0,0,0) = singleChunk;
 
@@ -117,14 +114,14 @@ printl(mesh->index_count);
     this->unitedBlocks(0,1,1) = 1; //so 1 from block palette. For testing
 }
 
-void VisualWorld::update(){
-/*
-nothing here... Yet
-*/
-}
+// void VisualWorld::update(){
+// /*
+// nothing here... Yet
+// */
+// }
 
-void VisualWorld::cleanup(){
-/*
-nothing here... Yet
-*/
-}
+// void VisualWorld::cleanup(){
+// /*
+// nothing here... Yet
+// */
+// }

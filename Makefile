@@ -5,7 +5,8 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -IC:\prog\sl-vector -I./common
 L = -L${VULKAN_SDK}/Lib
-F = -pipe -fno-exceptions
+F = -pipe -fno-exceptions -Wl,--stack,4096
+SA = -gVS
 A = $(I) $(F) $(args)
 
 objs := \
@@ -24,6 +25,7 @@ headers:= \
 	src/renderer/render.hpp\
 	src/renderer/window.hpp\
 	src/renderer/visible_world.hpp\
+	src/renderer/primitives.hpp\
 
 _shaders:= \
 	shaders/vert.spv\
@@ -45,15 +47,15 @@ obj/main.o: src/main.cpp $(headers)
 client: $(objs) $(_shaders)
 	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk $(args)
 client_opt: $(src) $(headers) $(_shaders)
-	g++ $(srcs) $(F) $(I) $(L) -lglfw3 -lvolk -Oz -fdata-sections -ffunction-sections -o client.exe -Wl,--gc-sections -DNDEBUG $(args)
+	g++ $(srcs) $(F) $(I) $(L) -lglfw3 -lvolk -Os -fdata-sections -ffunction-sections -o client.exe -Wl,--gc-sections,--stack,16777216 $(args)
 
 temp:
 	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)
 
 shaders/vert.spv: shaders/vert.vert
-	glslc shaders/vert.vert -o shaders/vert.spv
+	glslc shaders/vert.vert -o shaders/vert.spv 
 shaders/frag.spv: shaders/frag.frag
-	glslc shaders/frag.frag -o shaders/frag.spv
+	glslc shaders/frag.frag -o shaders/frag.spv 
 shaders/rayGenVert.spv: shaders/rayGen.vert
 	glslc shaders/rayGen.vert -o shaders/rayGenVert.spv
 shaders/rayGenFrag.spv: shaders/rayGen.frag

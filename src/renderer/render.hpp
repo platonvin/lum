@@ -124,40 +124,71 @@ public:
             VK_IMAGE_TYPE_2D,
             VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT,
-            swapChainExtent.width, swapChainExtent.height, 1);
+            {swapChainExtent.height, swapChainExtent.width, 1});
         create_Image_Storages(rayGenPosMatImages, rayGenPosMatImageAllocations, rayGenPosMatImageViews,
             VK_IMAGE_TYPE_2D,
             VK_FORMAT_R32G32B32A32_SFLOAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT,
-            swapChainExtent.width, swapChainExtent.height, 1);
+            {swapChainExtent.height, swapChainExtent.width, 1});
         create_Image_Storages(rayGenNormImages, rayGenNormImageAllocations, rayGenNormImageViews,
             VK_IMAGE_TYPE_2D,
             VK_FORMAT_R32G32B32A32_SFLOAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT,
-            swapChainExtent.width, swapChainExtent.height, 1);
+            {swapChainExtent.height, swapChainExtent.width, 1});
+        create_Image_Storages(rayGenDepthImages, rayGenDepthImageAllocations, rayGenDepthImageViews,
+            VK_IMAGE_TYPE_2D,
+            VK_FORMAT_D32_SFLOAT,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            {swapChainExtent.height, swapChainExtent.width, 1});
         create_Image_Storages(computeBlocksImages, computeBlocksImageAllocations, computeBlocksImageViews,
             VK_IMAGE_TYPE_3D,
-            VK_FORMAT_R8_UNORM,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT,
-            8, 8, 8); //TODO dynamic
+            VK_FORMAT_R8_UINT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+            {8, 8, 8}); //TODO dynamic
+        create_Image_Storages(computeBlockPaletteImages, computeBlockPaletteImageAllocations, computeBlockPaletteImageViews,
+            VK_IMAGE_TYPE_3D,
+            VK_FORMAT_R8_UINT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+            {16, 16, 16*256}); //TODO dynamic
+        create_Image_Storages(computeVoxelPaletteImages, computeVoxelPaletteImageAllocations, computeVoxelPaletteImageViews,
+            VK_IMAGE_TYPE_2D,
+            VK_FORMAT_R32_SFLOAT, //try R32G32
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT ,
+            {256, 6, 1}); //TODO dynamic, TODO: text formats, TODO: pack Material into smth other than 6 ortogonal floats :)
 
         vector<vector<VkImageView>> swapViews = {swapChainImageViews};
         create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
-        vector<vector<VkImageView>> rayVeiws = {rayGenPosMatImageViews, rayGenNormImageViews};
 // printl(swapChainImages.size());
-        create_N_Framebuffers(rayGenFramebuffers, rayVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+        vector<vector<VkImageView>> rayGenVeiws = {rayGenPosMatImageViews, rayGenNormImageViews, rayGenDepthImageViews};
+        create_N_Framebuffers(rayGenFramebuffers, rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
         
         create_Descriptor_Pool();
         create_Descriptor_Set_Layouts();
@@ -173,14 +204,20 @@ public:
     void cleanup(){
 
         for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-            vkDestroyImageView(device,       computeImageViews[i], NULL);
-            vkDestroyImageView(device,  rayGenPosMatImageViews[i], NULL);
-            vkDestroyImageView(device,    rayGenNormImageViews[i], NULL);
-            vkDestroyImageView(device, computeBlocksImageViews[i], NULL);
-            vmaDestroyImage(VMAllocator,       computeImages[i],       computeImageAllocations[i]);
-            vmaDestroyImage(VMAllocator,  rayGenPosMatImages[i],  rayGenPosMatImageAllocations[i]);
-            vmaDestroyImage(VMAllocator,    rayGenNormImages[i],    rayGenNormImageAllocations[i]);
-            vmaDestroyImage(VMAllocator, computeBlocksImages[i], computeBlocksImageAllocations[i]);
+            vkDestroyImageView(device,             computeImageViews[i], NULL);
+            vkDestroyImageView(device,        rayGenPosMatImageViews[i], NULL);
+            vkDestroyImageView(device,          rayGenNormImageViews[i], NULL);
+            vkDestroyImageView(device,         rayGenDepthImageViews[i], NULL);
+            vkDestroyImageView(device,       computeBlocksImageViews[i], NULL);
+            vkDestroyImageView(device, computeBlockPaletteImageViews[i], NULL);
+            vkDestroyImageView(device, computeVoxelPaletteImageViews[i], NULL);
+            vmaDestroyImage(VMAllocator,       computeImages[i],                   computeImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,  rayGenPosMatImages[i],              rayGenPosMatImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,    rayGenNormImages[i],                rayGenNormImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,   rayGenDepthImages[i],               rayGenDepthImageAllocations[i]);
+            vmaDestroyImage(VMAllocator, computeBlocksImages[i],             computeBlocksImageAllocations[i]);
+            vmaDestroyImage(VMAllocator, computeBlockPaletteImages[i], computeBlockPaletteImageAllocations[i]);
+            vmaDestroyImage(VMAllocator, computeVoxelPaletteImages[i], computeVoxelPaletteImageAllocations[i]);
             vkDestroySampler(device, computeImageSamplers[i], NULL);
             
             // vmaDestroyBuffer(VMAllocator, rayGenVertexBuffers[i], rayGenVertexAllocations[i]);
@@ -250,8 +287,10 @@ public:
         void   end_Present();
     void end_Frame();
 
-    MeshData create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices);
-
+    tuple<Buffer, Buffer> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices);
+    void update_Block_Palette(Block* blockPalette);
+    void update_Voxel_Palette(Material* materialPalette);
+    void update_Blocks(BlockID_t* blocks);
 private:
     void recreate_Swapchain();
 
@@ -288,8 +327,8 @@ private:
     // void update_Descriptors();
 
     void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
-    VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlagBits access, 
-    u32 width, u32 height, u32 depth);
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlags access, 
+    uvec3 hwd);
     void create_Compute_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
     //creates framebuffers that point to attachments view specified views
@@ -302,11 +341,12 @@ private:
     void create_Sync_Objects();
 
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size); 
+    void copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, VkDeviceSize size, uvec3 hwd, VkImageLayout layout);
     u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
-    void transition_Image_Layout_Singletime(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
+    void transition_Image_Layout_Singletime(VkImage image, VkFormat format, VkImageAspectFlags aspect,VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
     void transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
@@ -373,20 +413,29 @@ public:
     // VkBuffer rayGenVertexBuffer_Staging;
     
     
-    vector<VkImage>  rayGenPosMatImages;
-    vector<VkImage>    rayGenNormImages;
-    vector<VkImage> computeBlocksImages;
-    vector<VkImage>       computeImages;
-    vector<VkImage>     swapChainImages;
-    vector<VmaAllocation>  rayGenPosMatImageAllocations;
-    vector<VmaAllocation>    rayGenNormImageAllocations;
-    vector<VmaAllocation> computeBlocksImageAllocations;
-    vector<VmaAllocation>       computeImageAllocations;
-    vector<VkImageView>  rayGenPosMatImageViews;
-    vector<VkImageView>    rayGenNormImageViews;
-    vector<VkImageView> computeBlocksImageViews;
-    vector<VkImageView>       computeImageViews;
-    vector<VkImageView>     swapChainImageViews;
+    vector<VkImage>        rayGenPosMatImages;
+    vector<VkImage>          rayGenNormImages;
+    vector<VkImage>         rayGenDepthImages;
+    vector<VkImage>       computeBlocksImages;
+    vector<VkImage> computeBlockPaletteImages;
+    vector<VkImage> computeVoxelPaletteImages;
+    vector<VkImage>             computeImages;
+    vector<VkImage>           swapChainImages;
+    vector<VmaAllocation>        rayGenPosMatImageAllocations;
+    vector<VmaAllocation>          rayGenNormImageAllocations;
+    vector<VmaAllocation>         rayGenDepthImageAllocations;
+    vector<VmaAllocation>       computeBlocksImageAllocations;
+    vector<VmaAllocation> computeBlockPaletteImageAllocations;
+    vector<VmaAllocation> computeVoxelPaletteImageAllocations;
+    vector<VmaAllocation>             computeImageAllocations;
+    vector<VkImageView>        rayGenPosMatImageViews;
+    vector<VkImageView>          rayGenNormImageViews;
+    vector<VkImageView>         rayGenDepthImageViews;
+    vector<VkImageView>       computeBlocksImageViews;
+    vector<VkImageView> computeBlockPaletteImageViews;
+    vector<VkImageView> computeVoxelPaletteImageViews;
+    vector<VkImageView>             computeImageViews;
+    vector<VkImageView>           swapChainImageViews;
     vector<VkSampler>  computeImageSamplers;
 
     VkDescriptorSetLayout RayGenDescriptorSetLayout;
