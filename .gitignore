@@ -1,10 +1,12 @@
 obj/*.o
 obj/*.o
 obj/*.o
+# executable
 client.exe
+# compiled shaders
 shaders/*.spv
-# .vscode/c_cpp_properties.json
-# .vscode/settings.json
+# for clangd
+compile_flags.txt
 .vscode
 .idea
 test.exe
@@ -12,4 +14,3 @@ test.cpp
 r.cpp
 .vscode
 todo.txt
-vk_layer_settings.txt

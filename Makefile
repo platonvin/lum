@@ -6,7 +6,7 @@
 I = -I./src -I${VULKAN_SDK}/Include -IC:\prog\sl-vector -I./common
 L = -L${VULKAN_SDK}/Lib
 F = -pipe -fno-exceptions -Wl,--stack,4096
-SA = -gVS
+SA = -O
 A = $(I) $(F) $(args)
 
 objs := \
@@ -36,9 +36,9 @@ _shaders:= \
 
 # flags = 
 
-obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/window.cpp src/renderer/visible_world.hpp
+obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/window.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
-obj/visible_world.o: src/renderer/visible_world.cpp src/renderer/visible_world.hpp
+obj/visible_world.o: src/renderer/visible_world.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
 	g++ src/renderer/visible_world.cpp -c -o obj/visible_world.o $(F) $(I) $(args)
 obj/window.o: src/renderer/window.cpp src/renderer/window.hpp
 	g++ src/renderer/window.cpp -c -o obj/window.o $(F) $(I) $(args)
@@ -53,15 +53,15 @@ temp:
 	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)
 
 shaders/vert.spv: shaders/vert.vert
-	glslc shaders/vert.vert -o shaders/vert.spv 
+	glslc shaders/vert.vert -o shaders/vert.spv $(SA)
 shaders/frag.spv: shaders/frag.frag
-	glslc shaders/frag.frag -o shaders/frag.spv 
+	glslc shaders/frag.frag -o shaders/frag.spv $(SA)
 shaders/rayGenVert.spv: shaders/rayGen.vert
-	glslc shaders/rayGen.vert -o shaders/rayGenVert.spv
+	glslc shaders/rayGen.vert -o shaders/rayGenVert.spv $(SA)
 shaders/rayGenFrag.spv: shaders/rayGen.frag
-	glslc shaders/rayGen.frag -o shaders/rayGenFrag.spv
+	glslc shaders/rayGen.frag -o shaders/rayGenFrag.spv $(SA)
 shaders/comp.spv: shaders/comp.comp
-	glslc shaders/comp.comp -o shaders/comp.spv
+	glslc shaders/comp.comp -o shaders/comp.spv $(SA)
 
 init:
 	mkdir obj

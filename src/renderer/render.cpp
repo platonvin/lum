@@ -1,8 +1,15 @@
+// #include <memory>
+#include <process.h>
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 // #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 // #define VMA_VULKAN_VERSION 1003000
 #include "render.hpp" 
+
+#include <set>
+#include <iostream>
+#include <limits>
+#include <fstream>
 
 using namespace std;
 using namespace glm;
@@ -109,7 +116,7 @@ void Renderer::create_Allocator(){
 
 void Renderer::create_Window(){
     int glfwRes = glfwInit();
-    assert(glfwRes != NULL);
+    assert(glfwRes != 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     window.width  = mode->width  / 1;
@@ -337,12 +344,12 @@ void Renderer::create_Logical_Device(){
 
     VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.queueCreateInfoCount = static_cast<u32>(queueCreateInfos.size());
-        createInfo.pQueueCreateInfos = queueCreateInfos.data();
+        createInfo.queueCreateInfoCount = queueCreateInfos.size();
+        createInfo.pQueueCreateInfos    = queueCreateInfos.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
-        createInfo.enabledExtensionCount = static_cast<u32>(deviceExtensions.size());
+        createInfo.enabledExtensionCount   = deviceExtensions.size();
         createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-        createInfo.enabledLayerCount = static_cast<u32>(instanceLayers.size());
+        createInfo.enabledLayerCount   = instanceLayers.size();
         createInfo.ppEnabledLayerNames = instanceLayers.data();
 
     VK_CHECK(vkCreateDevice(physicalDevice, &createInfo, NULL, &device));
@@ -364,10 +371,9 @@ VkSurfaceFormatKHR Renderer::choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR
 
 VkPresentModeKHR Renderer::choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes) {
     for (auto mode : availablePresentModes) {
-        if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-        // if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            return mode;
-        }
+        // if (mode == VK_PRESENT_MODE_FIFO_KHR) {
+        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            return mode;}
     }
     // cout << "fifo\n";
     return VK_PRESENT_MODE_FIFO_KHR;
@@ -380,10 +386,7 @@ VkExtent2D Renderer::choose_Swap_Extent(VkSurfaceCapabilitiesKHR capabilities) {
         i32 width, height;
         glfwGetFramebufferSize(window.pointer, &width, &height);
 
-        VkExtent2D actualExtent = {
-            static_cast<u32>(width),
-            static_cast<u32>(height)
-        };
+        VkExtent2D actualExtent {(u32) width, (u32) height};
 
         actualExtent.width  = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -450,14 +453,14 @@ void Renderer::recreate_Swapchain(){
     //     vkDestroyImageView(device, imageView, NULL);}
     // vkDestroySwapchainKHR(device, swapchain, NULL);
 
-    // for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-    //     vkDestroyImageView(device,      computeImageViews[i], NULL);
+    // for (i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+    //     vkDestroyImageView(device,      raytracedImageViews[i], NULL);
     //     vkDestroyImageView(device, rayGenPosMatImageViews[i], NULL);
     //     vkDestroyImageView(device,   rayGenNormImageViews[i], NULL);
-    //     vkFreeMemory(device,      computeImagesMemory[i], NULL);
+    //     vkFreeMemory(device,      raytracedImagesMemory[i], NULL);
     //     vkFreeMemory(device, rayGenPosMatImagesMemory[i], NULL);
     //     vkFreeMemory(device,   rayGenNormImagesMemory[i], NULL);
-    //     vkDestroyImage(device,      computeImages[i], NULL);
+    //     vkDestroyImage(device,      raytracedImages[i], NULL);
     //     vkDestroyImage(device, rayGenPosMatImages[i], NULL);
     //     vkDestroyImage(device,   rayGenNormImages[i], NULL);
 
@@ -467,7 +470,7 @@ void Renderer::recreate_Swapchain(){
     // create_Swapchain();
     // create_Image_Views();
 
-    // create_Image_Storages(computeImages, computeImagesMemory, computeImageViews,
+    // create_Image_Storages(raytracedImages, raytracedImagesMemory, raytracedImageViews,
     //     VK_IMAGE_TYPE_2D,
     //     VK_FORMAT_R8G8B8A8_UNORM,
     //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -1016,7 +1019,7 @@ void Renderer::record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u3
 
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    transition_Image_Layout_Cmdb(commandBuffer, raytracedImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         0, VK_ACCESS_SHADER_READ_BIT
     );
@@ -1074,7 +1077,7 @@ void Renderer::record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u3
 //     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
 //     //TODO - change layout
-//     // transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+//     // transition_Image_Layout_Cmdb(commandBuffer, raytracedImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 //     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 //     //     0, VK_ACCESS_SHADER_READ_BIT
 //     // );graphic
@@ -1129,23 +1132,23 @@ void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer){
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
     // raygen;
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
 
 
-    transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+    transition_Image_Layout_Cmdb(commandBuffer, raytracedImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0, VK_ACCESS_SHADER_WRITE_BIT
     );
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
 
     //move to argument  
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 
     // vkCmdDispatch(commandBuffer, 1920/8, 1080/4, 1);
     // float data[32] = {111, 222};
-    // for(int i=0; i<100; i++){
-    //     vkCmdPushConstants(commandBuffer, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)*2 , &data);
+    // for(i32 i=0; i<100; i++){
+    //     vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)*2 , &data);
     //     vkCmdDispatch(commandBuffer, 5, 5, 45);
     //     data[0]++;
     //     data[1]++;
@@ -1158,12 +1161,12 @@ void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer){
 void Renderer::create_Sync_Objects(){
      imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
      renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    computeFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    raytraceFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
      rayGenFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 
        rayGenInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
     graphicalInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-      computeInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+      raytraceInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo semaphoreInfo = {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1174,10 +1177,10 @@ void Renderer::create_Sync_Objects(){
     for (i32 i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &imageAvailableSemaphores[i]));
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &renderFinishedSemaphores[i]));
-        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL, &computeFinishedSemaphores[i]));
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL, &raytraceFinishedSemaphores[i]));
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &rayGenFinishedSemaphores[i]));
         VK_CHECK(vkCreateFence(device, &fenceInfo, NULL, &graphicalInFlightFences[i]));
-        VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,   &computeInFlightFences[i]));
+        VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,   &raytraceInFlightFences[i]));
         VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,    &rayGenInFlightFences[i]));
     }
 }
@@ -1200,11 +1203,11 @@ void Renderer::create_Sync_Objects(){
 //     VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, rayGenInFlightFences[currentFrame]));
 
 //     // RT submission
-//     vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-//     vkResetFences  (device, 1, &computeInFlightFences[currentFrame]);
+//     vkWaitForFences(device, 1, &raytraceInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+//     vkResetFences  (device, 1, &raytraceInFlightFences[currentFrame]);
     
-//     vkResetCommandBuffer(computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-//     record_Command_Buffer_Compute(computeCommandBuffers[currentFrame]);
+//     vkResetCommandBuffer(raytraceCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
+//     record_Command_Buffer_Compute(raytraceCommandBuffers[currentFrame]);
 //     vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
 //     VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 //     submitInfo = {};
@@ -1213,10 +1216,10 @@ void Renderer::create_Sync_Objects(){
 //         submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
 //         submitInfo.pWaitSemaphores    = computeWaitSemaphores.data();
 //         submitInfo.commandBufferCount = 1;
-//         submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+//         submitInfo.pCommandBuffers = &raytraceCommandBuffers[currentFrame];
 //         submitInfo.signalSemaphoreCount = 1;
-//         submitInfo.pSignalSemaphores = &computeFinishedSemaphores[currentFrame];
-//     VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame]));
+//         submitInfo.pSignalSemaphores = &raytraceFinishedSemaphores[currentFrame];
+//     VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, raytraceInFlightFences[currentFrame]));
 
 
 //     // showing everything on screen submission
@@ -1236,7 +1239,7 @@ void Renderer::create_Sync_Objects(){
 //     vkResetCommandBuffer(graphicalCommandBuffers[currentFrame], 0);
 //     record_Command_Buffer_Graphical(graphicalCommandBuffers[currentFrame], imageIndex);
 //     // vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
-//     vector<VkSemaphore> waitSemaphores = {computeFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
+//     vector<VkSemaphore> waitSemaphores = {raytraceFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
 //     vector<VkSemaphore> signalSemaphores = {renderFinishedSemaphores[currentFrame]};
 //     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 //     // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -1344,35 +1347,35 @@ void Renderer::end_RayGen(){
 }
 
 void Renderer::start_RayTrace(){
-    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
-    vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-    vkResetFences  (device, 1, &computeInFlightFences[currentFrame]);
+    VkCommandBuffer &commandBuffer = raytraceCommandBuffers[currentFrame];
+    vkWaitForFences(device, 1, &raytraceInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+    vkResetFences  (device, 1, &raytraceInFlightFences[currentFrame]);
     
-    vkResetCommandBuffer(computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
+    vkResetCommandBuffer(raytraceCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
     VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = 0; // Optional
         beginInfo.pInheritanceInfo = NULL; // Optional
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
     
-    transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+    transition_Image_Layout_Cmdb(commandBuffer, raytracedImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0, VK_ACCESS_SHADER_WRITE_BIT
     );
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computeLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 }
 static int itime = 0;
 void Renderer::end_RayTrace(){
-    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    VkCommandBuffer &commandBuffer = raytraceCommandBuffers[currentFrame];
     float time = glfwGetTime();
     itime++;
     // printf("time %f\n", time);
-    // int data[1] = {*(int*)(&time)};
-    vkCmdPushConstants(commandBuffer, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)*1 , &itime);
+    // int data[1] = {*(i32*)(&time)};
+    vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
     vkCmdDispatch(commandBuffer, window.width/8, window.height/4, 1);
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
@@ -1384,10 +1387,10 @@ void Renderer::end_RayTrace(){
         submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
         submitInfo.pWaitSemaphores    = computeWaitSemaphores.data();
         submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+        submitInfo.pCommandBuffers = &raytraceCommandBuffers[currentFrame];
         submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = &computeFinishedSemaphores[currentFrame];
-    VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame]));
+        submitInfo.pSignalSemaphores = &raytraceFinishedSemaphores[currentFrame];
+    VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, raytraceInFlightFences[currentFrame]));
 }
 
 void Renderer::start_Present(){
@@ -1413,7 +1416,7 @@ void Renderer::start_Present(){
 
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    transition_Image_Layout_Cmdb(commandBuffer, computeImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    transition_Image_Layout_Cmdb(commandBuffer, raytracedImages[currentFrame], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         0, VK_ACCESS_SHADER_READ_BIT
     );
@@ -1457,7 +1460,7 @@ void Renderer::end_Present(){
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
     // vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
-    vector<VkSemaphore> waitSemaphores = {computeFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
+    vector<VkSemaphore> waitSemaphores = {raytraceFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
     vector<VkSemaphore> signalSemaphores = {renderFinishedSemaphores[currentFrame]};
     //TODO: replace with VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -1551,6 +1554,7 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocati
 //make so each chunk is stored in staging buffer and then copied to fast memory
 tuple<Buffer, Buffer> Renderer::create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices){
     VkDeviceSize bufferSizeV = sizeof(Vertex)*vertices.size();
+    cout << bufferSizeV;
     VkDeviceSize bufferSizeI = sizeof(u32   )* indices.size();
 
     vector<VkBuffer> vertexBuffers(MAX_FRAMES_IN_FLIGHT);
@@ -1573,13 +1577,23 @@ tuple<Buffer, Buffer> Renderer::create_RayGen_VertexBuffers(vector<Vertex> verti
     vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferI, &stagingAllocationI, NULL);
 
     void* data;
+assert (VMAllocator);
+assert (stagingAllocationV);
+assert (&data);
+// println
     vmaMapMemory(VMAllocator, stagingAllocationV, &data);
+// println
         memcpy(data, vertices.data(), bufferSizeV);
+// println
     vmaUnmapMemory(VMAllocator, stagingAllocationV);
 
+// println
     vmaMapMemory(VMAllocator, stagingAllocationI, &data);
+// println
         memcpy(data, indices.data(), bufferSizeI);
+// println
     vmaUnmapMemory(VMAllocator, stagingAllocationI);
+// println
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -1638,11 +1652,11 @@ void Renderer::create_Descriptor_Set_Layouts(){
         outFrameBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     vector<VkDescriptorSetLayoutBinding> layoutBindings = {inPosMatBinding, inNormBinding, inBlocksBinding, inBlockPaletteBinding, inVoxelPaletteBinding, outFrameBinding};
 
-    VkDescriptorSetLayoutCreateInfo computeLayoutInfo = {};
-        computeLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        computeLayoutInfo.bindingCount = layoutBindings.size();
-        computeLayoutInfo.pBindings    = layoutBindings.data();
-    VK_CHECK(vkCreateDescriptorSetLayout(device, &computeLayoutInfo, NULL, &computeDescriptorSetLayout));
+    VkDescriptorSetLayoutCreateInfo raytraceLayoutInfo = {};
+        raytraceLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        raytraceLayoutInfo.bindingCount = layoutBindings.size();
+        raytraceLayoutInfo.pBindings    = layoutBindings.data();
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &raytraceLayoutInfo, NULL, &raytraceDescriptorSetLayout));
 
     VkDescriptorSetLayoutBinding inFrameBinding = {};
         inFrameBinding.binding = 0;
@@ -1676,18 +1690,18 @@ void Renderer::create_Descriptor_Pool(){
 }
 
 void Renderer::allocate_Descriptors(){
-      computeDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+      raytraceDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
     graphicalDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
     
     //basically just MAX_FRAMES_IN_FLIGHT of same descriptors
     
-    vector<VkDescriptorSetLayout> computeLayouts(MAX_FRAMES_IN_FLIGHT, computeDescriptorSetLayout);
+    vector<VkDescriptorSetLayout> raytraceLayouts(MAX_FRAMES_IN_FLIGHT, raytraceDescriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo = {};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = descriptorPool;
-        allocInfo.descriptorSetCount = computeLayouts.size();
-        allocInfo.pSetLayouts        = computeLayouts.data();
-    VK_CHECK(vkAllocateDescriptorSets(device, &allocInfo, computeDescriptorSets.data()));
+        allocInfo.descriptorSetCount = raytraceLayouts.size();
+        allocInfo.pSetLayouts        = raytraceLayouts.data();
+    VK_CHECK(vkAllocateDescriptorSets(device, &allocInfo, raytraceDescriptorSets.data()));
 
     vector<VkDescriptorSetLayout> graphicsLayouts(MAX_FRAMES_IN_FLIGHT, graphicalDescriptorSetLayout);
     allocInfo = {};
@@ -1707,55 +1721,55 @@ void Renderer::setup_Compute_Descriptors(){
             inputNormInfo.imageView = rayGenNormImageViews[i];
             inputNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputBlockInfo = {};
-            inputBlockInfo.imageView = computeBlocksImageViews[i];
+            inputBlockInfo.imageView = raytraceBlocksImageViews[i];
             inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputBlockPaletteInfo = {};
-            inputBlockPaletteInfo.imageView = computeBlockPaletteImageViews[i];
+            inputBlockPaletteInfo.imageView = raytraceBlockPaletteImageViews[i];
             inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputVoxelPaletteInfo = {};
-            inputVoxelPaletteInfo.imageView = computeVoxelPaletteImageViews[i];
+            inputVoxelPaletteInfo.imageView = raytraceVoxelPaletteImageViews[i];
             inputVoxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo outputFrameInfo = {};
-            outputFrameInfo.imageView = computeImageViews[i];
+            outputFrameInfo.imageView = raytracedImageViews[i];
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             
         VkWriteDescriptorSet PosMatWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            PosMatWrite.dstSet = computeDescriptorSets[i];
+            PosMatWrite.dstSet = raytraceDescriptorSets[i];
             PosMatWrite.dstBinding = 0;
             PosMatWrite.dstArrayElement = 0;
             PosMatWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             PosMatWrite.descriptorCount = 1;
             PosMatWrite.pImageInfo = &inputPosMatInfo;
         VkWriteDescriptorSet NormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            NormWrite.dstSet = computeDescriptorSets[i];
+            NormWrite.dstSet = raytraceDescriptorSets[i];
             NormWrite.dstBinding = 1;
             NormWrite.dstArrayElement = 0;
             NormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             NormWrite.descriptorCount = 1;
             NormWrite.pImageInfo = &inputNormInfo;
         VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            blockWrite.dstSet = computeDescriptorSets[i];
+            blockWrite.dstSet = raytraceDescriptorSets[i];
             blockWrite.dstBinding = 2;
             blockWrite.dstArrayElement = 0;
             blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             blockWrite.descriptorCount = 1;
             blockWrite.pImageInfo = &inputBlockInfo;
         VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            blockPaletteWrite.dstSet = computeDescriptorSets[i];
+            blockPaletteWrite.dstSet = raytraceDescriptorSets[i];
             blockPaletteWrite.dstBinding = 3;
             blockPaletteWrite.dstArrayElement = 0;
             blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             blockPaletteWrite.descriptorCount = 1;
             blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
         VkWriteDescriptorSet voxelPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            voxelPaletteWrite.dstSet = computeDescriptorSets[i];
+            voxelPaletteWrite.dstSet = raytraceDescriptorSets[i];
             voxelPaletteWrite.dstBinding = 4;
             voxelPaletteWrite.dstArrayElement = 0;
             voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             voxelPaletteWrite.descriptorCount = 1;
             voxelPaletteWrite.pImageInfo = &inputVoxelPaletteInfo;
         VkWriteDescriptorSet outWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            outWrite.dstSet = computeDescriptorSets[i];
+            outWrite.dstSet = raytraceDescriptorSets[i];
             outWrite.dstBinding = 5 ;
             outWrite.dstArrayElement = 0;
             outWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1786,8 +1800,8 @@ void Renderer::create_samplers(){
         samplerInfo.minLod = 0.0f;
         samplerInfo.maxLod = 0.0f;
     
-    computeImageSamplers.resize(MAX_FRAMES_IN_FLIGHT);
-    for (auto& sampler : computeImageSamplers) {
+    raytracedImageSamplers.resize(MAX_FRAMES_IN_FLIGHT);
+    for (auto& sampler : raytracedImageSamplers) {
         VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
     }
 }
@@ -1795,9 +1809,9 @@ void Renderer::create_samplers(){
 void Renderer::setup_Graphical_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo storageImageInfo = {};
-            storageImageInfo.imageView = computeImageViews[i];
+            storageImageInfo.imageView = raytracedImageViews[i];
             storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            storageImageInfo.sampler = computeImageSamplers[i];
+            storageImageInfo.sampler = raytracedImageSamplers[i];
         VkWriteDescriptorSet descriptorWrite = {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrite.dstSet = graphicalDescriptorSets[i];
@@ -1813,37 +1827,37 @@ void Renderer::setup_Graphical_Descriptors(){
 void Renderer::create_Compute_Pipeline(){
     auto compShaderCode = read_Shader("shaders/comp.spv");
 
-    compShaderModule = create_Shader_Module(compShaderCode);
+    raytraceShaderModule = create_Shader_Module(compShaderCode);
     
     //single stage
     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        compShaderStageInfo.module = compShaderModule;
+        compShaderStageInfo.module = raytraceShaderModule;
         compShaderStageInfo.pName = "main";
 
     VkPushConstantRange pushRange = {};
         // pushRange.size = 256;
-        pushRange.size = sizeof(int)*1;
+        pushRange.size = sizeof(i32)*1;
         pushRange.offset = 0;
         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
-        pipelineLayoutInfo.pSetLayouts = &computeDescriptorSetLayout;
+        pipelineLayoutInfo.pSetLayouts = &raytraceDescriptorSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 1;
         pipelineLayoutInfo.pPushConstantRanges = &pushRange;
         // pipelineLayoutInfo.pushConstantRangeCount = 0;
         // pipelineLayoutInfo.pPushConstantRanges = NULL;
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &computeLayout));
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &raytraceLayout));
 
     VkComputePipelineCreateInfo pipelineInfo = {};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
-        pipelineInfo.layout = computeLayout;
+        pipelineInfo.layout = raytraceLayout;
 
-    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &computePipeline));
+    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &raytracePipeline));
 //I<3Vk
 }
 
@@ -1856,6 +1870,8 @@ u32 Renderer::find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties)
             return i;
         }
     }
+    cout << "memory type not found";
+    abort();
 }
 
 void Renderer::create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
@@ -1996,38 +2012,21 @@ void Renderer::transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkIma
         1, &barrier
     );
 }
+
 //TODO: make use of frames in flight - do not wait for this things
+//TODO: do smth with frames in flight
 void Renderer::update_Block_Palette(Block* blockPalette){
     VkDeviceSize bufferSize = sizeof(Block)*BLOCK_PALETTE_SIZE;
     table3d<MatID_t> blockPaletteLinear = {};
-    blockPaletteLinear.resize(16, 16, 16*BLOCK_PALETTE_SIZE);
-    for(int N=0; N<BLOCK_PALETTE_SIZE; N++){
-        for(int x=0; x<16; x++){
-            for(int y=0; y<16; y++){
-                for(int z=0; z<16; z++){
-                    blockPaletteLinear(x,y,z+16*N) = blockPalette[N].voxels[x][y][z].matID;
-                    // blockPaletteLinear(x,y,z+16*N) = 1;
-                    // printl(blockPalette[N].voxels[x][y][z].matID );
-                    // printf("%d ", blockPaletteLinear(x,y,z+16*N));
-                    // printf("%d ", blockPaletteLinear(x,y,z+16*N));
-                }
-            }
-        }
-        // printf("\n");
-    }
-    // cout << "(int)blockPaletteLinear(0,0,0)" " "<< (int)blockPaletteLinear(0,0,0) << "\n";
-    // cout << "(int)blockPaletteLinear(0,0,0)" " "<< (int)((int*)blockPaletteLinear.data())[0] << "\n";
-    // printl((int)blockPaletteLinear(0,0,0));
-    // printl((int)blockPaletteLinear(0,5,5));
-    // printl((int)blockPaletteLinear(2,4,4));
-    // printl((int)blockPaletteLinear(1,6,6));
-    // printl((int)blockPaletteLinear(0,2,4));
-    // printl((int)blockPaletteLinear(12,13,7));
-    // printl((int)blockPaletteLinear(15,15,15+255*16));
-    // printl((int)blockPaletteLinear(1,1,16));
-    // printl((int)blockPaletteLinear(2,2,17));
-    // printl((int)blockPaletteLinear(1,2,18));
-    // printl((int)blockPaletteLinear(1,2,48));
+    blockPaletteLinear.set_size(16, 16, 16*BLOCK_PALETTE_SIZE);
+    for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
+    for(i32 x=0; x<BLOCK_SIZE; x++){
+    for(i32 y=0; y<BLOCK_SIZE; y++){
+    for(i32 z=0; z<BLOCK_SIZE; z++){
+        blockPaletteLinear(x,y,z+16*N) = blockPalette[N].voxels[x][y][z].matID;
+    }}}}
+    // cout << "(i32)blockPaletteLinear(0,0,0)" " "<< (i32)((i32*)blockPaletteLinear.data())[0] << "\n";
+    // printl((i32)blockPaletteLinear(0,0,0));
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSize;
         stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -2036,28 +2035,33 @@ void Renderer::update_Block_Palette(Block* blockPalette){
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
+    void* data = NULL;
+    printl((u64) VMAllocator);
+    printl((u64) stagingAllocation);
+    printl((u64) data);
+    // fflush(stdout);
     vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
 
-    void* data;
     vmaMapMemory(VMAllocator, stagingAllocation, &data);
         memcpy(data, blockPaletteLinear.data(), bufferSize);
-        // cout << "\n PIZDEC " << *((int*) data);
-        // cout << "\n PIZDEC " << *((int*) blockPaletteLinear.data());
-        // cout << "\n PIZDEC " << (int)*((char*)data);
-        // cout << "\n PIZDEC " << (int)*((char*)blockPaletteLinear.data());
+        // cout << "\n PIZDEC " << *((i32*) data);
+        // cout << "\n PIZDEC " << *((i32*) blockPaletteLinear.data());
+        // cout << "\n PIZDEC " << (i32)*((char*)data);
+        // cout << "\n PIZDEC " << (i32)*((char*)blockPaletteLinear.data());
     vmaUnmapMemory(VMAllocator, stagingAllocation);
     // vmaMapMemory(VMAllocator, stagingAllocation, &data);
-    // cout << "\n PIZDEC" << *((int*)data);
+    // cout << "\n PIZDEC" << *((i32*)data);
     // cout << "\n PIZDEC" << *((char*)data);
     // vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, computeBlockPaletteImages[i], bufferSize, uvec3(16,16,BLOCK_PALETTE_SIZE*16), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, originBlockPaletteImages[i], bufferSize, uvec3(16,16,BLOCK_PALETTE_SIZE*16), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
 }
 
+//TODO: do smth with frames in flight
 void Renderer::update_Voxel_Palette(Material* materialPalette){
     VkDeviceSize bufferSize = sizeof(Material)*256;
 
@@ -2077,11 +2081,13 @@ void Renderer::update_Voxel_Palette(Material* materialPalette){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, computeVoxelPaletteImages[i], bufferSize, uvec3(256,6,1), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, raytraceVoxelPaletteImages[i], bufferSize, uvec3(256,6,1), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
 }
+
+//TODO: do smth with frames in flight
 void Renderer::update_Blocks(BlockID_t* blocks){
     VkDeviceSize bufferSize = sizeof(BlockID_t)*8*8*8;
 
@@ -2106,7 +2112,7 @@ void Renderer::update_Blocks(BlockID_t* blocks){
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         VmaAllocationCreateInfo allocInfo = {};
 
-        copy_Buffer(stagingBuffer, computeBlocksImages[i], bufferSize, uvec3(8,8,8), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, originBlocksImages[i], bufferSize, uvec3(8,8,8), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);

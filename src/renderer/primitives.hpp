@@ -13,10 +13,10 @@ using namespace std;
 //Everything is X -> Y -> Z order in arrays (vectors)
 #define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
-#define    BLOCK_PALETTE_SIZE 1 //0 always empty
+#define    BLOCK_PALETTE_SIZE 2 //0 always empty
 
 typedef   u8 MatID_t;
-typedef char BlockID_t;
+typedef  i32 BlockID_t;
 
 typedef struct Material {
     // glm::vec4<u8> casd;
@@ -73,7 +73,8 @@ private:
     vector<Type> memory = {};
     uvec3 _size = {};
 public:
-    void resize(u32 x, u32 y, u32 z) {
+    //makes content invalid 
+    void set_size(u32 x, u32 y, u32 z) {
         _size = uvec3(x,y,z);
         this->memory.resize(x*y*z);
     }

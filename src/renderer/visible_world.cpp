@@ -18,7 +18,7 @@ void VisualWorld::init(){
     auto [buffer, buffer_size] = readFileBuffer<u8>("assets/scene.vox");
     const ogt::vox_scene* scene = ogt::vox_read_scene(buffer, buffer_size);
     delete[] buffer;
-
+ 
     assert(scene->num_models <= BLOCK_PALETTE_SIZE);
     //relies on 16^3 size and single-copy of everything
     for(i32 i=0; i<scene->num_models; i++){
@@ -27,23 +27,23 @@ void VisualWorld::init(){
         assert(scene->models[i]->size_y == BLOCK_SIZE);
         assert(scene->models[i]->size_z == BLOCK_SIZE);
         u32 sizeToCopy = BLOCK_SIZE*BLOCK_SIZE*BLOCK_SIZE;
-        memcpy(&this->blocksPalette[i], scene->models[i]->voxel_data, sizeToCopy*sizeof(MatID_t));
+        memcpy(&this->blocksPalette[i+1], scene->models[i]->voxel_data, sizeToCopy*sizeof(MatID_t));
     }
     //i=0 alwaus empty mat/color
     for(i32 i=0; i<MATERIAL_PALETTE_SIZE; i++){
         this->matPalette[i].color = vec4(
-            scene->palette.color[i].r,
-            scene->palette.color[i].g,
-            scene->palette.color[i].b,
-            scene->palette.color[i].a
+            scene->palette.color[i].r / 256.0,
+            scene->palette.color[i].g / 256.0,
+            scene->palette.color[i].b / 256.0,
+            scene->palette.color[i].a / 256.0
         );
         this->matPalette[i].emmit = scene->materials.matl[i].emit;
         this->matPalette[i].rough = scene->materials.matl[i].rough;
     }
 
     // Chunks is just 3d psewdo dynamic array. Same as united blocks. Might change on settings change
-    this->loadedChunks.resize(1,1,1);
-    this->unitedBlocks.resize(8,8,8);
+    this->loadedChunks.set_size(1,1,1);
+    this->unitedBlocks.set_size(8,8,8);
 
     ChunkInMem singleChunk = {};
     ogt::ogt_voxel_meshify_context ctx = {};
@@ -57,7 +57,7 @@ void VisualWorld::init(){
         rgbaPalette[i].a = icolor.a;
     }
     // rgbaPalette.a
-    ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[0].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
+    ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[1].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
 
     vector<Vertex> vertices = {};
     vector<u32   >  indices = {};

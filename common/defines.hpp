@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 #define KEND  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
@@ -10,7 +12,7 @@
 #define KWHT  "\x1B[37m"
 
 #define println printf(KGRN "Line:%d Fun: %s\n" KEND, __LINE__, __FUNCTION__);
-#define printl(x) cout << #x " "<< x << "\n";
+#define printl(x) std::cout << #x " "<< x << std::endl;
 
 // #include <stdint.h>
 // #include <stdfloat>

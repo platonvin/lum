@@ -1,23 +1,39 @@
 #include <stdio.h>
-
 #include <Volk/volk.h>
 #include <GLFW/glfw3.h>
 #include <renderer/visible_world.hpp>
 #include <renderer/render.hpp>
 #include <renderer/window.hpp>
+#include <defines.hpp>
 
 VisualWorld world = {};
 Renderer render = {};
 int main() {
-
+    
+println
     render.init();
+println
     world.init();
 
-    std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
+    // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
+println
     render.update_Block_Palette(world.blocksPalette);
-    std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
+println
     render.update_Blocks(world.unitedBlocks.data());
+    // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
+println
     render.update_Voxel_Palette(world.matPalette);
+println
+
+    // 163
+    auto mat = world.matPalette[156];
+    printf("\n");
+    printl(mat.color.r);
+    printl(mat.color.g);
+    printl(mat.color.b);
+    printl(mat.color.a);
+    printl(mat.emmit);
+    printl(mat.rough);
 
     vkDeviceWaitIdle(render.device);
 
