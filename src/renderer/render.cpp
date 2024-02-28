@@ -1,10 +1,10 @@
-// #include <memory>
 #include <process.h>
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 // #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 // #define VMA_VULKAN_VERSION 1003000
 #include "render.hpp" 
+#include "vulkan/vulkan_core.h"
 
 #include <set>
 #include <iostream>
@@ -1365,13 +1365,18 @@ void Renderer::start_RayTrace(){
         0, VK_ACCESS_SHADER_WRITE_BIT
     );
 
+    copy_Whole_Image({8,8,8}, commandBuffer, 
+        originBlocksImages[currentFrame],       raytraceBlocksImages[currentFrame]);
+    copy_Whole_Image({16,16, 16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+        originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
+
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 }
 static int itime = 0;
 void Renderer::end_RayTrace(){
     VkCommandBuffer &commandBuffer = raytraceCommandBuffers[currentFrame];
-    float time = glfwGetTime();
+    // float time = glfwGetTime();
     itime++;
     // printf("time %f\n", time);
     // int data[1] = {*(i32*)(&time)};
@@ -1984,6 +1989,53 @@ void Renderer::transition_Image_Layout_Singletime(VkImage image, VkFormat format
 
     end_Single_Time_Commands(commandBuffer);
 }
+
+void Renderer::copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst){
+    VkImageCopy copy_op = {};
+        copy_op.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy_op.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy_op.srcSubresource.layerCount = 1;
+        copy_op.dstSubresource.layerCount = 1;
+        copy_op.srcSubresource.baseArrayLayer = 0;
+        copy_op.dstSubresource.baseArrayLayer = 0;
+        copy_op.srcSubresource.mipLevel = 0;
+        copy_op.dstSubresource.mipLevel = 0;
+        copy_op.srcOffset = {0, 0,0};
+        copy_op.dstOffset = {0, 0,0};
+        copy_op.extent = extent;
+    vkCmdCopyImage(cmdbuf, 
+        src,
+        VK_IMAGE_LAYOUT_GENERAL, //TODO:
+        dst,
+        VK_IMAGE_LAYOUT_GENERAL, //TODO:
+        1,
+        &copy_op
+    );
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = dst;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT ;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT ;
+
+    vkCmdPipelineBarrier(
+        cmdbuf,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
+}
+
 void Renderer::transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) {
 
@@ -2012,6 +2064,8 @@ void Renderer::transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkIma
         1, &barrier
     );
 }
+
+//NOTE: all following funcs are not updates - they are just "loads"
 
 //TODO: make use of frames in flight - do not wait for this things
 //TODO: do smth with frames in flight

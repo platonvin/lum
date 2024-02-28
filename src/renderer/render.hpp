@@ -157,7 +157,7 @@ public:
         create_Image_Storages(originBlocksImages, originBlocksImageAllocations, originBlocksImageViews,
             VK_IMAGE_TYPE_3D,
             VK_FORMAT_R32_SINT,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_GENERAL,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -166,7 +166,7 @@ public:
         create_Image_Storages(raytraceBlocksImages, raytraceBlocksImageAllocations, raytraceBlocksImageViews,
             VK_IMAGE_TYPE_3D,
             VK_FORMAT_R32_SINT,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_GENERAL,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -175,7 +175,7 @@ public:
         create_Image_Storages(originBlockPaletteImages, originBlockPaletteImageAllocations, originBlockPaletteImageViews,
             VK_IMAGE_TYPE_3D,
             VK_FORMAT_R8_UINT,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_GENERAL,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -184,7 +184,7 @@ public:
         create_Image_Storages(raytraceBlockPaletteImages, raytraceBlockPaletteImageAllocations, raytraceBlockPaletteImageViews,
             VK_IMAGE_TYPE_3D,
             VK_FORMAT_R8_UINT,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_GENERAL,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -218,20 +218,23 @@ public:
         create_Sync_Objects();
     }
     void cleanup(){
-
         for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroyImageView(device,             raytracedImageViews[i], NULL);
-            vkDestroyImageView(device,        rayGenPosMatImageViews[i], NULL);
-            vkDestroyImageView(device,          rayGenNormImageViews[i], NULL);
-            vkDestroyImageView(device,         rayGenDepthImageViews[i], NULL);
-            vkDestroyImageView(device,       raytraceBlocksImageViews[i], NULL);
-            vkDestroyImageView(device, raytraceBlockPaletteImageViews[i], NULL);
-            vkDestroyImageView(device, raytraceVoxelPaletteImageViews[i], NULL);
-            vmaDestroyImage(VMAllocator,       raytracedImages[i],                   raytracedImageAllocations[i]);
-            vmaDestroyImage(VMAllocator,  rayGenPosMatImages[i],              rayGenPosMatImageAllocations[i]);
-            vmaDestroyImage(VMAllocator,    rayGenNormImages[i],                rayGenNormImageAllocations[i]);
-            vmaDestroyImage(VMAllocator,   rayGenDepthImages[i],               rayGenDepthImageAllocations[i]);
-            vmaDestroyImage(VMAllocator, raytraceBlocksImages[i],             raytraceBlocksImageAllocations[i]);
+            vkDestroyImageView(device,          rayGenPosMatImageViews[i], NULL);
+            vkDestroyImageView(device,            rayGenNormImageViews[i], NULL);
+            vkDestroyImageView(device,           rayGenDepthImageViews[i], NULL);
+            vkDestroyImageView(device,          originBlocksImageViews[i], NULL);
+            vkDestroyImageView(device,        raytraceBlocksImageViews[i], NULL);
+            vkDestroyImageView(device,    originBlockPaletteImageViews[i], NULL);
+            vkDestroyImageView(device,  raytraceBlockPaletteImageViews[i], NULL);
+            vkDestroyImageView(device,  raytraceVoxelPaletteImageViews[i], NULL);
+            vmaDestroyImage(VMAllocator,            raytracedImages[i],            raytracedImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,         rayGenPosMatImages[i],         rayGenPosMatImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,           rayGenNormImages[i],           rayGenNormImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,          rayGenDepthImages[i],          rayGenDepthImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,         originBlocksImages[i],         originBlocksImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,       raytraceBlocksImages[i],       raytraceBlocksImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,   originBlockPaletteImages[i]  , originBlockPaletteImageAllocations[i]);
             vmaDestroyImage(VMAllocator, raytraceBlockPaletteImages[i], raytraceBlockPaletteImageAllocations[i]);
             vmaDestroyImage(VMAllocator, raytraceVoxelPaletteImages[i], raytraceVoxelPaletteImageAllocations[i]);
             vkDestroySampler(device, raytracedImageSamplers[i], NULL);
@@ -290,8 +293,6 @@ public:
         vkDestroyInstance(instance, NULL);
         glfwDestroyWindow(window.pointer);
     }
-
-    // void draw_Frame();
 
     void start_Frame();
         void start_RayGen();
@@ -366,7 +367,8 @@ private:
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
     void transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
-
+    void copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst);
+    
     void get_Layers();
     void get_Instance_Extensions();
     void get_PhysicalDevice_Extensions();
