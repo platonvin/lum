@@ -11,7 +11,7 @@
 #define KCYN  "\x1B[36m"
 #define KWHT  "\x1B[37m"
 
-#define println printf(KGRN "Line:%d Fun: %s\n" KEND, __LINE__, __FUNCTION__);
+#define println printf(KGRN ":%d Fun: %s\n" KEND, __LINE__, __FUNCTION__);
 #define printl(x) std::cout << #x " "<< x << std::endl;
 
 // #include <stdint.h>

@@ -85,6 +85,7 @@ void VisualWorld::init(){
     //without transformations
     singleChunk.blocks[0][0][0] = 1;
     tie(singleChunk.mesh.vertexes, singleChunk.mesh.indexes) = render.create_RayGen_VertexBuffers(vertices, indices);
+    // tie(singleChunk)
     singleChunk.mesh.icount = indices.size();
 
     // for (auto index: indices) {
@@ -108,10 +109,10 @@ void VisualWorld::init(){
     
     this->loadedChunks(0,0,0) = singleChunk;
 
-    this->unitedBlocks(0,0,0) = 1; //so 1 from block palette. For testing
-    this->unitedBlocks(0,0,1) = 1; //so 1 from block palette. For testing
-    this->unitedBlocks(0,0,2) = 1; //so 1 from block palette. For testing
-    this->unitedBlocks(0,1,1) = 1; //so 1 from block palette. For testing
+    // this->unitedBlocks(0,0,0) = 1; //so 1 from block palette. For testing
+    // this->unitedBlocks(0,0,1) = 1; //so 1 from block palette. For testing
+    // this->unitedBlocks(0,0,4) = 1; //so 1 from block palette. For testing
+    // this->unitedBlocks(0,1,1) = 1; //so 1 from block palette. For testing
 }
 
 // void VisualWorld::update(){

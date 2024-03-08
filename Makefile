@@ -6,7 +6,7 @@
 I = -I./src -I${VULKAN_SDK}/Include -IC:\prog\sl-vector -I./common
 L = -L${VULKAN_SDK}/Lib
 F = -pipe -fno-exceptions -Wl,--stack,4096
-SA = -O
+SA = 
 A = $(I) $(F) $(args)
 
 objs := \
@@ -28,11 +28,14 @@ headers:= \
 	src/renderer/primitives.hpp\
 
 _shaders:= \
-	shaders/vert.spv\
-	shaders/frag.spv\
-	shaders/rayGenVert.spv\
-	shaders/rayGenFrag.spv\
-	shaders/comp.spv\
+	shaders/compiled/vert.spv\
+	shaders/compiled/frag.spv\
+	shaders/compiled/rayGenVert.spv\
+	shaders/compiled/rayGenFrag.spv\
+	shaders/compiled/blockify.spv\
+	shaders/compiled/copy.spv\
+	shaders/compiled/map.spv\
+	shaders/compiled/comp.spv\
 
 # flags = 
 
@@ -52,16 +55,22 @@ client_opt: $(src) $(headers) $(_shaders)
 temp:
 	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)
 
-shaders/vert.spv: shaders/vert.vert
-	glslc shaders/vert.vert -o shaders/vert.spv $(SA)
-shaders/frag.spv: shaders/frag.frag
-	glslc shaders/frag.frag -o shaders/frag.spv $(SA)
-shaders/rayGenVert.spv: shaders/rayGen.vert
-	glslc shaders/rayGen.vert -o shaders/rayGenVert.spv $(SA)
-shaders/rayGenFrag.spv: shaders/rayGen.frag
-	glslc shaders/rayGen.frag -o shaders/rayGenFrag.spv $(SA)
-shaders/comp.spv: shaders/comp.comp
-	glslc shaders/comp.comp -o shaders/comp.spv $(SA)
+shaders/compiled/vert.spv: shaders/vert.vert
+	glslc shaders/vert.vert -o shaders/compiled/vert.spv $(SA)
+shaders/compiled/frag.spv: shaders/frag.frag
+	glslc shaders/frag.frag -o shaders/compiled/frag.spv $(SA)
+shaders/compiled/rayGenVert.spv: shaders/rayGen.vert
+	glslc shaders/rayGen.vert -o shaders/compiled/rayGenVert.spv $(SA)
+shaders/compiled/rayGenFrag.spv: shaders/rayGen.frag
+	glslc shaders/rayGen.frag -o shaders/compiled/rayGenFrag.spv $(SA)
+shaders/compiled/blockify.spv: shaders/blockify.comp
+	glslc shaders/blockify.comp -o shaders/compiled/blockify.spv $(SA)
+shaders/compiled/copy.spv: shaders/copy.comp
+	glslc shaders/copy.comp -o shaders/compiled/copy.spv $(SA)
+shaders/compiled/map.spv: shaders/map.comp
+	glslc shaders/map.comp -o shaders/compiled/map.spv $(SA)
+shaders/compiled/comp.spv: shaders/comp.comp
+	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
 
 init:
 	mkdir obj

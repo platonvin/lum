@@ -5,26 +5,23 @@ struct CopyOperation {
     int dst;
 };
 
-//copy_x and copy_y are set to 16 by vk set buffer
+layout(set = 0, binding = 0, r8ui) uniform uimage3D blocksPalette;
+    //copy_x and copy_y are set to 16 by vk set buffer
 layout(set = 0, binding = 1) readonly buffer copyCounterBuffer {
     int copy_x; //16
     int copy_y; //16
     int copy_z_counter;  //16 * copies_count
-    // TODO: balance this
-    // static "vector" ("dynamic" array of fixed capacity and atomic size_counter). 
-    // this stage will copy blocks_to_copy[i] from block palette to blocks_to_copy[STATIC_BLOCKS_COUNT+i] 
+        // TODO: balance this
+        // static "vector" ("dynamic" array of fixed capacity and atomic size_counter). 
+        // this stage will copy blocks_to_copy[i] from block palette to blocks_to_copy[STATIC_BLOCKS_COUNT+i] 
     CopyOperation copies[1024];
 };
-
-const int STATIC_BLOCKS_COUNT = 12;
-
-layout(set = 0, binding = 0, r32i) uniform iimage3D blocksPalette;
 
 //TODO: balance
 //16 by x
 //16 by y
 //16 * NUMBER OF BLOCKS TO COPY by z
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+const int STATIC_BLOCKS_COUNT = 12;
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     ivec3 absolute_voxel_pos = (
@@ -34,7 +31,9 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     return absolute_voxel_pos;
 }
 
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 void main(void){
+    
     vec3 pos = gl_GlobalInvocationID.xyz;
     ivec3 ipos = ivec3(pos);
 

@@ -106,7 +106,7 @@ public:
         create_Allocator();
         
         create_Swapchain();
-        create_Image_Views();
+        create_Swapchain_Image_Views();
 
         create_RenderPass_Graphical();
         create_RenderPass_RayGen();
@@ -114,7 +114,7 @@ public:
         create_Command_Pool();
         create_Command_Buffers(graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
         create_Command_Buffers(   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-        create_Command_Buffers(  raytraceCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+        create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
         create_samplers();
     
@@ -200,19 +200,33 @@ public:
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT ,
             {256, 6, 1}); //TODO: dynamic, text formats, pack Material into smth other than 6 ortogonal floats :)
 
+        // create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size)
+        create_Buffer_Storages(paletteCounterBuffers, paletteCounterBufferAllocations,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            sizeof(int));
+        create_Buffer_Storages(copyCounterBuffers, copyCounterBufferAllocations,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+            sizeof(int)*(3+1024));
+        
         vector<vector<VkImageView>> swapViews = {swapChainImageViews};
         create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
 // printl(swapChainImages.size());
         vector<vector<VkImageView>> rayGenVeiws = {rayGenPosMatImageViews, rayGenNormImageViews, rayGenDepthImageViews};
         create_N_Framebuffers(rayGenFramebuffers, rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
         
-        create_Descriptor_Pool();
         create_Descriptor_Set_Layouts();
+        create_Descriptor_Pool();
         allocate_Descriptors();
-        setup_Compute_Descriptors();
+        setup_Blockify_Descriptors();
+        setup_Copy_Descriptors();
+        //setup for map?
+        setup_Raytrace_Descriptors();
         setup_Graphical_Descriptors();
         // setup_RayGen_Descriptors();
-        create_Compute_Pipeline();
+        create_Blockify_Pipeline();
+        create_Copy_Pipeline();
+        create_Map_Pipeline();
+        create_Raytrace_Pipeline();
         create_Graphics_Pipeline();
         create_RayGen_Pipeline();
         create_Sync_Objects();
@@ -220,18 +234,18 @@ public:
     void cleanup(){
         for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroyImageView(device,             raytracedImageViews[i], NULL);
-            vkDestroyImageView(device,          rayGenPosMatImageViews[i], NULL);
             vkDestroyImageView(device,            rayGenNormImageViews[i], NULL);
             vkDestroyImageView(device,           rayGenDepthImageViews[i], NULL);
+            vkDestroyImageView(device,          rayGenPosMatImageViews[i], NULL);
             vkDestroyImageView(device,          originBlocksImageViews[i], NULL);
             vkDestroyImageView(device,        raytraceBlocksImageViews[i], NULL);
             vkDestroyImageView(device,    originBlockPaletteImageViews[i], NULL);
             vkDestroyImageView(device,  raytraceBlockPaletteImageViews[i], NULL);
             vkDestroyImageView(device,  raytraceVoxelPaletteImageViews[i], NULL);
             vmaDestroyImage(VMAllocator,            raytracedImages[i],            raytracedImageAllocations[i]);
-            vmaDestroyImage(VMAllocator,         rayGenPosMatImages[i],         rayGenPosMatImageAllocations[i]);
             vmaDestroyImage(VMAllocator,           rayGenNormImages[i],           rayGenNormImageAllocations[i]);
             vmaDestroyImage(VMAllocator,          rayGenDepthImages[i],          rayGenDepthImageAllocations[i]);
+            vmaDestroyImage(VMAllocator,         rayGenPosMatImages[i],         rayGenPosMatImageAllocations[i]);
             vmaDestroyImage(VMAllocator,         originBlocksImages[i],         originBlocksImageAllocations[i]);
             vmaDestroyImage(VMAllocator,       raytraceBlocksImages[i],       raytraceBlocksImageAllocations[i]);
             vmaDestroyImage(VMAllocator,   originBlockPaletteImages[i]  , originBlockPaletteImageAllocations[i]);
@@ -239,22 +253,30 @@ public:
             vmaDestroyImage(VMAllocator, raytraceVoxelPaletteImages[i], raytraceVoxelPaletteImageAllocations[i]);
             vkDestroySampler(device, raytracedImageSamplers[i], NULL);
             
-            // vmaDestroyBuffer(VMAllocator, rayGenVertexBuffers[i], rayGenVertexAllocations[i]);
-            // vmaDestroyBuffer(VMAllocator,  rayGenIndexBuffers[i],  rayGenIndexAllocations[i]);
-
+            vmaDestroyBuffer(VMAllocator, paletteCounterBuffers[i], paletteCounterBufferAllocations[i]);
+            vmaDestroyBuffer(VMAllocator, copyCounterBuffers[i], copyCounterBufferAllocations[i]);
 
             vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
         }
 
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
         vkDestroyDescriptorSetLayout(device,   raytraceDescriptorSetLayout, NULL);
+        vkDestroyDescriptorSetLayout(device,   blockifyDescriptorSetLayout, NULL);
+        vkDestroyDescriptorSetLayout(device,   copyDescriptorSetLayout, NULL);
+        vkDestroyDescriptorSetLayout(device,   mapDescriptorSetLayout, NULL);
         vkDestroyDescriptorSetLayout(device, graphicalDescriptorSetLayout, NULL);
         for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroySemaphore(device,  imageAvailableSemaphores[i], NULL);
             vkDestroySemaphore(device,  renderFinishedSemaphores[i], NULL);
+            // vkDestroySemaphore(device, blockifyFinishedSemaphores[i], NULL);
+            // vkDestroySemaphore(device, copyFinishedSemaphores[i], NULL);
+            // vkDestroySemaphore(device, mapFinishedSemaphores[i], NULL);
             vkDestroySemaphore(device, raytraceFinishedSemaphores[i], NULL);
             vkDestroySemaphore(device,  rayGenFinishedSemaphores[i], NULL);
             vkDestroyFence(device, graphicalInFlightFences[i], NULL);
+            // vkDestroyFence(device,   blockifyInFlightFences[i], NULL);
+            // vkDestroyFence(device,   copyInFlightFences[i], NULL);
+            // vkDestroyFence(device,   mapInFlightFences[i], NULL);
             vkDestroyFence(device,   raytraceInFlightFences[i], NULL);
             vkDestroyFence(device,    rayGenInFlightFences[i], NULL);
         }
@@ -295,16 +317,27 @@ public:
     }
 
     void start_Frame();
-        void start_RayGen();
-        void draw_RayGen_Mesh(Mesh &mesh);
-        void   end_RayGen();
-        void start_RayTrace();
-        void   end_RayTrace();
-        void start_Present();
+        void startRaygen();
+        void RaygenMesh(Mesh &mesh);
+        void   endRaygen();
+        // Start of computeCommandBuffer
+        void startCompute();
+                void startBlockify();
+                void blockifyMesh(Mesh &mesh);
+                void   endBlockify();
+            void execCopies();
+                void startMap();
+                void mapMesh(Mesh &mesh);
+                void   endMap();
+            void raytrace();
+        void   endCompute();
+        // End of computeCommandBuffer
+        void present();
         void   end_Present();
     void end_Frame();
 
     tuple<Buffer, Buffer> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices);
+    Image  create_RayTrace_VoxelImages(MatID_t* voxels, ivec3 size);
     void update_Block_Palette(Block* blockPalette);
     void update_Voxel_Palette(Material* materialPalette);
     void update_Blocks(BlockID_t* blocks);
@@ -330,7 +363,7 @@ private:
     VkSurfaceFormatKHR choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR> availableFormats);
     VkPresentModeKHR choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes);
     VkExtent2D choose_Swap_Extent(VkSurfaceCapabilitiesKHR capabilities);
-    void create_Image_Views();
+    void create_Swapchain_Image_Views();
     void create_RenderPass_Graphical();
     void create_RenderPass_RayGen();
     void create_Graphics_Pipeline(); 
@@ -338,7 +371,10 @@ private:
     void create_Descriptor_Set_Layouts();
     void create_Descriptor_Pool();
     void allocate_Descriptors();
-    void setup_Compute_Descriptors();
+    void setup_Blockify_Descriptors();
+    void setup_Copy_Descriptors();
+    void setup_Map_Descriptors();
+    void setup_Raytrace_Descriptors();
     void setup_Graphical_Descriptors();
     void create_samplers();
     // void update_Descriptors();
@@ -346,7 +382,11 @@ private:
     void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlags access, 
     uvec3 hwd);
-    void create_Compute_Pipeline(); 
+    void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size);
+    void create_Blockify_Pipeline();
+    void create_Copy_Pipeline();
+    void create_Map_Pipeline();
+    void create_Raytrace_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
     //creates framebuffers that point to attachments view specified views
     void create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector<vector<VkImageView>> &views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height);
@@ -414,15 +454,22 @@ public:
     vector<VkFramebuffer> swapChainFramebuffers;
     vector<VkFramebuffer>    rayGenFramebuffers;
 
-    vector<VkCommandBuffer> graphicalCommandBuffers;
     vector<VkCommandBuffer>    rayGenCommandBuffers;
-    vector<VkCommandBuffer>  raytraceCommandBuffers; //also used for blockify, copy and map
+    //It is so because they are too similar and easy to record (TODO: make concurent)
+    vector<VkCommandBuffer>   computeCommandBuffers; //also used for blockify, copy and map. 
+    vector<VkCommandBuffer> graphicalCommandBuffers;
 
     vector<VkSemaphore>   imageAvailableSemaphores;
     vector<VkSemaphore>   renderFinishedSemaphores;
+    // vector<VkSemaphore> blockifyFinishedSemaphores;
+    // vector<VkSemaphore> copyFinishedSemaphores;
+    // vector<VkSemaphore> mapFinishedSemaphores;
     vector<VkSemaphore> raytraceFinishedSemaphores;
     vector<VkSemaphore>   rayGenFinishedSemaphores;
     vector<VkFence> graphicalInFlightFences;
+    // vector<VkFence>  blockifyInFlightFences;
+    // vector<VkFence>      copyInFlightFences;
+    // vector<VkFence>       mapInFlightFences;
     vector<VkFence>  raytraceInFlightFences;
     vector<VkFence>    rayGenInFlightFences;    
     
@@ -434,6 +481,8 @@ public:
     vector<VkImage> raytraceBlockPaletteImages;
     vector<VkImage>   originBlockPaletteImages;
     vector<VkImage> raytraceVoxelPaletteImages;
+    vector<VkBuffer>       paletteCounterBuffers; //atomic
+    vector<VkBuffer>          copyCounterBuffers; //atomic
     // vector<VkImage>   originVoxelPaletteImages; //unused - voxel mat palette does not change
     vector<VkImage>            raytracedImages;
     vector<VkImage>            swapChainImages;
@@ -447,6 +496,8 @@ public:
     vector<VmaAllocation>  raytraceVoxelPaletteImageAllocations;
     // vector<VmaAllocation>    originVoxelPaletteImageAllocations; //unused - voxel mat palette does not change
     vector<VmaAllocation>             raytracedImageAllocations;
+    vector<VmaAllocation>        paletteCounterBufferAllocations;
+    vector<VmaAllocation>           copyCounterBufferAllocations;
     vector<VkImageView>         rayGenPosMatImageViews;
     vector<VkImageView>           rayGenNormImageViews;
     vector<VkImageView>          rayGenDepthImageViews;
@@ -458,6 +509,7 @@ public:
     // vector<VkImageView>   originVoxelPaletteImageViews; //unused - voxel mat palette does not change
     vector<VkImageView>            raytracedImageViews;
     vector<VkImageView>            swapChainImageViews;
+    //buffers dont need view
     vector<VkSampler>  raytracedImageSamplers;
     
     

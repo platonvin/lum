@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vulkan/vulkan_core.h"
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -50,6 +51,11 @@ typedef struct Buffer {
     vector<VkBuffer> buf;
     vector<VmaAllocation> alloc;
 } Buffer;
+typedef struct Image {
+    vector<VkImage> image;
+    vector<VkImageView> view;
+    vector<VmaAllocation> alloc;
+} Image;
 
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
@@ -60,7 +66,8 @@ typedef struct Mesh {
     //used to transform from self coordinate system to world coordinate system
     mat4 transform;
     //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
-    Buffer voxels;
+    Image voxels;
+    ivec3 size;
     // vector<VkBuffer> voxels;
 } Mesh;
 typedef struct Block {

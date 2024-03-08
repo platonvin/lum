@@ -5,6 +5,7 @@ obj/*.o
 client.exe
 # compiled shaders
 shaders/*.spv
+shaders/compiled/*.spv
 # for clangd
 compile_flags.txt
 .vscode

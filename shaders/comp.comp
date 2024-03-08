@@ -11,7 +11,7 @@ layout(push_constant) uniform constants{
 layout(set = 0, binding = 0, rgba32f) readonly uniform image2D posMat;
 layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norms;
 
-layout(set = 0, binding = 2, r32i) readonly uniform iimage3D blocks;
+layout(set = 0, binding = 2, r32i) uniform iimage3D blocks;
 
 //
 layout(set = 0, binding = 3, r8ui) readonly uniform uimage3D blockPalette;
@@ -460,6 +460,10 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
 }
 
 void main(void){
+                // imageStore(blocks, ivec3(0,0,1), ivec4(1));
+                // imageStore(blocks, ivec3(0,0,0), ivec4(1));
+                // imageStore(blocks, ivec3(0,1,1), ivec4(1));
+    
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(frame);
     if (pix.x >= size.x || pix.y >= size.y) {

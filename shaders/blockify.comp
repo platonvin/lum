@@ -5,11 +5,10 @@ struct copy_operation {
     int dst;
 };
 
-//atomic counter that is reset to current palette size every frame
-//used to decide where in palette will be block taken by model
+    //atomic counter that is reset to current palette size every frame
+    //used to decide where in palette will be block taken by model
 layout(set = 0, binding = 0) buffer paletteCounterBuffer {int palette_counter;};
-
-//completely zeroed every frame
+    //completely zeroed every frame
 layout(set = 0, binding = 1) buffer    copyCounterBuffer {
     int copy_x;
     int copy_y;
@@ -19,10 +18,10 @@ layout(set = 0, binding = 1) buffer    copyCounterBuffer {
     // next shader stage will copy blocks_to_copy[i] from block palette to blocks_to_copy[STATIC_BLOCKS_COUNT+i] 
     copy_operation copies[1024];
 };
+layout(set = 0, binding = 2, r32i) uniform iimage3D blocks;
 
 layout(push_constant) uniform constants{
     mat4 trans; //to map modelBlocks to game block world
-    ivec3 model_size;
 } PushConstants;
 
 //used to determine if value is taken
@@ -32,19 +31,24 @@ const int BLOCK_IS_BORROWED = 1024;
 //"air" not countet. So free blocks in palette start from index [1+STATIC_BLOCKS_COUNT] 
 const int STATIC_BLOCKS_COUNT = 12;
 
-layout(set = 0, binding = 0, r32i) uniform iimage3D blocks;
 
 //TODO: balance, X>Y>Z for coherence
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 
 void main(void){
-    vec3 relative_pos = gl_GlobalInvocationID.xyz;
+    // ivec3 ipos = ivec3(gl_GlobalInvocationID.xyz);
+    //             imageStore(blocks, ipos, ivec4(1));
+    //             imageStore(blocks, ipos, ivec4(1));
+    //             imageStore(blocks, ipos, ivec4(1));
+    //             imageStore(blocks, ipos, ivec4(1));
+     vec3  relative_pos = gl_GlobalInvocationID.xyz;
+    ivec3 irelative_pos = ivec3(relative_pos);
     vec3 absolute_pos = (PushConstants.trans * vec4(relative_pos,1)).xyz;
     //position of this block in real world grid
     ivec3 iabsolute_pos = ivec3(absolute_pos);
 
         //if this is extra "out-of-bounds" block then return
-    if (any(greaterThanEqual(iabsolute_pos, PushConstants.model_size))) return;
+    // if (any(greaterThanEqual(irelative_pos, PushConstants.model_size))) return;
 
         //we borrow block and replace with BLOCK_IS_BORROWED
     int borrowed_block = imageAtomicExchange(blocks, iabsolute_pos, BLOCK_IS_BORROWED);
@@ -66,6 +70,8 @@ void main(void){
         new_block = atomicAdd(palette_counter, 1);
 
             //also submit copying (increment counter) AND copy operation
+        copy_x=16;//TODO:move away
+        copy_y=16;//TODO:move away
         int copy_id = atomicAdd(copy_z_counter, 16); //this starts at zero. We hope it will not overflow
         copy_id /= 16;
             //we copy static block that is not air
