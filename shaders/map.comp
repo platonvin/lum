@@ -26,7 +26,7 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main(void){
     ivec3 ipos = ivec3(gl_GlobalInvocationID.xyz);
-    imageStore(blocks, (ipos)/16, ivec4(1));
+    // imageStore(blocks, (ipos)/16, ivec4(1));
         // imageStore(
         //     blockPalette, 
         //     voxel_in_palette(ipos, imageLoad(blocks, (ipos+1)/16).r)
@@ -37,12 +37,12 @@ void main(void){
     ivec3 irelative_vox = ivec3(relative_vox);
     //part where actual transformation happens
     ivec3   target_vox = ivec3((PushConstants.trans * vec4(relative_vox,1)).xyz);
-    ivec3 relative_block_in_model = irelative_vox / 16;
-    ivec3 target_block_in_world = target_vox   /  16;
+    ivec3 target_block_in_world   =    target_vox / 16;
 
-    ivec3 model_size = imageSize(modelVoxels);
+    // ivec3 model_size = imageSize(modelVoxels);
+    ivec3 model_size = ivec3(16);
     //+1 for propper rounding, so 15 results into 1
-    ivec3 model_size_in_blocks = (model_size + ivec3(1)) / 16;
+    // ivec3 model_size_in_blocks = (model_size + ivec3(1)) / 16;
     //if this is extra "out-of-bounds" voxel
     if (any(greaterThanEqual(irelative_vox, model_size))) return;
 
@@ -55,12 +55,13 @@ void main(void){
     //TODO: test different approaches to cast and dot etc...
     //WHERE IS MY IDOT
     int target_block_in_palette = int(imageLoad(blocks, target_block_in_world).r);
+    // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to
     ivec3 target_palette_voxel = voxel_in_palette(target_vox % 16, target_block_in_palette);
     
-    imageStore(blockPalette, target_palette_voxel, 
-        // imageLoad(modelVoxels, irelative_vox)
-        ivec4(167)
-        );
+    imageStore(blockPalette, target_palette_voxel,
+            imageLoad(modelVoxels, irelative_vox)
+            // ivec4(0)
+            );
 }

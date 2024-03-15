@@ -5,7 +5,8 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -IC:\prog\sl-vector -I./common
 L = -L${VULKAN_SDK}/Lib
-F = -pipe -fno-exceptions -Wl,--stack,4096
+F = -pipe -fno-exceptions -fno-rtti
+D = -DNDEBUG
 SA = 
 A = $(I) $(F) $(args)
 
@@ -50,7 +51,7 @@ obj/main.o: src/main.cpp $(headers)
 client: $(objs) $(_shaders)
 	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk $(args)
 client_opt: $(src) $(headers) $(_shaders)
-	g++ $(srcs) $(F) $(I) $(L) -lglfw3 -lvolk -Os -fdata-sections -ffunction-sections -o client.exe -Wl,--gc-sections,--stack,16777216 $(args)
+	g++ $(srcs) $(F) $(I) $(L) $(D) -lglfw3 -lvolk -Oz -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
 
 temp:
 	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)

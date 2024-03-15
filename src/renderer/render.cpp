@@ -32,6 +32,7 @@ vector<const char*> debugInstanceExtensions = {
     VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
 };
+static int itime = 0;
 
 //no debug device extensions
 vector<const char*> instanceLayers = {};
@@ -379,8 +380,8 @@ VkSurfaceFormatKHR Renderer::choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR
 
 VkPresentModeKHR Renderer::choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes) {
     for (auto mode : availablePresentModes) {
-        // if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+        if (mode == VK_PRESENT_MODE_FIFO_KHR) {
+        // if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return mode;}
     }
     // cout << "fifo\n";
@@ -1222,6 +1223,7 @@ void Renderer::startCompute(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     vkWaitForFences(device, 1, &raytraceInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
     vkResetFences  (device, 1, &raytraceInFlightFences[currentFrame]);
+
     
     vkResetCommandBuffer(computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
     VkCommandBufferBeginInfo beginInfo = {};
@@ -1229,6 +1231,12 @@ void Renderer::startCompute(){
         beginInfo.flags = 0; // Optional
         beginInfo.pInheritanceInfo = NULL; // Optional
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    vkCmdFillBuffer(commandBuffer,    copyCounterBuffers[currentFrame], sizeof(int)*2, sizeof(int)*1, 0);
+    vkCmdFillBuffer(commandBuffer, paletteCounterBuffers[currentFrame], sizeof(int)*0, sizeof(int)*1, 2);
+    //TODO: remove
+    copy_Whole_Image({16,16, 16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+    originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
 }
 void Renderer::startBlockify(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1236,12 +1244,18 @@ void Renderer::startBlockify(){
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, blockifyPipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, blockifyLayout, 0, 1, &blockifyDescriptorSets[currentFrame], 0, 0);
 }
+// allocates temp block in palette for every block that intersects with every mesh blockified
 void Renderer::blockifyMesh(Mesh& mesh){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
-    vkCmdPushConstants(commandBuffer, blockifyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(mat4) , &mesh.transform);
-    vkCmdDispatch(commandBuffer, (mesh.size.x+1)/16, (mesh.size.y+1)/16, (mesh.size.z+1)/16);
-
+    vkCmdPushConstants(commandBuffer, blockifyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(mat4), &mesh.transform);
+    vkCmdPushConstants(commandBuffer, blockifyLayout, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(mat4), sizeof(int), &itime);
+    // vkCmdDispatch(commandBuffer, (mesh.size.x+15+16*2)/16, 
+    //                              (mesh.size.y+15+16*2)/16, 
+    //                              (mesh.size.z+15+16*2)/16); //adds 1 block to size for each axis
+    vkCmdDispatch(commandBuffer, 4, 
+                                 4, 
+                                 4); //adds 1 block to size for each axis
 }
 void Renderer::endBlockify(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1252,8 +1266,8 @@ void Renderer::endBlockify(){
         copy_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         copy_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         copy_barrier.buffer = copyCounterBuffers[currentFrame];
-        copy_barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        copy_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT ;
+        copy_barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT| VK_ACCESS_SHADER_READ_BIT;
+        copy_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
     // vkcmdbarrer
     vkCmdPipelineBarrier(
         commandBuffer,
@@ -1275,8 +1289,8 @@ void Renderer::endBlockify(){
         block_barrier.subresourceRange.levelCount = 1;
         block_barrier.subresourceRange.baseArrayLayer = 0;
         block_barrier.subresourceRange.layerCount = 1;
-        block_barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;// | VK_ACCESS_SHADER_READ_BIT;
-        block_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT ;//| VK_ACCESS_SHADER_WRITE_BIT;
+        block_barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT| VK_ACCESS_SHADER_READ_BIT;
+        block_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
     vkCmdPipelineBarrier( 
         commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1291,13 +1305,9 @@ void Renderer::execCopies(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copyPipeline);//TODO:move away
-        typedef struct {ivec3 i; mat4 t;} push_constant; 
-        push_constant pc = {};
-        pc.i = {2,2,2};
-        pc.t = identity<mat4>();
-        //  = {ivec3(1,1,1), mat4()};
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copyLayout, 0, 1, &copyDescriptorSets[currentFrame], 0, 0);
         vkCmdDispatchIndirect(commandBuffer, copyCounterBuffers[currentFrame], 0);
+        // vkCmdDispatch(commandBuffer, 16,16,16);
         VkImageMemoryBarrier barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1310,8 +1320,8 @@ void Renderer::execCopies(){
             barrier.subresourceRange.levelCount = 1;
             barrier.subresourceRange.baseArrayLayer = 0;
             barrier.subresourceRange.layerCount = 1;
-            barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT| VK_ACCESS_SHADER_READ_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
         vkCmdPipelineBarrier(
             commandBuffer,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1387,8 +1397,8 @@ void Renderer::endMap(){
         barrier.subresourceRange.levelCount = 1;
         barrier.subresourceRange.baseArrayLayer = 0;
         barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT ;
+        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT  | VK_ACCESS_SHADER_WRITE_BIT;
     vkCmdPipelineBarrier(
         commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1398,7 +1408,6 @@ void Renderer::endMap(){
         1, &barrier
     );
 }
-static int itime = 0;
 void Renderer::raytrace(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
@@ -1408,8 +1417,6 @@ void Renderer::raytrace(){
             0, VK_ACCESS_SHADER_WRITE_BIT);
         // copy_Whole_Image({8,8,8}, commandBuffer, 
         //     originBlocksImages[currentFrame],       raytraceBlocksImages[currentFrame]);
-        copy_Whole_Image({16,16, 16*BLOCK_PALETTE_SIZE}, commandBuffer, 
-            originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
 
         // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
@@ -2028,7 +2035,7 @@ void Renderer::create_Blockify_Pipeline(){
 
     VkPushConstantRange pushRange = {};
         // pushRange.size = 256;
-        pushRange.size = sizeof(mat4); //trans
+        pushRange.size = sizeof(mat4) + sizeof(int); //trans
         pushRange.offset = 0;
         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 

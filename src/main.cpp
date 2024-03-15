@@ -1,4 +1,5 @@
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/scalar_constants.hpp>
 #include <stdio.h>
 #include <Volk/volk.h>
 #include <GLFW/glfw3.h>
@@ -32,18 +33,11 @@ int main() {
 
     vkDeviceWaitIdle(render.device);
 
-    table3d<MatID_t> dyn_16_block = {};
-    dyn_16_block.set_size(16, 16, 16);
-    dyn_16_block(0,0,0)=155;
-    dyn_16_block(0,0,1)=111;
-    dyn_16_block(1,0,2)=122;
-    dyn_16_block(0,3,0)=64;
-    dyn_16_block(0,5,0)=53;
-    dyn_16_block(0,6,0)=13;
-    dyn_16_block(1,0,3)=143;
     Mesh dyn_mesh = {};
-    dyn_mesh.voxels = render.create_RayTrace_VoxelImages(dyn_16_block.data(), {16,16,16});
+    dyn_mesh.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
     dyn_mesh.transform = identity<mat4>();
+    
+    // rotate(dyn_mesh.transform, pi<float>()/5, vec3(0,1,2));
     dyn_mesh.size = ivec3(16);
 
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
@@ -53,15 +47,17 @@ int main() {
                 render.RaygenMesh(world.loadedChunks(0,0,0).mesh);
             render.endRaygen();
             
+            // dyn_mesh.transform = rotate(dyn_mesh.transform, 0.002f, vec3(1,0,0));
+            dyn_mesh.transform = translate(dyn_mesh.transform, vec3(0.1,0,0));
+
             render.startCompute();
                 render.startBlockify();
                 render.blockifyMesh(dyn_mesh);
                 render.endBlockify();
-                // render.copy_RayTrace();
+                    // render.execCopies();
                 render.startMap();
                 render.mapMesh(dyn_mesh);
                 render.endMap();
-            // render.end_RayTrace();
                 render.raytrace();
             render.endCompute();
 

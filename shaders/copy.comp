@@ -31,22 +31,26 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     return absolute_voxel_pos;
 }
 
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 void main(void){
-    
     vec3 pos = gl_GlobalInvocationID.xyz;
     ivec3 ipos = ivec3(pos);
 
     //if out of bound
     //TODO: optimize (probably can be removed if dispatch_size is  multiply of local_size)
-    if (any(greaterThanEqual(ipos, ivec3(16,16,copy_z_counter)))) return;
+    if (any(greaterThanEqual(ipos, ivec3(16,16,copy_z_counter)))) return; 
 
     int copy_op_index = ipos.z / 16;
     CopyOperation copy = copies[copy_op_index];
+    // CopyOperation copy = copies[0];
+    // copy.src = 1;
+    // copy.dst = 2;
+
 
     ivec3 relative_ipos = ipos % 16;
-    ivec3 src_voxel = voxel_in_palette(relative_ipos, copy.src);
-    ivec3 dst_voxel = voxel_in_palette(relative_ipos, copy.dst);
+    ivec3 src_voxel = voxel_in_palette(ipos, copy.src);
+    ivec3 dst_voxel = voxel_in_palette(ipos, copy.dst);
+    // ivec3 dst_voxel = ivec3(1,1,1+16*2);
     
     imageStore(blocksPalette, dst_voxel,
         imageLoad(blocksPalette, src_voxel)
