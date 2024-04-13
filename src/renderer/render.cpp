@@ -1,7 +1,12 @@
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <glm/detail/qualifier.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_projection.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/vector_int3.hpp>
+#include <glm/trigonometric.hpp>
 // #include <glm/fwd.hpp>
 // #include <process.h>
 
@@ -929,12 +934,20 @@ VkPipelineColorBlendAttachmentState colorBlendAttachmentPos = {};
         colorBlending.blendConstants[2] = 0.0f; // Optional
         colorBlending.blendConstants[3] = 0.0f; // Optional
 
+    VkPushConstantRange pushRange = {};
+        // pushRange.size = 256;
+        pushRange.size = sizeof(mat4); //trans
+        pushRange.offset = 0;
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0;
-        pipelineLayoutInfo.pSetLayouts = NULL;
-        pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-        pipelineLayoutInfo.pPushConstantRanges = NULL; // Optional
+        // pipelineLayoutInfo.setLayoutCount = 0;
+        // pipelineLayoutInfo.pSetLayouts = NULL;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &RayGenDescriptorSetLayout;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
 
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &rayGenPipelineLayout));
 
@@ -1152,7 +1165,16 @@ void Renderer::create_Sync_Objects(){
 }
 
 void Renderer::start_Frame(){
-    //maybe waiting for all fences here
+    // update transformation matrix for raygen:
+    mat4 isometricRotation = identity<mat4>(); 
+         isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(0, 1, 0));
+         isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(1, 0, 0));
+
+    mat4 trans = scale(isometricRotation, vec3(.03));
+    trans = scale(trans, vec3((1080.0/1920.0), 1.0, 1.0));
+//1920.0/1080.0
+//(1080.0/1920.0)
+    memcpy(RayGenUniformMapped[currentFrame], &trans, sizeof(trans));
 }
 
 void Renderer::startRaygen(){
@@ -1183,6 +1205,7 @@ void Renderer::startRaygen(){
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipeline);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipelineLayout, 0, 1, &RayGenDescriptorSets[currentFrame], 0, 0);
 
     VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -1202,6 +1225,7 @@ void Renderer::RaygenMesh(Mesh &mesh){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
         VkBuffer vertexBuffers[] = {mesh.vertexes.buf[currentFrame]};
         VkDeviceSize offsets[] = {0};
+    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &mesh.transform);
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, mesh.indexes.buf[currentFrame], 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(commandBuffer, mesh.icount, 1, 0, 0, 0);
@@ -1380,7 +1404,11 @@ void Renderer::mapMesh(Mesh& mesh){
         vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite, blocksWrite, blockPaletteWrite};
 
     vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-    vkCmdDispatch(commandBuffer, mesh.size.x, mesh.size.y, mesh.size.z);
+    mat4 trans = mesh.transform;
+    // trans = glm::scale(trans, vec3(0.95));
+    vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(mat4), &trans);
+    ivec3 adjusted_size = ivec3(round(vec3(mesh.size) * vec3(sqrt(1.5))));
+    vkCmdDispatch(commandBuffer, (adjusted_size.x +1) / 4, (adjusted_size.y +1) / 4, (adjusted_size.z +1) / 4);
 }
 void Renderer::endMap(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1423,10 +1451,11 @@ void Renderer::raytrace(){
 
         itime++;
         vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
-        vkCmdDispatch(commandBuffer, window.width/8, window.height/4, 1);
-        VK_CHECK(vkEndCommandBuffer(commandBuffer));
+        vkCmdDispatch(commandBuffer, window.width/8, window.height/8, 1);
 }
 void Renderer::endCompute(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
         vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
         VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         VkSubmitInfo submitInfo = {};
@@ -1594,7 +1623,7 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocati
     }
 }
 //fill manually with cmd or copy
-void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size){
+void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, VkMemoryPropertyFlags required_flags){
     buffers.resize(MAX_FRAMES_IN_FLIGHT);
     allocs.resize(MAX_FRAMES_IN_FLIGHT);
     
@@ -1604,6 +1633,10 @@ void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAlloc
             bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
             bufferInfo.usage = usage;
         VmaAllocationCreateInfo allocInfo = {};
+            if (required_flags == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            }
+            allocInfo.requiredFlags = required_flags;
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         VK_CHECK(vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &buffers[i], &allocs[i], NULL));
     }
@@ -1710,6 +1743,7 @@ Image Renderer::create_RayTrace_VoxelImages(MatID_t* voxels, ivec3 size){
 static u32 STORAGE_BUFFER_DESCRIPTOR_COUNT = 0;
 static u32 STORAGE_IMAGE_DESCRIPTOR_COUNT = 0;
 static u32 COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT = 0;
+static u32 UNIFORM_BUFFER_DESCRIPTOR_COUNT = 0;
 static void count_descriptor(const VkDescriptorType type){
     if(type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER){
         STORAGE_BUFFER_DESCRIPTOR_COUNT++;
@@ -1717,6 +1751,8 @@ static void count_descriptor(const VkDescriptorType type){
         COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT++;
     } else if(type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE){
         STORAGE_IMAGE_DESCRIPTOR_COUNT++;
+    } else if(type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER){
+        UNIFORM_BUFFER_DESCRIPTOR_COUNT++;    
     } else {
         cout << KRED "ADD DESCRIPTOR TO COUNTER\n" KEND;
         abort();
@@ -1781,30 +1817,39 @@ void Renderer::create_Descriptor_Set_Layouts(){
         VK_SHADER_STAGE_COMPUTE_BIT, raytraceDescriptorSetLayout, device);
 
     create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, //frame-constant world_to_screen mat4
+        }, 
+        VK_SHADER_STAGE_VERTEX_BIT, RayGenDescriptorSetLayout, device);
+
+    create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //in frame (raytraced)
         }, 
         VK_SHADER_STAGE_FRAGMENT_BIT, graphicalDescriptorSetLayout, device);
 }
 
 void Renderer::create_Descriptor_Pool(){
-    printl(STORAGE_IMAGE_DESCRIPTOR_COUNT);
-    printl(COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT);
-    printl(STORAGE_BUFFER_DESCRIPTOR_COUNT);
+    // printl(STORAGE_IMAGE_DESCRIPTOR_COUNT);
+    // printl(COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT);
+    // printl(STORAGE_BUFFER_DESCRIPTOR_COUNT);
 
     VkDescriptorPoolSize STORAGE_IMAGE_PoolSize = {};
         STORAGE_IMAGE_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        STORAGE_IMAGE_PoolSize.descriptorCount = STORAGE_IMAGE_DESCRIPTOR_COUNT;
+        STORAGE_IMAGE_PoolSize.descriptorCount = STORAGE_IMAGE_DESCRIPTOR_COUNT*5;
     VkDescriptorPoolSize COMBINED_IMAGE_SAMPLER_PoolSize = {};
         COMBINED_IMAGE_SAMPLER_PoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        COMBINED_IMAGE_SAMPLER_PoolSize.descriptorCount = COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT;
+        COMBINED_IMAGE_SAMPLER_PoolSize.descriptorCount = COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT*5;
     VkDescriptorPoolSize STORAGE_BUFFER_PoolSize = {};
         STORAGE_BUFFER_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        STORAGE_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT;
+        STORAGE_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*5;
+    VkDescriptorPoolSize UNIFORM_BUFFER_PoolSize = {};
+        UNIFORM_BUFFER_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        UNIFORM_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*5;
 
     vector<VkDescriptorPoolSize> poolSizes = {
         STORAGE_IMAGE_PoolSize, 
         COMBINED_IMAGE_SAMPLER_PoolSize, 
-        STORAGE_BUFFER_PoolSize};
+        STORAGE_BUFFER_PoolSize,
+        UNIFORM_BUFFER_PoolSize};
 
     VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1832,6 +1877,7 @@ void Renderer::allocate_Descriptors(){
     //we do not allocate this because it's descriptors are managed trough push_descriptor mechanism
     // allocate_Descriptors_helper(      mapDescriptorSets,       mapDescriptorSetLayout, descriptorPool, device); 
     allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
+    allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
 }
 
 // static void setup_descriptors_helper(vector<vector<VkImageView>> views
@@ -2017,6 +2063,23 @@ void Renderer::setup_Graphical_Descriptors(){
             descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             descriptorWrite.descriptorCount = 1;
             descriptorWrite.pImageInfo = &storageImageInfo;
+        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
+    }
+}
+void Renderer::setup_RayGen_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkDescriptorBufferInfo transInfo = {};
+            transInfo.offset = 0;
+            transInfo.buffer = RayGenUniformBuffers[i];
+            transInfo.range = VK_WHOLE_SIZE;
+        VkWriteDescriptorSet descriptorWrite = {};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = RayGenDescriptorSets[i];
+            descriptorWrite.dstBinding = 0;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pBufferInfo = &transInfo;
         vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
     }
 }

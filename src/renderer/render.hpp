@@ -207,6 +207,15 @@ public:
         create_Buffer_Storages(copyCounterBuffers, copyCounterBufferAllocations,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             sizeof(int)*(3+1024));
+        create_Buffer_Storages(RayGenUniformBuffers, RayGenUniformBufferAllocations,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            sizeof(mat4), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+        RayGenUniformMapped.resize(MAX_FRAMES_IN_FLIGHT);
+        for (i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+            vmaMapMemory(VMAllocator, RayGenUniformBufferAllocations[i], &RayGenUniformMapped[i]);
+            // println
+        }
         
         vector<vector<VkImageView>> swapViews = {swapChainImageViews};
         create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
@@ -222,7 +231,7 @@ public:
         //setup for map?
         setup_Raytrace_Descriptors();
         setup_Graphical_Descriptors();
-        // setup_RayGen_Descriptors();
+        setup_RayGen_Descriptors();
         create_Blockify_Pipeline();
         create_Copy_Pipeline();
         create_Map_Pipeline();
@@ -255,6 +264,8 @@ public:
             
             vmaDestroyBuffer(VMAllocator, paletteCounterBuffers[i], paletteCounterBufferAllocations[i]);
             vmaDestroyBuffer(VMAllocator, copyCounterBuffers[i], copyCounterBufferAllocations[i]);
+            // vmaUnmapMemory(VMAllocator, RayGenUniformBufferAllocations[i]);
+            vmaDestroyBuffer(VMAllocator, RayGenUniformBuffers[i], RayGenUniformBufferAllocations[i]);
 
             vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
         }
@@ -376,13 +387,14 @@ private:
     void setup_Map_Descriptors();
     void setup_Raytrace_Descriptors();
     void setup_Graphical_Descriptors();
+    void setup_RayGen_Descriptors();
     void create_samplers();
     // void update_Descriptors();
 
     void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlags access, 
     uvec3 hwd);
-    void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size);
+    void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, VkMemoryPropertyFlags required_flags = 0);
     void create_Blockify_Pipeline();
     void create_Copy_Pipeline();
     void create_Map_Pipeline();
@@ -483,6 +495,8 @@ public:
     vector<VkImage> raytraceVoxelPaletteImages;
     vector<VkBuffer>       paletteCounterBuffers; //atomic
     vector<VkBuffer>          copyCounterBuffers; //atomic
+
+    vector<VkBuffer> RayGenUniformBuffers;
     // vector<VkImage>   originVoxelPaletteImages; //unused - voxel mat palette does not change
     vector<VkImage>            raytracedImages;
     vector<VkImage>            swapChainImages;
@@ -498,6 +512,7 @@ public:
     vector<VmaAllocation>             raytracedImageAllocations;
     vector<VmaAllocation>        paletteCounterBufferAllocations;
     vector<VmaAllocation>           copyCounterBufferAllocations;
+    vector<VmaAllocation>           RayGenUniformBufferAllocations;
     vector<VkImageView>         rayGenPosMatImageViews;
     vector<VkImageView>           rayGenNormImageViews;
     vector<VkImageView>          rayGenDepthImageViews;
@@ -512,7 +527,7 @@ public:
     //buffers dont need view
     vector<VkSampler>  raytracedImageSamplers;
     
-    
+    vector<void*> RayGenUniformMapped;
 
     VkDescriptorSetLayout    RayGenDescriptorSetLayout;
     VkDescriptorSetLayout  raytraceDescriptorSetLayout;
@@ -529,6 +544,7 @@ public:
     vector<VkDescriptorSet>      copyDescriptorSets;
     vector<VkDescriptorSet>       mapDescriptorSets;
     vector<VkDescriptorSet> graphicalDescriptorSets;
+    vector<VkDescriptorSet>    RayGenDescriptorSets;
 
 //compute pipeline things
     VkPipelineLayout raytraceLayout;

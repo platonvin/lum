@@ -15,32 +15,34 @@ layout(set = 0, binding = 1, r32i)           uniform iimage3D blocks;
 layout(set = 0, binding = 2, r8ui) writeonly uniform uimage3D blockPalette;
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
-    ivec3 absolute_voxel_pos = (
-        relative_voxel_pos+
-        ivec3(0,0,16)*block_id
-    );
-    return absolute_voxel_pos;
+    return relative_voxel_pos + ivec3(0,0,16*(block_id));
 }
-
 //TODO: balance, X>Y>Z for coherence
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+//TODO: temp
+ivec3 model_size = ivec3(16);
 void main(void){
-    ivec3 ipos = ivec3(gl_GlobalInvocationID.xyz);
-    // imageStore(blocks, (ipos)/16, ivec4(1));
-        // imageStore(
-        //     blockPalette, 
-        //     voxel_in_palette(ipos, imageLoad(blocks, (ipos+1)/16).r)
-        //     , ivec4(157));
-    //             imageStore(blocks, ipos, ivec4(1));
-    //             imageStore(blocks, ipos, ivec4(1));
-     vec3  relative_vox = gl_GlobalInvocationID.xyz;
+    //sqrt(1.5) is for more precise mapping so holes do not appear 
+     vec3  relative_vox = gl_GlobalInvocationID.xyz / sqrt(1.5);
+    //  vec3  relative_vox = gl_GlobalInvocationID.xyz / 2;
+    //  vec3  relative_vox = gl_GlobalInvocationID.xyz;
     ivec3 irelative_vox = ivec3(relative_vox);
+
+    if(
+        irelative_vox.x < 1
+      ||irelative_vox.y < 1
+      ||irelative_vox.z < 1
+      ||irelative_vox.x > 14
+      ||irelative_vox.y > 14
+      ||irelative_vox.z > 14
+    ) return;
+
     //part where actual transformation happens
     ivec3   target_vox = ivec3((PushConstants.trans * vec4(relative_vox,1)).xyz);
-    ivec3 target_block_in_world   =    target_vox / 16;
+    ivec3 target_block = (target_vox) / ivec3(16);
 
     // ivec3 model_size = imageSize(modelVoxels);
-    ivec3 model_size = ivec3(16);
     //+1 for propper rounding, so 15 results into 1
     // ivec3 model_size_in_blocks = (model_size + ivec3(1)) / 16;
     //if this is extra "out-of-bounds" voxel
@@ -54,14 +56,20 @@ void main(void){
     //then we set target block in world to block in palette ID
     //TODO: test different approaches to cast and dot etc...
     //WHERE IS MY IDOT
-    int target_block_in_palette = int(imageLoad(blocks, target_block_in_world).r);
+    // int target_block_in_palette = int(imageLoad(blocks, target_block).r);
+    int target_block_in_palette = int(target_block.x + (target_block.y*4) + (target_block.z*4*4) + 2);
     // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to
-    ivec3 target_palette_voxel = voxel_in_palette(target_vox % 16, target_block_in_palette);
-    
+    ivec3 target_palette_voxel = voxel_in_palette(target_vox.xyz % 16, target_block_in_palette);
+    // int a=0;
+    // if( irelative_vox.x == 0 ||
+    //     irelative_vox.y == 0 ||
+    //     irelative_vox.z == 0){
+    //         a=1;
+    //     }
     imageStore(blockPalette, target_palette_voxel,
             imageLoad(modelVoxels, irelative_vox)
-            // ivec4(0)
+            // ivec4(166*a)
             );
 }

@@ -39,6 +39,8 @@ _shaders:= \
 	shaders/compiled/comp.spv\
 
 # flags = 
+all: client
+	@echo compiled this ****
 
 obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/window.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
