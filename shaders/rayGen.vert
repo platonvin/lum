@@ -29,7 +29,7 @@ void main() {
         m2w[3][0] /= 16.0;
         m2w[3][1] /= 16.0;
         m2w[3][2] /= 16.0;
-    mat4 w2s = ubo.trans_w2s;
+    // mat4 w2s = ubo.trans_w2s;
 
     vec4 world_pos   = m2w * vec4(pos,1);
     // vec4 clip_coords = w2s * world_pos;
@@ -51,12 +51,12 @@ void main() {
 
     gl_Position  = clip_coords;
 
-    // m2w = pco.trans_m2w;
-        // m2w[3][0] *= 16.0;
-        // m2w[3][1] *= 16.0;
-        // m2w[3][2] *= 16.0;
+    //TODO: MERGE UNITS
     posOut = (pco.trans_m2w * vec4(pos,1)).xyz;
-    normOut = norm;
+    
+    mat4 m2w_normals = transpose(inverse(pco.trans_m2w)); 
+
+    normOut = normalize(mat3(m2w_normals)*norm);
     MatIDOut = float(MatID);
     // MatIDOut = float(66);
 }
