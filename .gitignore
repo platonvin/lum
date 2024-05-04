@@ -1,18 +1,19 @@
 obj/*.o
 obj/*.o
 obj/*.o
-# executable
-client.exe
+*.exe
 # compiled shaders
 shaders/*.spv
 shaders/compiled/*.spv
-# for clangd
+# IDE things
 compile_flags.txt
 .vscode
 .idea
-test.exe
+
 test.cpp
+temp.cpp
 r.cpp
 .vscode
 todo.txt
 assets/MechGolem.zip
+run.py

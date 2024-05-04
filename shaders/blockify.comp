@@ -41,16 +41,17 @@ const mat4 identity = mat4 (
 );
 
 //TODO: balance, X>Y>Z for coherence
-layout(local_size_x = 3, local_size_y = 3, local_size_z = 3) in;
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 void main(void){
     //  vec3  relative_pos = gl_GlobalInvocationID.xyz - vec3(1);
      vec3  relative_pos = gl_GlobalInvocationID.xyz;
     ivec3 irelative_pos = ivec3(relative_pos);
 
-    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*4) + (irelative_pos.z*4*4) + 2));
-    return;
+    // if (any(greaterThanEqual(irelative_pos, ivec3(4)))) return;
 
+    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*5) + (irelative_pos.z*5*5) + 2));
+    return;
 
     //position of this block in real world grid
     // vec3 absolute_pos = (PushConstants.trans * vec4(relative_pos,1)).xyz;
@@ -59,7 +60,6 @@ void main(void){
 
     //     //if this is extra "out-of-bounds" block then return
     // //TODO: for testing, local size is 1
-    // // if (any(greaterThanEqual(irelative_pos, ivec3(3)))) return;
 
     //     //we borrow block and replace with BLOCK_IS_BORROWED
     // int borrowed_block = imageAtomicExchange(blocks, iabsolute_pos, BLOCK_IS_BORROWED);

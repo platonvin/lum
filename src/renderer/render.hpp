@@ -145,6 +145,15 @@ public:
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT,
             {swapChainExtent.height, swapChainExtent.width, 1});
+        create_Image_Storages(rayGenPosDiffImages, rayGenPosDiffImageAllocations, rayGenPosDiffImageViews,
+            VK_IMAGE_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            {swapChainExtent.height, swapChainExtent.width, 1});
         create_Image_Storages(rayGenDepthImages, rayGenDepthImageAllocations, rayGenDepthImageViews,
             VK_IMAGE_TYPE_2D,
             VK_FORMAT_D32_SFLOAT,
@@ -220,7 +229,7 @@ public:
         vector<vector<VkImageView>> swapViews = {swapChainImageViews};
         create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
 // printl(swapChainImages.size());
-        vector<vector<VkImageView>> rayGenVeiws = {rayGenPosMatImageViews, rayGenNormImageViews, rayGenDepthImageViews};
+        vector<vector<VkImageView>> rayGenVeiws = {rayGenPosMatImageViews, rayGenNormImageViews, rayGenPosDiffImageViews,rayGenDepthImageViews};
         create_N_Framebuffers(rayGenFramebuffers, rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
         
         create_Descriptor_Set_Layouts();
@@ -487,6 +496,7 @@ public:
     
     vector<VkImage>         rayGenPosMatImages;
     vector<VkImage>           rayGenNormImages;
+    vector<VkImage>           rayGenPosDiffImages;
     vector<VkImage>          rayGenDepthImages;
     vector<VkImage>       raytraceBlocksImages;
     vector<VkImage>         originBlocksImages;
@@ -502,6 +512,7 @@ public:
     vector<VkImage>            swapChainImages;
     vector<VmaAllocation>          rayGenPosMatImageAllocations;
     vector<VmaAllocation>            rayGenNormImageAllocations;
+    vector<VmaAllocation>            rayGenPosDiffImageAllocations;
     vector<VmaAllocation>           rayGenDepthImageAllocations;
     vector<VmaAllocation>        raytraceBlocksImageAllocations;
     vector<VmaAllocation>          originBlocksImageAllocations;
@@ -515,6 +526,7 @@ public:
     vector<VmaAllocation>           RayGenUniformBufferAllocations;
     vector<VkImageView>         rayGenPosMatImageViews;
     vector<VkImageView>           rayGenNormImageViews;
+    vector<VkImageView>           rayGenPosDiffImageViews;
     vector<VkImageView>          rayGenDepthImageViews;
     vector<VkImageView>       raytraceBlocksImageViews;
     vector<VkImageView>         originBlocksImageViews;

@@ -30,12 +30,12 @@ void main(void){
     ivec3 irelative_vox = ivec3(relative_vox);
 
     if(
-        irelative_vox.x < 1
-      ||irelative_vox.y < 1
-      ||irelative_vox.z < 1
-      ||irelative_vox.x > 14
-      ||irelative_vox.y > 14
-      ||irelative_vox.z > 14
+        (relative_vox.x < 1 )
+      ||(relative_vox.y < 1 )
+      ||(relative_vox.z < 1 )
+      ||(relative_vox.x > 13.3) 
+      ||(relative_vox.y > 13.3) 
+      ||(relative_vox.z > 13.3) 
     ) return;
 
     //part where actual transformation happens
@@ -57,7 +57,7 @@ void main(void){
     //TODO: test different approaches to cast and dot etc...
     //WHERE IS MY IDOT
     // int target_block_in_palette = int(imageLoad(blocks, target_block).r);
-    int target_block_in_palette = int(target_block.x + (target_block.y*4) + (target_block.z*4*4) + 2);
+    int target_block_in_palette = int(target_block.x + (target_block.y*5) + (target_block.z*5*5) + 2);
     // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to

@@ -79,6 +79,8 @@ init:
 	mkdir obj
 run: client
 	client.exe
+fun:
+	@echo fun was never an option
 opt: client_opt
 	client.exe
 

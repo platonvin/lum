@@ -134,8 +134,8 @@ void Renderer::create_Window(){
     assert(glfwRes != 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    window.width  = mode->width  / 1;
-    window.height = mode->height / 1;
+    window.width  = mode->width  / 2;
+    window.height = mode->height / 2;
     
     // window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", glfwGetPrimaryMonitor(), 0);
     window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", 0, 0);
@@ -624,6 +624,15 @@ void Renderer::create_RenderPass_RayGen(){
         colorAttachmentNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachmentNorm.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         colorAttachmentNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription colorAttachmentPosDiff = {};
+        colorAttachmentPosDiff.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        colorAttachmentPosDiff.samples = VK_SAMPLE_COUNT_1_BIT;
+        colorAttachmentPosDiff.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachmentPosDiff.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        colorAttachmentPosDiff.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachmentPosDiff.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachmentPosDiff.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        colorAttachmentPosDiff.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = VK_FORMAT_D32_SFLOAT;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -640,11 +649,14 @@ void Renderer::create_RenderPass_RayGen(){
     VkAttachmentReference colorAttachmentNormRef = {};
         colorAttachmentNormRef.attachment = 1;
         colorAttachmentNormRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference colorAttachmentPosDiffRef = {};
+        colorAttachmentPosDiffRef.attachment = 2;
+        colorAttachmentPosDiffRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkAttachmentReference depthAttachmentRef = {};
-        depthAttachmentRef.attachment = 2;
+        depthAttachmentRef.attachment = 3;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    vector<VkAttachmentDescription> attachments = {colorAttachmentPosMat, colorAttachmentNorm, depthAttachment};
-    vector<VkAttachmentReference>   colorAttachmentRefs = {colorAttachmentPosMatRef, colorAttachmentNormRef};
+    vector<VkAttachmentDescription> attachments = {colorAttachmentPosMat, colorAttachmentNorm, colorAttachmentPosDiff, depthAttachment};
+    vector<VkAttachmentReference>   colorAttachmentRefs = {colorAttachmentPosMatRef, colorAttachmentNormRef, colorAttachmentPosDiffRef};
 
     VkSubpassDescription subpass = {};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -921,7 +933,16 @@ VkPipelineColorBlendAttachmentState colorBlendAttachmentPos = {};
         colorBlendAttachmentNorm.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
         colorBlendAttachmentNorm.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
         colorBlendAttachmentNorm.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-    vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments = {colorBlendAttachmentPos, colorBlendAttachmentNorm};
+    VkPipelineColorBlendAttachmentState colorBlendAttachmentPosDiff = {};
+        colorBlendAttachmentPosDiff.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachmentPosDiff.blendEnable = VK_FALSE;
+        colorBlendAttachmentPosDiff.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+        colorBlendAttachmentPosDiff.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+        colorBlendAttachmentPosDiff.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+        colorBlendAttachmentPosDiff.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+        colorBlendAttachmentPosDiff.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+        colorBlendAttachmentPosDiff.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+    vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments = {colorBlendAttachmentPos, colorBlendAttachmentNorm, colorBlendAttachmentPosDiff};
 // printl(colorBlendAttachments.size());
     VkPipelineColorBlendStateCreateInfo colorBlending{};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -936,7 +957,7 @@ VkPipelineColorBlendAttachmentState colorBlendAttachmentPos = {};
 
     VkPushConstantRange pushRange = {};
         // pushRange.size = 256;
-        pushRange.size = sizeof(mat4); //trans
+        pushRange.size = sizeof(mat4)*2; //trans
         pushRange.offset = 0;
         pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -1192,6 +1213,7 @@ void Renderer::startRaygen(){
     vector<VkClearValue> clearColors = {
         {{0.111f, 0.666f, 0.111f, 1.0f}}, 
         {{0.111f, 0.666f, 0.111f, 1.0f}}, 
+        {{0.111f, 0.666f, 0.111f, 1.0f}}, 
         {{0.0, 0}}
     };
     VkRenderPassBeginInfo renderPassInfo = {};
@@ -1222,10 +1244,16 @@ void Renderer::startRaygen(){
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
 void Renderer::RaygenMesh(Mesh &mesh){
+    
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
         VkBuffer vertexBuffers[] = {mesh.vertexes.buf[currentFrame]};
         VkDeviceSize offsets[] = {0};
+    
+    //TODO:
     vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &mesh.transform);
+    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(mat4), sizeof(mat4), &mesh.old_transform);
+    mesh.old_transform = mesh.transform;
+
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, mesh.indexes.buf[currentFrame], 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(commandBuffer, mesh.icount, 1, 0, 0, 0);
@@ -1277,9 +1305,9 @@ void Renderer::blockifyMesh(Mesh& mesh){
     // vkCmdDispatch(commandBuffer, (mesh.size.x+15+16*2)/16, 
     //                              (mesh.size.y+15+16*2)/16, 
     //                              (mesh.size.z+15+16*2)/16); //adds 1 block to size for each axis
-    vkCmdDispatch(commandBuffer, 4, 
-                                 4, 
-                                 4); //adds 1 block to size for each axis
+    vkCmdDispatch(commandBuffer, 5, 
+                                 5, 
+                                 5); //adds 1 block to size for each axis
 }
 void Renderer::endBlockify(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1809,10 +1837,12 @@ void Renderer::create_Descriptor_Set_Layouts(){
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //pos mat
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //norm
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //clip pos Difference
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //blocks
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //block palette
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //voxel palette
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //out frame (raytraced)
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //frame sampled
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, raytraceDescriptorSetLayout, device);
 
@@ -1963,6 +1993,9 @@ void Renderer::setup_Raytrace_Descriptors(){
         VkDescriptorImageInfo inputNormInfo = {};
             inputNormInfo.imageView = rayGenNormImageViews[i];
             inputNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputPosDiffInfo = {};
+            inputPosDiffInfo.imageView = rayGenPosDiffImageViews[i];
+            inputPosDiffInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputBlockInfo = {};
             inputBlockInfo.imageView = raytraceBlocksImageViews[i];
             inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1975,6 +2008,7 @@ void Renderer::setup_Raytrace_Descriptors(){
         VkDescriptorImageInfo outputFrameInfo = {};
             outputFrameInfo.imageView = raytracedImageViews[i];
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            outputFrameInfo.sampler = raytracedImageSamplers[i];
             
         VkWriteDescriptorSet PosMatWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             PosMatWrite.dstSet = raytraceDescriptorSets[i];
@@ -1990,35 +2024,49 @@ void Renderer::setup_Raytrace_Descriptors(){
             NormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             NormWrite.descriptorCount = 1;
             NormWrite.pImageInfo = &inputNormInfo;
+        VkWriteDescriptorSet PosDiffWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            PosDiffWrite.dstSet = raytraceDescriptorSets[i];
+            PosDiffWrite.dstBinding = 2;
+            PosDiffWrite.dstArrayElement = 0;
+            PosDiffWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            PosDiffWrite.descriptorCount = 1;
+            PosDiffWrite.pImageInfo = &inputPosDiffInfo;
         VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             blockWrite.dstSet = raytraceDescriptorSets[i];
-            blockWrite.dstBinding = 2;
+            blockWrite.dstBinding = 3;
             blockWrite.dstArrayElement = 0;
             blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             blockWrite.descriptorCount = 1;
             blockWrite.pImageInfo = &inputBlockInfo;
         VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             blockPaletteWrite.dstSet = raytraceDescriptorSets[i];
-            blockPaletteWrite.dstBinding = 3;
+            blockPaletteWrite.dstBinding = 4;
             blockPaletteWrite.dstArrayElement = 0;
             blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             blockPaletteWrite.descriptorCount = 1;
             blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
         VkWriteDescriptorSet voxelPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             voxelPaletteWrite.dstSet = raytraceDescriptorSets[i];
-            voxelPaletteWrite.dstBinding = 4;
+            voxelPaletteWrite.dstBinding = 5;
             voxelPaletteWrite.dstArrayElement = 0;
             voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             voxelPaletteWrite.descriptorCount = 1;
             voxelPaletteWrite.pImageInfo = &inputVoxelPaletteInfo;
         VkWriteDescriptorSet outWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             outWrite.dstSet = raytraceDescriptorSets[i];
-            outWrite.dstBinding = 5 ;
+            outWrite.dstBinding = 6;
             outWrite.dstArrayElement = 0;
             outWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             outWrite.descriptorCount = 1;
             outWrite.pImageInfo = &outputFrameInfo;
-        vector<VkWriteDescriptorSet> descriptorWrites = {PosMatWrite, NormWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, outWrite};
+        VkWriteDescriptorSet outReadSampler = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            outReadSampler.dstSet = raytraceDescriptorSets[i];
+            outReadSampler.dstBinding = 7;
+            outReadSampler.dstArrayElement = 0;
+            outReadSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            outReadSampler.descriptorCount = 1;
+            outReadSampler.pImageInfo = &outputFrameInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {PosMatWrite, NormWrite, PosDiffWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, outWrite, outReadSampler};
 
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }

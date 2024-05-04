@@ -2,7 +2,6 @@
 
 precision highp int;
 precision highp float;
-// precision highp vec3;
 
 layout(push_constant) uniform constants{
     int timeSeed;
@@ -10,11 +9,12 @@ layout(push_constant) uniform constants{
 //descriptor bindings for the pipeline
 layout(set = 0, binding = 0, rgba32f) readonly uniform image2D posMat;
 layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norms;
+layout(set = 0, binding = 2, rgba32f) readonly uniform image2D diffs;
 
-layout(set = 0, binding = 2, r32i) uniform iimage3D blocks;
+layout(set = 0, binding = 3, r32i) uniform iimage3D blocks;
 
 //
-layout(set = 0, binding = 3, r8ui) readonly uniform uimage3D blockPalette;
+layout(set = 0, binding = 4, r8ui) readonly uniform uimage3D blockPalette;
 
 /* <- Width -> 
 |rgb a emm rough 
@@ -23,27 +23,31 @@ layout(set = 0, binding = 3, r8ui) readonly uniform uimage3D blockPalette;
 |rgb a emm rough
 |rgb a emm rough
 */
-layout(set = 0, binding = 4, r32f) readonly uniform image2D voxelPalette;
+layout(set = 0, binding = 5, r32f) readonly uniform image2D voxelPalette;
 
-layout(set = 0, binding = 5, rgba8) uniform image2D frame;
+layout(set = 0, binding = 6, rgba8) uniform   image2D frame;
+layout(set = 0, binding = 7       ) uniform sampler2D frame_sampler;
 
 vec3 cameraRayDir = normalize(vec3(12, 21, 7));
+// vec3 cameraRayDir = normalize(vec3(1, 1, 0));
+vec3 globalLightDir = normalize(vec3(5, 1, 2));
+// vec3 globalLightDir = cameraRayDir;
 vec3 horizline = normalize(vec3(1,-1,0));
 vec3 vertiline = normalize(cross(cameraRayDir, horizline));
 vec3 cameraPos = vec3(-13, -22, -8)*1.5;
-vec3 globalLightDir = normalize(vec3(10, 25, -6));
 
-#define MAX_DEPTH 3
+#define MAX_DEPTH 4
 #define NUM_SAMPLES 1
 #define PI 3.1415926535
 #define FAR_DISTANCE 100000.0
 #define nIN 1.0
 #define nOUT 1.0
-#define WIDTH  16*8
-#define LENGTH 16*8
-#define HEIGHT 16*8
 
-vec2 randvec;
+#define WIDTH_B  (5)
+#define LENGTH_B (5)
+#define HEIGHT_B (5)
+
+vec3 randvec;
 
 float view_width;
 float view_height;
@@ -55,23 +59,51 @@ struct Material{
     float transparancy;
 };
 
-float RandomNoise(vec2 co){
-    float res = fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
-    randvec.x = randvec.y;
-    randvec.y = res;
-    return res;
+uint hash3(uint x, uint y, uint z) {
+    x += x >> 11;
+    x ^= x << 7;
+    x += y;
+    x ^= x << 3;
+    x += z ^ (x >> 14);
+    x ^= x << 6;
+    x += x >> 15;
+    x ^= x << 5;
+    x += x >> 12;
+    x ^= x << 9;
+    return x;
+}
+float random(vec3 f) {
+  uint mantissaMask = 0x007FFFFFu;
+  uint one = 0x3F800000u;
+  uvec3 u = floatBitsToUint(f);
+  uint h = hash3(u.x, u.y, u.z);
+  return uintBitsToFloat((h & mantissaMask) | one) - 1.0;
+}
+
+float RandomNoise(){
+  uint mantissaMask = 0x007FFFFFu;
+  uint one = 0x3F800000u;
+  uvec3 u = floatBitsToUint(randvec);
+  uint h = hash3(u.x, u.y, u.z);
+  float res = uintBitsToFloat((h & mantissaMask) | one) - 1.0;
+
+  randvec.x = randvec.y;
+  randvec.y = randvec.z;
+  randvec.z = res;
+  
+  return res;
 }
 
 float RandomFloat_0to1(){
-    return RandomNoise(randvec);
+    return RandomNoise();
 }
 
 vec2 Random2D(){
-    return normalize(vec2(RandomNoise(randvec), RandomNoise(randvec)));
+    return normalize(vec2(RandomNoise(), RandomNoise()));
 }
 
 vec3 Random3D(){
-    return normalize(vec3(RandomNoise(randvec), RandomNoise(randvec), RandomNoise(randvec)));
+    return normalize(vec3(RandomNoise(), RandomNoise(), RandomNoise()));
 }
 
 vec3 RandomHemispherePoint(vec2 rand){
@@ -93,9 +125,9 @@ vec3 NormalOrientedHemispherePoint(vec2 rand, vec3 n){
 int GetBlock(in ivec3 block_pos){
     int block;
 
-    if (block_pos.x < 0 || block_pos.x >= 8 ) return 0;
-    if (block_pos.y < 0 || block_pos.y >= 8) return 0;
-    if (block_pos.z < 0 || block_pos.z >= 8) return 0;
+    // if (block_pos.x < 0 || block_pos.x >=3) return 0;
+    // if (block_pos.y < 0 || block_pos.y >=3) return 0;
+    // if (block_pos.z < 0 || block_pos.z >=3) return 0;
 
     block = int((imageLoad(blocks, ivec3(
         block_pos.x,
@@ -108,9 +140,9 @@ int GetBlock(in ivec3 block_pos){
 int GetVoxel(in ivec3 pos){
     int voxel;
 
-    if (pos.x < 0 || pos.x >= WIDTH) return 0;
-    if (pos.y < 0 || pos.y >= LENGTH) return 0;
-    if (pos.z < 0 || pos.z >= HEIGHT) return 0;
+    if (pos.x <= 0 || pos.x >= 16*WIDTH_B ) return 0;
+    if (pos.y <= 0 || pos.y >= 16*LENGTH_B) return 0;
+    if (pos.z <= 0 || pos.z >= 16*HEIGHT_B) return 0;
 
     ivec3 block_pos = pos / 16;
     ivec3 relative_voxel_pos = pos % 16;
@@ -134,7 +166,6 @@ Material GetMat(in int voxel){
     mat.color = vec3(1);
     mat.emmitance = 0.1;
     mat.smoothness = 0.5;
-    mat.transparancy = 0.0;
 
 
     mat.color.r      = imageLoad(voxelPalette, ivec2(0, voxel)).r;    
@@ -146,7 +177,10 @@ Material GetMat(in int voxel){
     // mat.emmitance    = 0.1;    
     // mat.emmitance=mat.color;
     // mat.color=vec3(0);
-    mat.smoothness   = 1;    
+    // mat.color = vec3(.6,.8,.3);
+    // mat.transparancy = 0.0;
+    mat.smoothness   = .5;    
+    // mat.smoothness   = 1;    
     // mat.transparancy = 0;
     // if (voxel == 156) {
     //     // mat.color = vec3(255, 0, 0) / 256.0;
@@ -165,31 +199,30 @@ Material GetMat(in int voxel){
     //     mat.smoothness = 0.2;
     // }
     // // mat.smoothness = 1.0;
-
-    return mat;
+return mat;
 }
 
-bool InsideScene(in vec3 rayOrigin){
-    vec3 corner_1 = vec3(0, 0, 0);
-    vec3 corner_2 = vec3(WIDTH, LENGTH, HEIGHT);
+// bool InsideScene(in vec3 rayOrigin){
+//     vec3 corner_1 = vec3(0, 0, 0);
+//     vec3 corner_2 = vec3(WIDTH, LENGTH, HEIGHT);
 
-    vec3 s = step(corner_1, rayOrigin) - step(corner_2, rayOrigin); //if we are inside of the box
+//     vec3 s = step(corner_1, rayOrigin) - step(corner_2, rayOrigin); //if we are inside of the box
 
-    if (s.x * s.y * s.z == 0.0) return false;
+//     if (s.x * s.y * s.z == 0.0) return false;
 
-    return true;
-}
+//     return true;
+// }
 
-bool InsideScene_byBlockPos(in ivec3 block_pos){
-    ivec3 corner_1 = ivec3(0, 0, 0);
-    ivec3 corner_2 = ivec3(WIDTH, LENGTH, HEIGHT);
+// bool InsideScene_byBlockPos(in ivec3 block_pos){
+//     ivec3 corner_1 = ivec3(0, 0, 0);
+//     ivec3 corner_2 = ivec3(WIDTH, LENGTH, HEIGHT);
 
-    vec3 s = step(corner_1, block_pos) - step(corner_2, block_pos); //if we are inside of the box
+//     vec3 s = step(corner_1, block_pos) - step(corner_2, block_pos); //if we are inside of the box
 
-    if (s.x * s.y * s.z == 0) return false;
+//     if (s.x * s.y * s.z == 0) return false;
 
-    return true;
-}
+//     return true;
+// }
 
 bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOrigin, in vec3 rayDirection){
     vec3 effective_origin = rayOrigin;
@@ -344,27 +377,26 @@ bool CastRay(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out ve
 
         current_block = GetVoxel(block_pos);
 
-        if ((current_block != 0            ) 
-        && !(iterations < 1)
+        if ((current_block != 0) 
+        && ((current_block != ignored_voxel))
         ){
             block_hit = true;
-            // block_hit = false;
             break;
         }
-        if (iterations++ > 164) {
+        if (iterations++ >= 16) {
             block_hit = false;
             break;
         }
-        if (any(lessThan(block_pos,ivec3(1))) || any(greaterThan(block_pos,ivec3(46)))) {
+        if (any(lessThanEqual(block_pos,ivec3(0))) || any(greaterThanEqual(block_pos,ivec3(16*5)))) {
             block_hit = false;
             break;
         }
     }
-    ;
+
     normal = -(fsteps * fcurrentStepDiretion);
     vec3 tFinal = tMax - tDelta;
-    block_fraction += dot(tFinal, fcurrentStepDiretion);
-    // block_fraction = dot(tFinal, fcurrentStepDiretion);
+    // block_fraction += dot(tFinal, fcurrentStepDiretion);
+    block_fraction = dot(tFinal, fcurrentStepDiretion);
 
     material = GetMat(current_block);
     fraction = block_fraction;
@@ -398,11 +430,11 @@ bool IsRefracted(in vec3 rayDirection, in vec3 normal, in float transparancy){
     return (transparancy > rand) && (fresnel < rand); // && transparancy == 0.0;
 }
 
-void ProcessHit(inout vec3 current_origin, inout vec3 current_direction, 
+void ProcessHit(inout vec3 origin, inout vec3 direction, 
                 in float fraction, in vec3 normal, in Material material, 
                 inout vec3 accumulated_light, inout vec3 accumulated_reflection){
 
-            vec3 new_origin = current_origin + (fraction * current_direction);
+            vec3 new_origin = origin + (fraction * direction);
 
             vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random2D(), normal);
             vec3 randomVec = normalize(2.0 * Random3D() - 1.0);
@@ -412,27 +444,28 @@ void ProcessHit(inout vec3 current_origin, inout vec3 current_direction,
 
             vec3 new_direction = transform * hemisphereDistributedDirection;
 
-            bool refracted = IsRefracted(current_direction, normal, material.transparancy);
+            bool refracted = IsRefracted(direction, normal, material.transparancy);
             refracted = false;//TODO:
             if (refracted)
             {
-                vec3 idealRefraction = IdealRefract(current_direction, normal, nIN, nOUT);
+                vec3 idealRefraction = IdealRefract(direction, normal, nIN, nOUT);
                 new_direction = normalize(mix(-new_direction, idealRefraction, material.smoothness));
                 // newRayDirection = normalize(mix(idealRefraction, -newRayDirection, material.smoothness));
                 new_origin += normal * (dot(new_direction, normal) < 0.0 ? -0.001 : 0.001);
             }
             else
             {
-                vec3 idealReflection = reflect(current_direction, normal);
+                vec3 idealReflection = reflect(direction, normal);
                 new_direction = normalize(mix(new_direction, idealReflection, material.smoothness));
                 new_origin += normal * 0.001;
                 accumulated_light += accumulated_reflection * material.emmitance * material.color;
                 accumulated_reflection *= material.color;
-                accumulated_light += vec3(0.8) * 0.2 * accumulated_reflection;
+                accumulated_light += vec3(0.8) * 0.1 * accumulated_reflection;
             }
 
-            current_direction = new_direction;
-            current_origin = new_origin;
+            // direction = reflect(direction,normal);
+            direction = new_direction;
+            origin = new_origin;
 }
 
 vec3 TraceRay(in vec3 rayOrigin, in vec3 rayDirection, in vec3 accumulated_light, in vec3 accumulated_reflection, in float ignored_voxel){
@@ -449,53 +482,55 @@ vec3 TraceRay(in vec3 rayOrigin, in vec3 rayDirection, in vec3 accumulated_light
         ignored_voxel = 999.0;
         if (hit)
         {
-            ProcessHit(rayOrigin, rayDirection, 
-                fraction, normal, material, 
-                accumulated_light, accumulated_reflection);
+            // return vec3(material.color);
+            // ProcessHit(rayOrigin, rayDirection, 
+            //     fraction, normal, material, 
+            //     accumulated_light, accumulated_reflection);
+            // if (length(rayDirection) <= 15) return vec3(1);
+            vec3 newRayOrigin = rayOrigin + (fraction * rayDirection);
 
-            // vec3 newRayOrigin = rayOrigin + (fraction * rayDirection);
+            vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random2D(), normal);
+            vec3 randomVec = normalize(2.0 * Random3D() - 1.0);
 
-            // vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random2D(), normal);
-            // vec3 randomVec = normalize(2.0 * Random3D() - 1.0);
+            vec3 tangent = cross(randomVec, normal);
+            vec3 bitangent = cross(normal, tangent);
+            mat3 transform = mat3(tangent, bitangent, normal);
 
-            // vec3 tangent = cross(randomVec, normal);
-            // vec3 bitangent = cross(normal, tangent);
-            // mat3 transform = mat3(tangent, bitangent, normal);
+            vec3 newRayDirection = transform * hemisphereDistributedDirection;
 
-            // vec3 newRayDirection = transform * hemisphereDistributedDirection;
+            bool refracted = IsRefracted(rayDirection, normal, material.transparancy);
+            refracted=false;
+            if (refracted)
+            {
+                vec3 idealRefraction = IdealRefract(rayDirection, normal, nIN, nOUT);
+                newRayDirection = normalize(mix(-newRayDirection, idealRefraction, material.smoothness));
+                // newRayDirection = normalize(mix(idealRefraction, -newRayDirection, material.smoothness));
+                newRayOrigin += normal * (dot(newRayDirection, normal) < 0.0 ? -0.001 : 0.001);
+            }
+            else
+            {
+                vec3 idealReflection = reflect(rayDirection, normal);
+                newRayDirection = normalize(mix(newRayDirection, idealReflection, material.smoothness));
+                newRayOrigin += normal * 0.001;
+                accumulated_light += accumulated_reflection * material.emmitance * material.color;
+                accumulated_reflection *= material.color;
+                accumulated_light += vec3(0.8) * 0.2 * accumulated_reflection;
+            }
 
-            // bool refracted = IsRefracted(rayDirection, normal, material.transparancy);
-
-            // if (refracted)
-            // {
-            //     vec3 idealRefraction = IdealRefract(rayDirection, normal, nIN, nOUT);
-            //     newRayDirection = normalize(mix(-newRayDirection, idealRefraction, material.smoothness));
-            //     // newRayDirection = normalize(mix(idealRefraction, -newRayDirection, material.smoothness));
-            //     newRayOrigin += normal * (dot(newRayDirection, normal) < 0.0 ? -0.001 : 0.001);
-            // }
-            // else
-            // {
-            //     vec3 idealReflection = reflect(rayDirection, normal);
-            //     newRayDirection = normalize(mix(newRayDirection, idealReflection, material.smoothness));
-            //     newRayOrigin += normal * 0.001;
-            //     accumulated_light += accumulated_reflection * material.emmitance * material.color;
-            //     accumulated_reflection *= material.color;
-            //     accumulated_light += vec3(0.8) * 0.2 * accumulated_reflection;
-            // }
-
-            // rayDirection = newRayDirection;
-            // rayOrigin = newRayOrigin;
+            rayDirection = newRayDirection;
+            rayOrigin = newRayOrigin;
         }
         else {
             break;
         }
     }
-    // float global_light_participance = -dot(globalLightDir, rayDirection);
-    // if (global_light_participance > 0.9) {
-    //     accumulated_light += vec3(0.99, 0.98, 0.83) * accumulated_reflection;
-    // }
 
-    return accumulated_light;
+    float global_light_participance = -dot(rayDirection, globalLightDir);
+    if (global_light_participance > 0.0) {
+        accumulated_light += vec3(.9,.9,.6) * abs(global_light_participance)/2;
+    }
+
+    return accumulated_light;   
 }
 
 
@@ -506,6 +541,38 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
 //TODO: balance
 layout(local_size_x = 8, local_size_y = 8) in;
 
+vec4 bilinearSmoothstep(vec2 clip_space) {
+    // Normalize UV coordinates to texture dimensions
+    vec2 uv = clip_space/2 + 0.5;
+    // vec2 uv = clip_space/vec2(2.0*(1919.5/1920.0) , 2.0*(1079.5/1080.0)) + 0.5;
+    // vec2 uv = clip_space/2.0 + 0.5*vec2((1919.5/1920.0) , (1079.0/1080.0));
+    // -1 to 0 +1 to 1 
+    uv *= imageSize(frame)-1;
+    // uv = uv.yx;
+    // Fractional parts of UV
+    vec2 fractUV = fract(uv);
+
+    // Floor of UV for neighbor texels
+    ivec2 floorUV = ivec2(uv);
+
+    // Bilinear interpolation weights using smoothstep
+    //   vec2 weights = smoothstep(vec2(0.0), vec2(1.0), fractUV);
+
+    // Sample neighboring texels
+    vec4    topLeft  = imageLoad(frame, floorUV + ivec2(0, 0));
+    vec4    topRight = imageLoad(frame, floorUV + ivec2(1, 0));
+    vec4 bottomLeft  = imageLoad(frame, floorUV + ivec2(0, 1));
+    vec4 bottomRight = imageLoad(frame, floorUV + ivec2(1, 1));
+
+    // Interpolate using weights
+    // return topLeft;
+    return mix(mix(topLeft, topRight, fractUV.x), mix(bottomLeft, bottomRight, fractUV.x), fractUV.y);
+}
+
+// float inv(float f){
+//     return  ()
+// }
+
 void main(void){
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(frame);
@@ -514,19 +581,38 @@ void main(void){
     }
 
     vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
-    randvec = pos / PushConstants.timeSeed;
+    randvec = vec3(pos,pos.x*pos.y) / (0.1+sin(PushConstants.timeSeed));
+    randvec = Random3D();
+    // randvec = (((randvec)));
 
     float       fmat =  imageLoad(posMat, pix).w;
     vec3 origin =  imageLoad(posMat, pix).xyz;
     vec3 direction = cameraRayDir;
-    vec3 normal = imageLoad(norms , pix).xyz;
+    vec3 normal = normalize(imageLoad(norms , pix).xyz);
+    // origin += normal*0.1;
+    // origin -= direction*0.1;
 
     vec3 accumulated_light      = vec3(0); 
     vec3 accumulated_reflection = vec3(1);
 
-    float fvoxel = GetVoxel(ivec3(origin));
-    fvoxel = 999;
     Material material = GetMat(int(fmat));
+    // float fvoxel = GetVoxel(ivec3(origin));
+    // fvoxel = 999;
+    // direction = reflect(direction, normal);
+    
+    float fvoxel = GetVoxel(ivec3(origin));
+    fvoxel=999.0;
+
+    ProcessHit(origin, direction,
+        0.0, normal, material, 
+        accumulated_light, accumulated_reflection);
+
+    // imageStore(frame, pix, vec4(vec3(fvoxel)/256,1));
+    // imageStore(frame, pix, vec4(0.5+(direction)/2,1));
+
+
+    // imageStore(frame, pix, vec4(vec3(1)*(dot(abs(direction), abs(vec3(1)))),1));
+
 
     // vec3 idealReflection = reflect(direction, normal);
     // direction = idealReflection;
@@ -536,19 +622,23 @@ void main(void){
     // accumulated_reflection *= material.color;
     // accumulated_light += vec3(0.8) * 0.2 * accumulated_reflection;
 
-    ProcessHit(origin, direction,
-        0.0, normal, material, 
-        accumulated_light, accumulated_reflection);
 
-    // imageStore(frame, pix, vec4(abs(normal),1));
+    // imageStore(frame, pix, vec4(((direction)/2+0.5),1));
 
-    vec4 color = vec4(0);
-    for (int samplei = 0; samplei < NUM_SAMPLES; samplei++)
-    {
+    vec3 color = vec3(0);
+    for (int samplei = 0; samplei < NUM_SAMPLES; samplei++)    {
         // vec2 posShift = 2.0 * (Random2D() - vec2(0.5)) / vec2(size);
-        color += vec4(TraceRay(origin, direction, accumulated_light, accumulated_reflection, fvoxel), 1) / NUM_SAMPLES;
+        color += TraceRay(origin, direction, accumulated_light, accumulated_reflection, fvoxel) / NUM_SAMPLES;
     }
 
-    // color = mix(color, imageLoad(frame, pix), 0.9);
-    imageStore(frame, pix, color);
+    vec2 old_clip = imageLoad(diffs, pix).xy;
+    vec2 old_uv   = old_clip/2 + 0.5;
+    // ivec2 pix_shift = ivec2(size * clip_shift.xy * 10);
+    vec3 old_color = texture(frame_sampler, old_uv).xyz;
+    // vec3 old_color = imageLoad(frame, pix).xyz;
+    // vec3 old_color = imageLoad(frame, pix).xyz;
+    color = mix(color, old_color, 0.9);
+    // imageStore(frame, pix, vec4(400*abs(clip_shift),1));
+    imageStore(frame, pix, vec4(color, 1));
+    // imageStore(frame, pix, vec4(abs(old_clip), 1));
 }

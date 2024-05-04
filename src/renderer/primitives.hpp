@@ -14,7 +14,7 @@ using namespace std;
 //Everything is X -> Y -> Z order in arrays (vectors)
 #define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
-#define    BLOCK_PALETTE_SIZE 80 //0 always empty
+#define    BLOCK_PALETTE_SIZE 128 //0 always empty
 
 typedef   u8 MatID_t;
 typedef  i32 BlockID_t;
@@ -65,6 +65,7 @@ typedef struct Mesh {
     u32 icount;
     //used to transform from self coordinate system to world coordinate system
     mat4 transform;
+    mat4 old_transform;
     //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
     Image voxels;
     ivec3 size;
