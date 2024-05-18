@@ -30,17 +30,22 @@ void main(void){
     ivec3 irelative_vox = ivec3(relative_vox);
 
     if(
-        (relative_vox.x < 1 )
-      ||(relative_vox.y < 1 )
-      ||(relative_vox.z < 1 )
-      ||(relative_vox.x > 13.3) 
-      ||(relative_vox.y > 13.3) 
-      ||(relative_vox.z > 13.3) 
+        (relative_vox.x < 0.9 )
+      ||(relative_vox.y < 0.9 )
+      ||(relative_vox.z < 0.9 )
+      ||(relative_vox.x > 14.3) 
+      ||(relative_vox.y > 14.3) 
+      ||(relative_vox.z > 14.3) 
     ) return;
 
     //part where actual transformation happens
-    ivec3   target_vox = ivec3((PushConstants.trans * vec4(relative_vox,1)).xyz);
-    ivec3 target_block = (target_vox) / ivec3(16);
+    ivec3   itarget_vox = ivec3((PushConstants.trans * vec4(relative_vox,1)).xyz);
+    ivec3 target_block = (itarget_vox) / ivec3(16);
+
+    // vec3   target_block = ((PushConstants.trans * vec4(relative_vox,1)).xyz);
+    // ivec3 itarget_block = ivec3(target_block);
+    // // ivec3 itarget_block = ivec3(target_block);
+    // ivec3 itarget_vox = ivec3((target_block) * vec3(16));
 
     // ivec3 model_size = imageSize(modelVoxels);
     //+1 for propper rounding, so 15 results into 1
@@ -57,11 +62,11 @@ void main(void){
     //TODO: test different approaches to cast and dot etc...
     //WHERE IS MY IDOT
     // int target_block_in_palette = int(imageLoad(blocks, target_block).r);
-    int target_block_in_palette = int(target_block.x + (target_block.y*5) + (target_block.z*5*5) + 2);
+    int target_block_in_palette = int(target_block.x + (target_block.y*5) + (target_block.z*5*5) + 3);
     // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to
-    ivec3 target_palette_voxel = voxel_in_palette(target_vox.xyz % 16, target_block_in_palette);
+    ivec3 target_palette_voxel = voxel_in_palette(itarget_vox.xyz % 16, target_block_in_palette);
     // int a=0;
     // if( irelative_vox.x == 0 ||
     //     irelative_vox.y == 0 ||

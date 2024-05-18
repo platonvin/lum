@@ -385,8 +385,8 @@ VkSurfaceFormatKHR Renderer::choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR
 
 VkPresentModeKHR Renderer::choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes) {
     for (auto mode : availablePresentModes) {
-        if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-        // if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+        // if (mode == VK_PRESENT_MODE_FIFO_KHR) {
+        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return mode;}
     }
     // cout << "fifo\n";

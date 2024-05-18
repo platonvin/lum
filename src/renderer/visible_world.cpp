@@ -16,7 +16,9 @@ template<typename Type> tuple<Type*, u32> readFileBuffer(const char* path) {
 
 void VisualWorld::init(){
     auto [buffer, buffer_size] = readFileBuffer<u8>("assets/scene.vox");
+    auto [buffer_mirror, buffer_size_mirror] = readFileBuffer<u8>("assets/mirror.vox");
     const ogt::vox_scene* scene = ogt::vox_read_scene(buffer, buffer_size);
+    const ogt::vox_scene* mirror = ogt::vox_read_scene(buffer_mirror, buffer_size_mirror);
     delete[] buffer;
  
     assert(scene->num_models <= BLOCK_PALETTE_SIZE);
@@ -29,6 +31,13 @@ void VisualWorld::init(){
         u32 sizeToCopy = BLOCK_SIZE*BLOCK_SIZE*BLOCK_SIZE;
         memcpy(&this->blocksPalette[i+1], scene->models[i]->voxel_data, sizeToCopy*sizeof(MatID_t));
     }
+    //based "ill fix it later"
+    assert(mirror->models[0]->size_x == BLOCK_SIZE);
+    assert(mirror->models[0]->size_y == BLOCK_SIZE);
+    assert(mirror->models[0]->size_z == BLOCK_SIZE);
+    u32 sizeToCopy = BLOCK_SIZE*BLOCK_SIZE*BLOCK_SIZE;
+    memcpy(&this->blocksPalette[2], mirror->models[0]->voxel_data, sizeToCopy*sizeof(MatID_t));
+
     //i=0 alwaus empty mat/color
     for(i32 i=0; i<MATERIAL_PALETTE_SIZE; i++){
         this->matPalette[i].color = vec4(
@@ -42,10 +51,9 @@ void VisualWorld::init(){
     }
 
     // Chunks is just 3d psewdo dynamic array. Same as united blocks. Might change on settings change
-    this->loadedChunks.set_size(1,1,1);
+    this->loadedChunks.set_size(1,1,2);
     this->unitedBlocks.set_size(8,8,8);
 
-    ChunkInMem singleChunk = {};
     ogt::ogt_voxel_meshify_context ctx = {};
     ogt::ogt_mesh_rgba rgbaPalette[256] = {};
     // comepletely unnesessary but who cares
@@ -58,9 +66,13 @@ void VisualWorld::init(){
     }
     // rgbaPalette.a
     ogt::ogt_mesh* mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[1].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
+    ctx = {};
+    ogt::ogt_mesh* mesh_mirror = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)this->blocksPalette[2].voxels, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rgbaPalette);
 
     vector<Vertex> vertices = {};
+    vector<Vertex> vertices_mirror = {};
     vector<u32   >  indices = {};
+    vector<u32   >  indices_mirror = {};
     
     for(i32 i=0; i<mesh->vertex_count; i++){
         Vertex v = {};
@@ -77,16 +89,39 @@ void VisualWorld::init(){
         v.matID = mesh->vertices[i].palette_index;
         vertices.push_back(v);
     }
+    for(i32 i=0; i<mesh_mirror->vertex_count; i++){
+        Vertex v = {};
+            v.pos.x = mesh_mirror->vertices[i].pos.x;
+            v.pos.y = mesh_mirror->vertices[i].pos.y;
+            v.pos.z = mesh_mirror->vertices[i].pos.z;
+
+            v.norm.x = mesh_mirror->vertices[i].normal.x;
+            v.norm.y = mesh_mirror->vertices[i].normal.y;
+            v.norm.z = mesh_mirror->vertices[i].normal.z;
+        
+        assert(mesh_mirror->vertices[i].palette_index < 256);
+        assert(mesh_mirror->vertices[i].palette_index != 0);
+        v.matID = mesh_mirror->vertices[i].palette_index;
+        vertices_mirror.push_back(v);
+    }
     for(i32 i=0; i<mesh->index_count; i++){
         u32 index = mesh->indices[i];
         indices.push_back(index);
     }
+    for(i32 i=0; i<mesh_mirror->index_count; i++){
+        u32 index = mesh_mirror->indices[i];
+        indices_mirror.push_back(index);
+    }
     //so we have a mesh in indexed vertex form
     //without transformations
+    ChunkInMem singleChunk = {};
+    ChunkInMem mirrorChunk = {};
     singleChunk.blocks[0][0][0] = 1;
     tie(singleChunk.mesh.vertexes, singleChunk.mesh.indexes) = render.create_RayGen_VertexBuffers(vertices, indices);
+    tie(mirrorChunk.mesh.vertexes, mirrorChunk.mesh.indexes) = render.create_RayGen_VertexBuffers(vertices_mirror, indices_mirror);
     // tie(singleChunk)
     singleChunk.mesh.icount = indices.size();
+    mirrorChunk.mesh.icount = indices_mirror.size();
 
     // for (auto index: indices) {
     //     printf("%3d: %.1f %.1f %.1f\n", index, vertices[index].pos.x, vertices[index].pos.y, vertices[index].pos.z);
@@ -98,6 +133,7 @@ void VisualWorld::init(){
     float rotationZ = glm::radians(20.0f);
 
     singleChunk.mesh.transform = mat4(1);
+    mirrorChunk.mesh.transform = mat4(1);
     //applying rotation
     singleChunk.mesh.transform = rotate(singleChunk.mesh.transform, rotationZ, vec3(0.0f, 0.0f, 1.0f));
     singleChunk.mesh.transform = rotate(singleChunk.mesh.transform, rotationY, vec3(0.0f, 1.0f, 0.0f));
@@ -108,6 +144,7 @@ void VisualWorld::init(){
     // this->objects.push_back(singleChunk.mesh);
     
     this->loadedChunks(0,0,0) = singleChunk;
+    this->loadedChunks(0,0,1) = mirrorChunk;
 
     // this->unitedBlocks(0,0,0) = 1; //so 1 from block palette. For testing
     // this->unitedBlocks(0,0,1) = 1; //so 1 from block palette. For testing

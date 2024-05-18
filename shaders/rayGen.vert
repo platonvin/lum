@@ -9,12 +9,17 @@ layout(location = 1)      out vec3 norm;
 layout(location = 2)      out vec3 pos_old;
 layout(location = 3) flat out float MatID; //uint8 thing. But in float
 
-vec3 cameraRayDir = normalize(vec3(12, 21, 7));
+
+vec3 cameraRayDir = normalize(vec3(1, 0.1, .2));
+// vec3 cameraRayDir = normalize(vec3(-1, 0, .1));
+// vec3 cameraRayDir = normalize(vec3(12, 21, 7));
 // vec3 cameraRayDir = normalize(vec3(1, 1, 0));
-vec3 horizline = normalize(vec3(1,-1,0));
+vec3 globalLightDir = normalize(vec3(1, -1, 0));
+// vec3 globalLightDir = cameraRayDir;
+vec3 cameraRayDirPlane = vec3(cameraRayDir.xy, 0);
+vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
 vec3 vertiline = normalize(cross(cameraRayDir, horizline));
 vec3 cameraPos = vec3(-13, -22, -8)*1.5;
-vec3 globalLightDir = normalize(vec3(10, 25, -6));
 
 vec3 camera_unit_x = horizline / 2;
 vec3 camera_unit_y = vertiline / 2;
