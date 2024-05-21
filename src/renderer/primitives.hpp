@@ -25,9 +25,7 @@ typedef struct Material {
     f32 emmit; //emmits same color as reflect
     f32 rough;
 } Material;
-typedef struct Voxel {
-    MatID_t matID;
-} Voxel;
+typedef u8 Voxel;
 typedef struct Vertex {
     vec3 pos;
     vec3 norm;
@@ -50,41 +48,47 @@ typedef struct Vertex {
 typedef struct Buffer {
     vector<VkBuffer> buf;
     vector<VmaAllocation> alloc;
-} Buffer;
+} Buffers;
 typedef struct Image {
     vector<VkImage> image;
     vector<VkImageView> view;
     vector<VmaAllocation> alloc;
-} Image;
+} Images;
 
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
     //VkBuffers for ray generation
-    Buffer vertexes;
-    Buffer indexes;
+    Buffers vertexes;
+    Buffers indexes;
     u32 icount;
-    //used to transform from self coordinate system to world coordinate system
-    mat4 transform;
-    mat4 old_transform;
-    //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
-    Image voxels;
+    Images voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
+
+    mat4 transform; //used to transform from self coordinate system to world coordinate system
+    mat4 old_transform; //for denoising
+    
     ivec3 size;
-    // vector<VkBuffer> voxels;
+    // Voxel* host_voxels; // single copy of voxel memory on cpu. If NULL then you store your data yourself
 } Mesh;
+
+
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
 } Block;
 
-template <typename Type>
-class table3d {
+//just 3d array. Content invalid after allocate()
+template <typename Type> class table3d {
 private:
-    vector<Type> memory = {};
-    uvec3 _size = {};
+    void* memory = NULL;
+    ivec3 _size = {};
 public:
     //makes content invalid 
-    void set_size(u32 x, u32 y, u32 z) {
-        _size = uvec3(x,y,z);
-        this->memory.resize(x*y*z);
+    void allocate(int x, int y, int z) {
+        _size = ivec3(x,y,z);
+        this->memory = malloc(x*y*z);
+    }
+    //makes content invalid 
+    void allocate(ivec3 size) {
+        this->allocate(size.x, size.y, size.z);
     }
     Type* data() {
         return this->memory.data();
@@ -92,7 +96,7 @@ public:
     uvec3 size() {
         return _size;
     }
-    Type& operator()(u32 x, u32 y, u32 z) {
+    Type& operator()(int x, int y, int z) {
         return this->memory [x + _size.x*y + (_size.x*_size.y)*z];
     }
 };

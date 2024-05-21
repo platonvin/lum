@@ -17,3 +17,5 @@ r.cpp
 todo.txt
 assets/MechGolem.zip
 run.py
+#memory dump from VMA
+dump.json

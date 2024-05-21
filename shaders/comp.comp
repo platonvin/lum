@@ -236,6 +236,7 @@ bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOr
     vec3 block_corner2 = block_corner1 + vec3(1.0); //now real center
 
     blockPos = ivec3(block_corner1); //round origin to block pos
+    // blockPos = ivec3(block_corner1)*16; //round origin to block pos
 
     block_corner1 -= effective_origin; //now corners are relative vectors
     block_corner2 -= effective_origin;
@@ -252,101 +253,101 @@ bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOr
     return true;
 }
 
-void CollideInsideBlock(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, in ivec3 block_pos){
-    vec3 corner_1 = vec3(block_pos);
-    vec3 corner_2 = vec3(block_pos) + vec3(1.0);
+// void CollideInsideBlock(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, in ivec3 block_pos){
+//     vec3 corner_1 = vec3(block_pos);
+//     vec3 corner_2 = vec3(block_pos) + vec3(1.0);
 
-    vec3 planes_1 = (corner_1 - rayOrigin) / rayDirection;
-    vec3 planes_2 = (corner_2 - rayOrigin) / rayDirection;
+//     vec3 planes_1 = (corner_1 - rayOrigin) / rayDirection;
+//     vec3 planes_2 = (corner_2 - rayOrigin) / rayDirection;
 
-    vec3 fractionsForAxis;
-    fractionsForAxis.x = max(planes_1.x, planes_2.x);
-    fractionsForAxis.y = max(planes_1.y, planes_2.y);
-    fractionsForAxis.z = max(planes_1.z, planes_2.z);
+//     vec3 fractionsForAxis;
+//     fractionsForAxis.x = max(planes_1.x, planes_2.x);
+//     fractionsForAxis.y = max(planes_1.y, planes_2.y);
+//     fractionsForAxis.z = max(planes_1.z, planes_2.z);
 
-    ivec3 steps;
-    steps.x = (rayDirection.x < 0) ? -1 : +1;
-    steps.y = (rayDirection.y < 0) ? -1 : +1;
-    steps.z = (rayDirection.z < 0) ? -1 : +1;
+//     ivec3 steps;
+//     steps.x = (rayDirection.x < 0) ? -1 : +1;
+//     steps.y = (rayDirection.y < 0) ? -1 : +1;
+//     steps.z = (rayDirection.z < 0) ? -1 : +1;
 
-    if (fractionsForAxis.x < fractionsForAxis.y) {
-        if (fractionsForAxis.x < fractionsForAxis.z) {
-            fraction = fractionsForAxis.x;
-            normal = vec3(-1.0, 0, 0) * float(steps.x);
-        }
-        else { //z is the lowest
-            fraction = fractionsForAxis.z;
-            normal = vec3(0, 0, -1.0) * float(steps.z);
-        }
-    } else {
-        if (fractionsForAxis.y < fractionsForAxis.z) {
-            fraction = fractionsForAxis.y;
-            normal = vec3(0, -1.0, 0) * float(steps.y);
-        }
-        else { //z is the lowest
-            fraction = fractionsForAxis.z;
-            normal = vec3(0, 0, -1.0) * float(steps.z);
-        }
-    }
-}
-bool Cast_Ray(in vec3 origin, in vec3 dir, out float fraction, out vec3 normal, out Material mat) {
-    bool hit = false;
-    ivec3 isteps;
-    isteps.x = int(dir.x > 0.0);
-    isteps.y = int(dir.y > 0.0);
-    isteps.z = int(dir.z > 0.0);
-    isteps = ivec3(2) * isteps - ivec3(1);
-    vec3 fsteps;
-    fsteps.x = float(dir.x > 0.0);
-    fsteps.y = float(dir.y > 0.0);
-    fsteps.z = float(dir.z > 0.0);
-    fsteps = 2.0 * fsteps - 1.0;
+//     if (fractionsForAxis.x < fractionsForAxis.y) {
+//         if (fractionsForAxis.x < fractionsForAxis.z) {
+//             fraction = fractionsForAxis.x;
+//             normal = vec3(-1.0, 0, 0) * float(steps.x);
+//         }
+//         else { //z is the lowest
+//             fraction = fractionsForAxis.z;
+//             normal = vec3(0, 0, -1.0) * float(steps.z);
+//         }
+//     } else {
+//         if (fractionsForAxis.y < fractionsForAxis.z) {
+//             fraction = fractionsForAxis.y;
+//             normal = vec3(0, -1.0, 0) * float(steps.y);
+//         }
+//         else { //z is the lowest
+//             fraction = fractionsForAxis.z;
+//             normal = vec3(0, 0, -1.0) * float(steps.z);
+//         }
+//     }
+// }
+// bool Cast_Ray(in vec3 origin, in vec3 dir, out float fraction, out vec3 normal, out Material mat) {
+//     bool hit = false;
+//     ivec3 isteps;
+//     isteps.x = int(dir.x > 0.0);
+//     isteps.y = int(dir.y > 0.0);
+//     isteps.z = int(dir.z > 0.0);
+//     isteps = ivec3(2) * isteps - ivec3(1);
+//     vec3 fsteps;
+//     fsteps.x = float(dir.x > 0.0);
+//     fsteps.y = float(dir.y > 0.0);
+//     fsteps.z = float(dir.z > 0.0);
+//     fsteps = 2.0 * fsteps - 1.0;
 
-    vec3 tMax = vec3(0);
-    vec3 tDelta = vec3(0);
-    vec3 fcurrentStepDiretion = vec3(0);
-    ivec3 icurrentStepDiretion = ivec3(0);
-    ivec3 currentVoxelPos = ivec3(0);
-    int currentVoxel = 0;
-    fraction = 0;
+//     vec3 tMax = vec3(0);
+//     vec3 tDelta = vec3(0);
+//     vec3 fcurrentStepDiretion = vec3(0);
+//     ivec3 icurrentStepDiretion = ivec3(0);
+//     ivec3 currentVoxelPos = ivec3(0);
+//     int currentVoxel = 0;
+//     fraction = 0;
 
-    if (!initTvals(origin, dir, tMax, tDelta, currentVoxelPos)) return false; //does not intersect with scene
+//     if (!initTvals(origin, dir, tMax, tDelta, currentVoxelPos)) return false; //does not intersect with scene
 
-    currentVoxel = GetVoxel(currentVoxelPos);
-    int iterations = 0;
-    while (true) {
-        icurrentStepDiretion.x = int(tMax.x < tMax.y && tMax.x < tMax.z);
-        icurrentStepDiretion.y = int(tMax.x > tMax.y && tMax.y < tMax.z);
-        icurrentStepDiretion.z = int(tMax.z < tMax.x && tMax.z < tMax.y);
+//     currentVoxel = GetVoxel(currentVoxelPos);
+//     int iterations = 0;
+//     while (true) {
+//         icurrentStepDiretion.x = int(tMax.x < tMax.y && tMax.x < tMax.z);
+//         icurrentStepDiretion.y = int(tMax.x > tMax.y && tMax.y < tMax.z);
+//         icurrentStepDiretion.z = int(tMax.z < tMax.x && tMax.z < tMax.y);
 
-        fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
-        fcurrentStepDiretion.y = float(int((tMax.x >= tMax.y) && (tMax.y <= tMax.z)));
-        fcurrentStepDiretion.z = float(int((tMax.z <= tMax.x) && (tMax.z <= tMax.y)));
+//         fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
+//         fcurrentStepDiretion.y = float(int((tMax.x >= tMax.y) && (tMax.y <= tMax.z)));
+//         fcurrentStepDiretion.z = float(int((tMax.z <= tMax.x) && (tMax.z <= tMax.y)));
 
-        currentVoxelPos += isteps * icurrentStepDiretion;
-        fraction += dot(tDelta, fcurrentStepDiretion);
-        tMax += (tDelta * fcurrentStepDiretion);
+//         currentVoxelPos += isteps * icurrentStepDiretion;
+//         fraction += dot(tDelta, fcurrentStepDiretion);
+//         tMax += (tDelta * fcurrentStepDiretion);
 
-        currentVoxel = GetVoxel(currentVoxelPos);
-        // currentBlock = Get_Block(currentVoxelPos);
+//         currentVoxel = GetVoxel(currentVoxelPos);
+//         // currentBlock = Get_Block(currentVoxelPos);
 
-        if (currentVoxel != 0) {
-            hit = true;
-            break;
-        }
+//         if (currentVoxel != 0) {
+//             hit = true;
+//             break;
+//         }
 
-        if (iterations++ > 128) {
-            hit = false;
-            break;
-        }
-    }
-    ;
+//         if (iterations++ > 128) {
+//             hit = false;
+//             break;
+//         }
+//     }
+//     ;
 
-    normal = -(fsteps * fcurrentStepDiretion);
-    mat = GetMat(currentVoxel);
+//     normal = -(fsteps * fcurrentStepDiretion);
+//     mat = GetMat(currentVoxel);
 
-    return hit;
-}
+//     return hit;
+// }
 bool CastRay(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, out Material material, float ignored_voxel){
     bool block_hit = false;
 
@@ -383,7 +384,7 @@ bool CastRay(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out ve
         current_voxel = GetVoxel(voxel_pos);
 
         if ((current_voxel != 0) 
-        && ((current_voxel != ignored_voxel))
+         && (current_voxel != ignored_voxel)
         ){
             block_hit = true;
             break;
@@ -593,8 +594,8 @@ void main(void){
     // imageStore(frame, pix, vec4((GetMat(int(fvoxel)).color),1));
     // imageStore(frame, pix, vec4((abs(direction)),1));
     // if(length(direction)<0.9) 
-    // imageStore(frame, pix, vec4(vec3(dot(normal, direction)<0),1));
     // imageStore(frame, pix, vec4(0.5+(direction)/2,1));
+    // imageStore(frame, pix, vec4(vec3(dot(normal, direction)<0),1));
 
 
     // imageStore(frame, pix, vec4(vec3(1)*(dot(abs(direction), abs(vec3(1)))),1));

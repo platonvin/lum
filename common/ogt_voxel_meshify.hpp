@@ -1,3 +1,4 @@
+#define _MY_VERTEX_STRUCT_
 /*
     opengametools voxel meshifier - v0.9 - MIT license - Justin Paver, April 2020
 
@@ -113,7 +114,9 @@ struct ogt_mesh_vertex
 {
     ogt_mesh_vec3  pos;
     ogt_mesh_vec3  normal;
+#ifndef _MY_VERTEX_STRUCT_
     ogt_mesh_rgba  color;
+#endif
     uint32_t palette_index;
 };
 
@@ -182,6 +185,7 @@ void     ogt_stream_from_paletted_voxels_simple(const uint8_t* voxels, uint32_t 
 // If you're interested in how this library works, everything you need is below this point.
 //
 //-----------------------------------------------------------------------------------------------------------------
+// #define OGT_VOXEL_MESHIFY_IMPLEMENTATION
 #ifdef OGT_VOXEL_MESHIFY_IMPLEMENTATION
 #include <assert.h>
 #include <stdlib.h>
@@ -305,7 +309,9 @@ static inline ogt_mesh_vertex _mesh_make_vertex(const ogt_mesh_vec3& pos, const 
     ogt_mesh_vertex ret;
     ret.pos    = pos;
     ret.normal = normal;
+#ifndef _MY_VERTEX_STRUCT_
     ret.color  = color;
+#endif
     ret.palette_index = palette_index;
     return ret;
 }
@@ -1622,9 +1628,11 @@ void _polygon_meshify_voxels_in_face_direction(
                 const uint32_t MAX_VERTS = 4096;
                 ogt_mesh_vec2i verts[MAX_VERTS];
                 uint32_t vert_count = _construct_polygon_for_slice(verts, MAX_VERTS, i, j, size_x, size_y, slice_colors, voxel_polygonized);
-                
+#ifndef _MY_VERTEX_STRUCT_
                 const ogt_mesh_rgba& color = palette[color_index];
-
+#else
+                const ogt_mesh_rgba& color = (ogt_mesh_rgba){};
+#endif
                 // generate the verts in the output mesh
                 uint32_t base_vertex_index = mesh->vertex_count;
                 for (uint32_t vert_index = 0; vert_index < vert_count; vert_index++) {

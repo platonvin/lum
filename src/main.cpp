@@ -22,9 +22,9 @@ int main() {
 
     // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
     render.update_Block_Palette(world.blocksPalette);
-    render.update_Blocks(world.unitedBlocks.data());
+    render.update_Chunk(world.unitedBlocks.data());
     // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
-    render.update_Voxel_Palette(world.matPalette);
+    render.update_Material_Palette(world.matPalette);
 
 
     // dyn_mesh.vertexes = world.loadedChunks(0,0,0).mesh.vertexes;
@@ -35,13 +35,13 @@ int main() {
     dyn_mesh1.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
     dyn_mesh1.size = ivec3(16);
     dyn_mesh1.transform = identity<mat4>();
-    dyn_mesh1.transform = translate(dyn_mesh1.transform, vec3(40));
+    dyn_mesh1.transform = translate(dyn_mesh1.transform, vec3(20));
     Mesh dyn_mesh2 = {};
     dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
     dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[2].voxels, {16,16,16});
     dyn_mesh2.size = ivec3(16);
     dyn_mesh2.transform = identity<mat4>();
-    dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(40));
+    dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
     // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(16,16,0));
     // dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
     // dyn_mesh.transform = translate(dyn_mesh.transform, vec3(16,16,16));
@@ -67,6 +67,10 @@ int main() {
 
     // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(30,0,0));
     // void* ptr = malloc((size_t)(void *)malloc); 
+    // char* dump;
+    // vmaBuildStatsString(render.VMAllocator, &dump, 1);
+    // cout << dump;
+    // vmaFreeStatsString(render.VMAllocator, dump);
 
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
         glfwPollEvents();
@@ -105,14 +109,22 @@ int main() {
     vkDeviceWaitIdle(render.device);
 
     //TODO: temp
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,0).mesh.vertexes.buf[0], world.loadedChunks(0,0,0).mesh.vertexes.alloc[0]);
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,0).mesh.vertexes.buf[1], world.loadedChunks(0,0,0).mesh.vertexes.alloc[1]);
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,0).mesh.indexes.buf[0], world.loadedChunks(0,0,0).mesh.indexes.alloc[0]);
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,0).mesh.indexes.buf[1], world.loadedChunks(0,0,0).mesh.indexes.alloc[1]);
 
+
+    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.vertexes.buf[0], world.loadedChunks(0,0,1).mesh.vertexes.alloc[0]);
+    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.vertexes.buf[1], world.loadedChunks(0,0,1).mesh.vertexes.alloc[1]);
+    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.indexes.buf[0], world.loadedChunks(0,0,1).mesh.indexes.alloc[0]);
+    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.indexes.buf[1], world.loadedChunks(0,0,1).mesh.indexes.alloc[1]);
+    vmaDestroyImage(render.VMAllocator, dyn_mesh2.voxels.image[0], dyn_mesh2.voxels.alloc[0]);
+    vmaDestroyImage(render.VMAllocator, dyn_mesh2.voxels.image[1], dyn_mesh2.voxels.alloc[1]);
+    vkDestroyImageView(render.device, dyn_mesh2.voxels.view[0], NULL);
+    vkDestroyImageView(render.device, dyn_mesh2.voxels.view[1], NULL);
     vkDeviceWaitIdle(render.device);
 
     render.cleanup();
+    // vmaBuildStatsString(render.VMAllocator, &dump, 1);
+    // cout << dump;
+    // vmaFreeStatsString(render.VMAllocator, dump);
     return 0;
 }
 

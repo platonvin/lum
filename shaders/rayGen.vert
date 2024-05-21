@@ -20,9 +20,7 @@ vec3 cameraRayDirPlane = vec3(cameraRayDir.xy, 0);
 vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
 vec3 vertiline = normalize(cross(cameraRayDir, horizline));
 vec3 cameraPos = vec3(-13, -22, -8)*1.5;
-
-vec3 camera_unit_x = horizline / 2;
-vec3 camera_unit_y = vertiline / 2;
+// vec3 cameraPos = vec3(-13, -22, -8)*1.5/16.0;
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;

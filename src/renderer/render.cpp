@@ -1,12 +1,14 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <glm/detail/qualifier.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_projection.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/vector_int3.hpp>
 #include <glm/trigonometric.hpp>
+#include <io.h>
 // #include <glm/fwd.hpp>
 // #include <process.h>
 
@@ -50,7 +52,275 @@ vector<const char*>   deviceExtensions = {
     // "VK_KHR_shader_non_semantic_info"
 };
 
+void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size){
+    ivec3 world_size = ivec3(x_size, y_size, z_size);
+// void init(VisualWorld &_world){
+    // _world = world;
+    create_Window();
+    VK_CHECK(volkInitialize());
 
+    get_Layers();
+    get_Instance_Extensions();
+    get_PhysicalDevice_Extensions();
+
+    create_Instance();
+    volkLoadInstance(instance);   
+    
+#ifndef VKNDEBUG
+    setup_Debug_Messenger();
+#endif
+
+    create_Surface();
+    pick_Physical_Device();
+    create_Logical_Device();
+
+    //AMD VMA 
+    create_Allocator();
+    
+    create_Swapchain();
+    create_Swapchain_Image_Views();
+
+    create_RenderPass_Graphical();
+    create_RenderPass_RayGen();
+
+    create_Command_Pool();
+    create_Command_Buffers(graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+
+    create_samplers();
+
+    create_Image_Storages(raytracedImages, raytracedImageAllocations, raytracedImageViews,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        {swapChainExtent.height, swapChainExtent.width, 1});
+    create_Image_Storages(rayGenPosMatImages, rayGenPosMatImageAllocations, rayGenPosMatImageViews,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        {swapChainExtent.height, swapChainExtent.width, 1});
+    create_Image_Storages(rayGenNormImages, rayGenNormImageAllocations, rayGenNormImageViews,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        {swapChainExtent.height, swapChainExtent.width, 1});
+    create_Image_Storages(rayGenPosDiffImages, rayGenPosDiffImageAllocations, rayGenPosDiffImageViews,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT,
+        {swapChainExtent.height, swapChainExtent.width, 1});
+    create_Image_Storages(rayGenDepthImages, rayGenDepthImageAllocations, rayGenDepthImageViews,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_D32_SFLOAT,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        {swapChainExtent.height, swapChainExtent.width, 1});
+    create_Image_Storages(originBlocksImages, originBlocksImageAllocations, originBlocksImageViews,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R32_SINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+        world_size); //TODO: dynamic
+    create_Image_Storages(raytraceBlocksImages, raytraceBlocksImageAllocations, raytraceBlocksImageViews,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R32_SINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+        world_size); //TODO: dynamic
+    create_Image_Storages(originBlockPaletteImages, originBlockPaletteImageAllocations, originBlockPaletteImageViews,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R8_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        {16, 16, 16*block_palette_size}); //TODO: dynamic
+    create_Image_Storages(raytraceBlockPaletteImages, raytraceBlockPaletteImageAllocations, raytraceBlockPaletteImageViews,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R8_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        {16, 16, 16*block_palette_size}); //TODO: dynamic
+    create_Image_Storages(raytraceVoxelPaletteImages, raytraceVoxelPaletteImageAllocations, raytraceVoxelPaletteImageViews,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_R32_SFLOAT, //try R32G32
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT ,
+        {256, 6, 1}); //TODO: dynamic, text formats, pack Material into smth other than 6 floats :)
+
+    // create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size)
+    create_Buffer_Storages(paletteCounterBuffers, paletteCounterBufferAllocations,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        sizeof(int));
+    create_Buffer_Storages(copyCounterBuffers, copyCounterBufferAllocations,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        sizeof(int)*(copy_queue_size));
+    create_Buffer_Storages(RayGenUniformBuffers, RayGenUniformBufferAllocations,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        sizeof(mat4), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    RayGenUniformMapped.resize(MAX_FRAMES_IN_FLIGHT);
+    for (i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+        vmaMapMemory(VMAllocator, RayGenUniformBufferAllocations[i], &RayGenUniformMapped[i]);
+        // println
+    }
+    
+    vector<vector<VkImageView>> swapViews = {swapChainImageViews};
+    create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapChainImages.size(), swapChainExtent.width, swapChainExtent.height);
+// printl(swapChainImages.size());
+    vector<vector<VkImageView>> rayGenVeiws = {rayGenPosMatImageViews, rayGenNormImageViews, rayGenPosDiffImageViews,rayGenDepthImageViews};
+    create_N_Framebuffers(rayGenFramebuffers, rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+    
+    create_Descriptor_Set_Layouts();
+    create_Descriptor_Pool();
+    allocate_Descriptors();
+    setup_Blockify_Descriptors();
+    setup_Copy_Descriptors();
+    //setup for map?
+    setup_Raytrace_Descriptors();
+    setup_Graphical_Descriptors();
+    setup_RayGen_Descriptors();
+    create_Blockify_Pipeline();
+    create_Copy_Pipeline();
+    create_Map_Pipeline();
+    create_Raytrace_Pipeline();
+    create_Graphics_Pipeline();
+    create_RayGen_Pipeline();
+    create_Sync_Objects();
+}
+void Renderer::cleanup(){
+    for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+        vkDestroyImageView(device,             raytracedImageViews[i], NULL);
+        vkDestroyImageView(device,            rayGenNormImageViews[i], NULL);
+        vkDestroyImageView(device,           rayGenDepthImageViews[i], NULL);
+        vkDestroyImageView(device,          rayGenPosMatImageViews[i], NULL);
+        vkDestroyImageView(device,          originBlocksImageViews[i], NULL);
+        vkDestroyImageView(device,         rayGenPosDiffImageViews[i], NULL);
+        vkDestroyImageView(device,        raytraceBlocksImageViews[i], NULL);
+        vkDestroyImageView(device,    originBlockPaletteImageViews[i], NULL);
+        vkDestroyImageView(device,  raytraceBlockPaletteImageViews[i], NULL);
+        vkDestroyImageView(device,  raytraceVoxelPaletteImageViews[i], NULL);
+        vmaDestroyImage(VMAllocator,            raytracedImages[i],            raytracedImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,           rayGenNormImages[i],           rayGenNormImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,          rayGenDepthImages[i],          rayGenDepthImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,         rayGenPosMatImages[i],         rayGenPosMatImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,         originBlocksImages[i],         originBlocksImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,        rayGenPosDiffImages[i],        rayGenPosDiffImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,       raytraceBlocksImages[i],       raytraceBlocksImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,   originBlockPaletteImages[i]  , originBlockPaletteImageAllocations[i]);
+        vmaDestroyImage(VMAllocator, raytraceBlockPaletteImages[i], raytraceBlockPaletteImageAllocations[i]);
+        vmaDestroyImage(VMAllocator, raytraceVoxelPaletteImages[i], raytraceVoxelPaletteImageAllocations[i]);
+        vkDestroySampler(device, raytracedImageSamplers[i], NULL);
+        
+        vmaDestroyBuffer(VMAllocator, paletteCounterBuffers[i], paletteCounterBufferAllocations[i]);
+        vmaDestroyBuffer(VMAllocator, copyCounterBuffers[i], copyCounterBufferAllocations[i]);
+
+            vmaUnmapMemory(VMAllocator,                          RayGenUniformBufferAllocations[i]);
+        vmaDestroyBuffer(VMAllocator, RayGenUniformBuffers[i], RayGenUniformBufferAllocations[i]);
+
+        vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
+    }
+
+    vkDestroyDescriptorPool(device, descriptorPool, NULL);
+    vkDestroyDescriptorSetLayout(device,     RayGenDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,   blockifyDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,       copyDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,        mapDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,   raytraceDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,  graphicalDescriptorSetLayout, NULL);
+    for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
+        vkDestroySemaphore(device,  imageAvailableSemaphores[i], NULL);
+        vkDestroySemaphore(device,  renderFinishedSemaphores[i], NULL);
+        // vkDestroySemaphore(device, blockifyFinishedSemaphores[i], NULL);
+        // vkDestroySemaphore(device, copyFinishedSemaphores[i], NULL);
+        // vkDestroySemaphore(device, mapFinishedSemaphores[i], NULL);
+        vkDestroySemaphore(device, raytraceFinishedSemaphores[i], NULL);
+        vkDestroySemaphore(device,  rayGenFinishedSemaphores[i], NULL);
+        vkDestroyFence(device, graphicalInFlightFences[i], NULL);
+        // vkDestroyFence(device,   blockifyInFlightFences[i], NULL);
+        // vkDestroyFence(device,   copyInFlightFences[i], NULL);
+        // vkDestroyFence(device,   mapInFlightFences[i], NULL);
+        vkDestroyFence(device,   raytraceInFlightFences[i], NULL);
+        vkDestroyFence(device,    rayGenInFlightFences[i], NULL);
+
+    }
+    vkDestroyCommandPool(device, commandPool, NULL);
+    for (auto framebuffer : swapChainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, NULL);
+    }
+    vkDestroyRenderPass(device, graphicalRenderPass, NULL);
+    vkDestroyRenderPass(device, rayGenRenderPass, NULL);
+
+    vkDestroyPipeline(device,   rayGenPipeline, NULL);
+    vkDestroyPipeline(device, blockifyPipeline, NULL);
+    vkDestroyPipeline(device,     copyPipeline, NULL);
+    vkDestroyPipeline(device,      mapPipeline, NULL);
+    vkDestroyPipeline(device, raytracePipeline, NULL);
+    vkDestroyPipeline(device, graphicsPipeline, NULL);
+
+    vkDestroyPipelineLayout(device,   rayGenPipelineLayout, NULL);
+    vkDestroyPipelineLayout(device, blockifyLayout, NULL);
+    vkDestroyPipelineLayout(device,     copyLayout, NULL);
+    vkDestroyPipelineLayout(device,      mapLayout, NULL);
+    vkDestroyPipelineLayout(device, raytraceLayout, NULL);
+    vkDestroyPipelineLayout(device, graphicsLayout, NULL);
+
+    vkDestroyShaderModule(device, rayGenVertShaderModule, NULL);
+    vkDestroyShaderModule(device, rayGenFragShaderModule, NULL); 
+    vkDestroyShaderModule(device, blockifyShaderModule, NULL);
+    vkDestroyShaderModule(device,     copyShaderModule, NULL);
+    vkDestroyShaderModule(device,      mapShaderModule, NULL);
+    vkDestroyShaderModule(device, raytraceShaderModule, NULL); 
+    vkDestroyShaderModule(device, graphicsVertShaderModule, NULL);
+    vkDestroyShaderModule(device, graphicsFragShaderModule, NULL); 
+    for (auto imageView : swapChainImageViews) {
+        vkDestroyImageView(device, imageView, NULL);
+    }
+    vkDestroySwapchainKHR(device, swapchain, NULL);
+    //do before destroyDevice
+    vmaDestroyAllocator(VMAllocator);
+    vkDestroyDevice(device, NULL);
+    //"unpicking" physical device is unnessesary :)
+    vkDestroySurfaceKHR(instance, surface, NULL);
+#ifndef VKNDEBUG
+    vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, NULL);
+#endif
+    vkDestroyInstance(instance, NULL);
+    glfwDestroyWindow(window.pointer);
+}
 void Renderer::get_Layers(){
     for(auto layer : debugInstanceLayers){
         instanceLayers.push_back(layer);
@@ -1671,10 +1941,15 @@ void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAlloc
 }
 //TODO: need to find memory, verify flags
 //make so each chunk is stored in staging buffer and then copied to fast memory
-tuple<Buffer, Buffer> Renderer::create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices){
-    VkDeviceSize bufferSizeV = sizeof(Vertex)*vertices.size();
-    cout << bufferSizeV;
-    VkDeviceSize bufferSizeI = sizeof(u32   )* indices.size();
+
+tuple<Buffers, Buffers> Renderer::create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices){
+    return create_RayGen_VertexBuffers(vertices.data(), vertices.size(), indices.data(), indices.size());
+}
+//exists so i can easelly use ogt allocation without manual moving. BTW i also changed it src code for this
+tuple<Buffers, Buffers> Renderer::create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount){
+    VkDeviceSize bufferSizeV = sizeof(Vertex)*vcount;
+    // cout << bufferSizeV;
+    VkDeviceSize bufferSizeI = sizeof(u32   )*icount;
 
     vector<VkBuffer> vertexBuffers(MAX_FRAMES_IN_FLIGHT);
     vector<VkBuffer>  indexBuffers(MAX_FRAMES_IN_FLIGHT);
@@ -1700,11 +1975,11 @@ assert (VMAllocator);
 assert (stagingAllocationV);
 assert (&data);
     vmaMapMemory(VMAllocator, stagingAllocationV, &data);
-        memcpy(data, vertices.data(), bufferSizeV);
+        memcpy(data, vertices, bufferSizeV);
     vmaUnmapMemory(VMAllocator, stagingAllocationV);
 
     vmaMapMemory(VMAllocator, stagingAllocationI, &data);
-        memcpy(data, indices.data(), bufferSizeI);
+        memcpy(data, indices, bufferSizeI);
     vmaUnmapMemory(VMAllocator, stagingAllocationI);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
@@ -1730,8 +2005,8 @@ assert (&data);
         {indexBuffers, indexAllocations}
     };
 }
-Image Renderer::create_RayTrace_VoxelImages(MatID_t* voxels, ivec3 size){
-    VkDeviceSize bufferSize = sizeof(MatID_t)*size.x*size.y*size.z;
+Images Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size){
+    VkDeviceSize bufferSize = sizeof(Voxel)*size.x*size.y*size.z;
 
     vector<VkImage>   images(MAX_FRAMES_IN_FLIGHT);
     vector<VkImageView>  views(MAX_FRAMES_IN_FLIGHT);
@@ -1765,6 +2040,7 @@ Image Renderer::create_RayTrace_VoxelImages(MatID_t* voxels, ivec3 size){
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         copy_Buffer(stagingBuffer, images[i], bufferSize, {16,16,16}, VK_IMAGE_LAYOUT_GENERAL);
     }
+    vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
     return {images, views, allocations};
 }
 
@@ -2480,15 +2756,16 @@ void Renderer::transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkIma
 
 //TODO: make use of frames in flight - do not wait for this things
 //TODO: do smth with frames in flight
+//block palette on cpu side is expected to be array of pointers to blocks
 void Renderer::update_Block_Palette(Block* blockPalette){
     VkDeviceSize bufferSize = sizeof(Block)*BLOCK_PALETTE_SIZE;
     table3d<MatID_t> blockPaletteLinear = {};
-    blockPaletteLinear.set_size(16, 16, 16*BLOCK_PALETTE_SIZE);
+    blockPaletteLinear.allocate(16, 16, 16*BLOCK_PALETTE_SIZE);
     for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
     for(i32 x=0; x<BLOCK_SIZE; x++){
     for(i32 y=0; y<BLOCK_SIZE; y++){
     for(i32 z=0; z<BLOCK_SIZE; z++){
-        blockPaletteLinear(x,y,z+16*N) = blockPalette[N].voxels[x][y][z].matID;
+        blockPaletteLinear(x,y,z+16*N) = blockPalette[N].voxels[x][y][z];
     }}}}
     // cout << "(i32)blockPaletteLinear(0,0,0)" " "<< (i32)((i32*)blockPaletteLinear.data())[0] << "\n";
     // printl((i32)blockPaletteLinear(0,0,0));
@@ -2527,7 +2804,7 @@ void Renderer::update_Block_Palette(Block* blockPalette){
 }
 
 //TODO: do smth with frames in flight
-void Renderer::update_Voxel_Palette(Material* materialPalette){
+void Renderer::update_Material_Palette(Material* materialPalette){
     VkDeviceSize bufferSize = sizeof(Material)*256;
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -2553,7 +2830,8 @@ void Renderer::update_Voxel_Palette(Material* materialPalette){
 }
 
 //TODO: do smth with frames in flight
-void Renderer::update_Blocks(BlockID_t* blocks){
+//TODO: currently its update chunk
+void Renderer::update_Chunk(BlockID_t* blocks){
     VkDeviceSize bufferSize = sizeof(BlockID_t)*8*8*8;
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -2581,4 +2859,61 @@ void Renderer::update_Blocks(BlockID_t* blocks){
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
+}
+
+char* readFileBuffer(const char* path, size_t* size) {
+    FILE* fp = fopen(path, "rb");
+    *size = _filelength(_fileno(fp));
+    char* buffer = (char*)malloc(*size);
+    fread(buffer, *size, 1, fp);
+    fclose(fp);
+
+    return buffer;
+}
+
+namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
+    #include <ogt_vox.h>
+    #include <ogt_voxel_meshify.hpp>
+} //so we'll have to use ogt::ogt_func :(
+
+//TODO: alloca
+
+void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool make_vertices){
+    size_t buffer_size;
+    char* buffer = readFileBuffer(vox_file, &buffer_size);
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
+    free(buffer);
+
+    assert(scene->num_models == 1);
+    load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    ogt::vox_destroy_scene(scene);
+}
+
+void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool if_make_vertices){
+    mesh->size = ivec3(x_size, y_size, z_size);
+    mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
+    if(if_make_vertices){
+        make_vertices(mesh, Voxels, x_size, y_size, z_size);
+    }
+}
+//frees only gpu side stuff, not mesh ptr
+void Renderer::free_mesh(Mesh* mesh){
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+        vmaDestroyBuffer(VMAllocator, mesh->vertexes.buf[i], mesh->vertexes.alloc[i]);
+        vmaDestroyBuffer(VMAllocator, mesh->indexes.buf[i], mesh->indexes.alloc[i]);
+        vmaDestroyImage(VMAllocator, mesh->voxels.image[i], mesh->voxels.alloc[i]);
+        vkDestroyImageView(device, mesh->voxels.view[i], NULL);
+    }
+}
+
+void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
+    ogt::ogt_voxel_meshify_context ctx = {};
+    ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
+
+    tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers((Vertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
+    mesh->icount = ogt_mesh->index_count;
+}
+
+void Renderer::load_vertices(Mesh* mesh, Vertex* vertices){
+    crush("not implemented yet");
 }
