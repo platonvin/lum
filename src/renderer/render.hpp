@@ -10,11 +10,12 @@
 #include <Volk/volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vma/vk_mem_alloc.h>
+// #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
 #include "vulkan/vulkan_core.h"
-#include "window.hpp"
+// #include "window.hpp"
 #include "primitives.hpp"
 // #include "visible_world.hpp"
 #include <defines.hpp>
@@ -27,9 +28,9 @@ using namespace glm;
 #define STRINGIZE2(x) #x
 #define __LINE_STRING__ STRINGIZE(__LINE__)
 
-#define crush(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, string); exit(69);} while(0)
+#define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, string); exit(69);} while(0)
 
-// #define VKNDEBUG
+#define NDEBUG
 #ifdef NDEBUG
 // #define VMA_NAME(allocation) 
 #define VKNDEBUG
@@ -39,17 +40,6 @@ using namespace glm;
         exit(result);\
     }} while (0)
 #else
-// #define VMA_NAME(allocation) vmaSetAllocationName(VMAllocator, allocation, #allocation)
-#define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
-    VkResult res = (vmaCreateImage)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(VMAllocator, *pAllocation, #pAllocation __LINE_STRING__);\
-    res;\
-    }
-#define vmaCreateBuffer(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
-    VkResult res = (vmaCreateBuffer)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(VMAllocator, *pAllocation, #pAllocation __LINE_STRING__);\
-    res;\
-    }
 #define VK_CHECK(func) do{\
     VkResult result = (func);\
     if (result != VK_SUCCESS) {\
@@ -57,6 +47,25 @@ using namespace glm;
         exit(1);\
     }} while (0)
 #endif
+
+#ifdef SET_ALLOC_NAMES
+#define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
+    VkResult res = (vmaCreateImage)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
+    vmaSetAllocationName(allocator, *pAllocation, #pAllocation __LINE_STRING__);\
+    res;\
+    }
+#define vmaCreateBuffer(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
+    VkResult res = (vmaCreateBuffer)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
+    vmaSetAllocationName(allocator, *pAllocation, #pAllocation __LINE_STRING__);\
+    res;\
+    }
+#endif
+
+typedef struct Window{
+    GLFWwindow* pointer;
+    int width;
+    int height;
+} Window;
 
 typedef struct QueueFamilyIndices {
     optional<u32> graphicalAndCompute;
@@ -84,18 +93,23 @@ public:
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 class Renderer {
+
 public: 
     void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024);
     void cleanup();
 
-    // sets voxels and size
-    void load_mesh(Mesh* mesh, const char* vox_file, bool make_vertices=true);
-    void load_mesh(Mesh* mesh, Voxel* voxel_mem, int x_size, int y_size, int z_size, bool if_make_vertices=true);
+    // sets voxels and size. By default uses first .vox palette as main palette
+    void load_mesh(Mesh* mesh, const char* vox_file,                                 bool _make_vertices=true, bool extrude_palette=true);
+    // sets voxels and size. By default uses first .vox palette as main palette
+    void load_mesh(Mesh* mesh, Voxel* voxel_mem, int x_size, int y_size, int z_size, bool _make_vertices=true);
     void free_mesh(Mesh* mesh);
     void make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size);
     void load_vertices(Mesh* mesh, Vertex* vertices);
-    
-
+    // void extrude_palette(Material* material_palette);
+    Material mat_palette[MATERIAL_PALETTE_SIZE];
+private:
+    bool _has_palette = false;
+public:
     void start_Frame();
         void startRaygen();
         void RaygenMesh(Mesh &mesh);
@@ -121,7 +135,7 @@ public:
     Images  create_RayTrace_VoxelImages(MatID_t* voxels, ivec3 size);
     void update_Block_Palette(Block* blockPalette);
     void update_Material_Palette(Material* materialPalette);
-    void update_Chunk(BlockID_t* blocks);
+    void update_SingleChunk(BlockID_t* blocks);
 private:
     void recreate_Swapchain();
 
@@ -191,9 +205,8 @@ private:
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
     void copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst);
     
-    void get_Layers();
     void get_Instance_Extensions();
-    void get_PhysicalDevice_Extensions();
+    // void get_PhysicalDevice_Extensions();
 public:
     
 
@@ -260,7 +273,7 @@ public:
     vector<VkImage>           rayGenPosDiffImages;
     vector<VkImage>          rayGenDepthImages;
     vector<VkImage>       raytraceBlocksImages;
-    vector<VkImage>         originBlocksImages;
+    vector<VkImage>         originSingleChunkImages; //TODO: change single chunk to multiple chunks
     vector<VkImage> raytraceBlockPaletteImages;
     vector<VkImage>   originBlockPaletteImages;
     vector<VkImage> raytraceVoxelPaletteImages;
@@ -276,7 +289,7 @@ public:
     vector<VmaAllocation>            rayGenPosDiffImageAllocations;
     vector<VmaAllocation>           rayGenDepthImageAllocations;
     vector<VmaAllocation>        raytraceBlocksImageAllocations;
-    vector<VmaAllocation>          originBlocksImageAllocations;
+    vector<VmaAllocation>          originSingleChunkImageAllocations;
     vector<VmaAllocation>  raytraceBlockPaletteImageAllocations;
     vector<VmaAllocation>    originBlockPaletteImageAllocations;
     vector<VmaAllocation>  raytraceVoxelPaletteImageAllocations;

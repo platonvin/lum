@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan/vulkan_core.h"
+#include <cstring>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -78,20 +79,29 @@ typedef struct Block {
 //just 3d array. Content invalid after allocate()
 template <typename Type> class table3d {
 private:
-    void* memory = NULL;
+    Type* memory = NULL;
     ivec3 _size = {};
 public:
     //makes content invalid 
     void allocate(int x, int y, int z) {
         _size = ivec3(x,y,z);
-        this->memory = malloc(x*y*z);
+        this->memory = (Type*)malloc(sizeof(Type)*x*y*z);
+    }
+    void set(Type val) {
+        for(int x=0; x<_size.x; x++){
+        for(int y=0; y<_size.y; y++){
+        for(int z=0; z<_size.z; z++){
+            this->memory [x + _size.x*y + (_size.x*_size.y)*z] = val;
+        }}}
+        // memset(dst);
+        // this->memory = (Type*)malloc(x*y*z);
     }
     //makes content invalid 
     void allocate(ivec3 size) {
         this->allocate(size.x, size.y, size.z);
     }
     Type* data() {
-        return this->memory.data();
+        return this->memory;
     }
     uvec3 size() {
         return _size;

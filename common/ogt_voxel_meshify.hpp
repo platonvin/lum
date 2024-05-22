@@ -1,3 +1,4 @@
+#include <cstring>
 #define _MY_VERTEX_STRUCT_
 /*
     opengametools voxel meshifier - v0.9 - MIT license - Justin Paver, April 2020
@@ -98,6 +99,7 @@
 
 
 // a 3 dimensional quantity
+namespace ogt {
 struct ogt_mesh_vec3 
 {
     float x, y, z;
@@ -175,7 +177,7 @@ void      ogt_mesh_destroy(const ogt_voxel_meshify_context* ctx, ogt_mesh* mesh 
     
 // The simple stream function will stream geometry for the specified voxel field, to the specified stream function, which will be invoked on each voxel that requires geometry. 
 void     ogt_stream_from_paletted_voxels_simple(const uint8_t* voxels, uint32_t size_x, uint32_t size_y, uint32_t size_z, const ogt_mesh_rgba* palette, ogt_voxel_simple_stream_func stream_func, void* stream_func_data);
-
+}
 
 #endif // OGT_VOXEL_MESHIFY_H__
 
@@ -191,7 +193,7 @@ void     ogt_stream_from_paletted_voxels_simple(const uint8_t* voxels, uint32_t 
 #include <stdlib.h>
 #include <memory.h>
 #include <math.h>
-
+namespace ogt {
 // a set of up to 65536 bits
 struct ogt_mesh_bitset_64k {
     uint8_t bits[8192];
@@ -1806,7 +1808,7 @@ void ogt_mesh_destroy(const ogt_voxel_meshify_context* ctx, ogt_mesh* mesh )
 {
     _voxel_meshify_free(ctx, mesh);
 }
-
+}
 #endif // #ifdef OGT_VOXEL_MESHIFY_IMPLEMENTATION
 
 /* -------------------------------------------------------------------------------------------------------------------------------------------------

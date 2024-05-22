@@ -233,6 +233,7 @@
 #endif
 
     // denotes an invalid group index. Usually this is only applicable to the scene's root group's parent.
+namespace ogt {
     static const uint32_t k_invalid_group_index = UINT32_MAX;
 
     // color
@@ -249,10 +250,8 @@
         float m20, m21, m22, m23;   // column 2 of 4x4 matrix, 1st three elements = z axis vector, last element always 0.0
         float m30, m31, m32, m33;   // column 3 of 4x4 matrix. 1st three elements = translation vector, last element always 1.0
     } vox_transform;
-    
     vox_transform vox_transform_get_identity();
     vox_transform vox_transform_multiply(const vox_transform & a, const vox_transform & b);
-
     // a palette of colors
     typedef struct vox_palette
     {
@@ -474,6 +473,7 @@
     //  vox_sample_group_transform_local returns the transform relative to its parent group
     vox_transform vox_sample_group_transform_global(const vox_group* group, uint32_t frame_index, const vox_scene* scene);
     vox_transform vox_sample_group_transform_local(const vox_group* group, uint32_t frame_index);
+}
 
 #endif // VOX_H__
 
@@ -493,6 +493,7 @@
     #include <string.h>
     #include <stdio.h>
 
+namespace ogt {
     // MAKE_VOX_CHUNK_ID: used to construct a literal to describe a chunk in a .vox file.
     #define MAKE_VOX_CHUNK_ID(c0,c1,c2,c3)     ( (c0<<0) | (c1<<8) | (c2<<16) | (c3<<24) )
 
@@ -3184,8 +3185,9 @@
         }
 
     }
+}
 
- #endif // #ifdef VOX_IMPLEMENTATION
+#endif // #ifdef VOX_IMPLEMENTATION
 // #ifdef __cplusplus
 // } //extern "C"
 // #endif

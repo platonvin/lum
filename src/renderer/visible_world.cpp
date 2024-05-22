@@ -51,8 +51,8 @@ void VisualWorld::init(){
     }
 
     // Chunks is just 3d psewdo dynamic array. Same as united blocks. Might change on settings change
-    this->loadedChunks.set_size(1,1,2);
-    this->unitedBlocks.set_size(8,8,8);
+    // this->loadedChunks.set_size(1,1,2);
+    // this->unitedBlocks.set_size(8,8,8);
 
     ogt::ogt_voxel_meshify_context ctx = {};
     ogt::ogt_mesh_rgba rgbaPalette[256] = {};

@@ -15,10 +15,10 @@
 #include <vulkan/vulkan.h>
 #include <VMA/vk_mem_alloc.h>
 
-namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
-    #include <ogt_vox.h>
-    #include <ogt_voxel_meshify.hpp>
-} //so we'll have to use ogt::ogt_func :(
+// namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
+#include <ogt_vox.hpp>
+#include <ogt_voxel_meshify.hpp>
+// } //so we'll have to use ogt::ogt_func :(
 
 #include "primitives.hpp"
 

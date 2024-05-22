@@ -1,3 +1,5 @@
+// #include "renderer/primitives.hpp"
+// #include "renderer/primitives.hpp"
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/scalar_constants.hpp>
 // #include <iostream>
@@ -7,39 +9,49 @@
 #include <GLFW/glfw3.h>
 #include <renderer/visible_world.hpp>
 #include <renderer/render.hpp>
-#include <renderer/window.hpp>
+// #include <renderer/window.hpp>
 #include <defines.hpp>
 // #include <string>
 #include <glm/gtx/string_cast.hpp>
 
-VisualWorld world = {};
+// VisualWorld world = {};
 Renderer render = {};
 int itimish = 0;
 int main() {
     // Renderer::init(
     render.init();
-    world.init();
+    vkDeviceWaitIdle(render.device);
+    // world.init();
 
     // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
-    render.update_Block_Palette(world.blocksPalette);
-    render.update_Chunk(world.unitedBlocks.data());
     // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
-    render.update_Material_Palette(world.matPalette);
 
+    table3d<BlockID_t> single_chunk = {};
+    //user responsible for managing chunks somehow and also in future translating them to main chunk
+    single_chunk.allocate(8,8,8);
+    single_chunk.set(0) ;
+    render.update_SingleChunk(single_chunk.data());
 
     // dyn_mesh.vertexes = world.loadedChunks(0,0,0).mesh.vertexes;
     // dyn_mesh.indexes  = world.loadedChunks(0,0,0).mesh.indexes;
     // dyn_mesh = world.loadedChunks(0,0,0).mesh;
     Mesh dyn_mesh1 = {};
-    dyn_mesh1 = world.loadedChunks(0,0,0).mesh;
-    dyn_mesh1.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
-    dyn_mesh1.size = ivec3(16);
+    render.load_mesh(&dyn_mesh1, "assets/scene.vox");
+    // dyn_mesh1 = world.loadedChunks(0,0,0).mesh;
+    // dyn_mesh1.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
+    // dyn_mesh1.size = ivec3(16);
     dyn_mesh1.transform = identity<mat4>();
     dyn_mesh1.transform = translate(dyn_mesh1.transform, vec3(20));
     Mesh dyn_mesh2 = {};
-    dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
-    dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[2].voxels, {16,16,16});
-    dyn_mesh2.size = ivec3(16);
+    render.load_mesh(&dyn_mesh2, "assets/mirror.vox");
+
+    //TEMP: emtpy palette just to make things run. No static block atm
+    Block* block_palette = (Block*)calloc(BLOCK_PALETTE_SIZE, sizeof(Block));
+    render.update_Block_Palette(block_palette);
+    render.update_Material_Palette(render.mat_palette);
+    // dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
+    // dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[2].voxels, {16,16,16});
+    // dyn_mesh2.size = ivec3(16);
     dyn_mesh2.transform = identity<mat4>();
     dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
     // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(16,16,0));
@@ -48,7 +60,6 @@ int main() {
     
     // rotate(dyn_mesh.transform, pi<float>()/5, vec3(0,1,2));
     //TODO: move to API
-
 
     // mat4 isometricRotation = identity<mat4>(); 
     //      isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(0, 1, 0));
@@ -63,7 +74,6 @@ int main() {
                 // dyn_mesh2.transform = rotate(dyn_mesh2.transform, (-(pi<float>())/2.f), vec3(0,0,1));
 
     //TEMP crutch
-    vkDeviceWaitIdle(render.device);
 
     // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(30,0,0));
     // void* ptr = malloc((size_t)(void *)malloc); 
@@ -111,14 +121,8 @@ int main() {
     //TODO: temp
 
 
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.vertexes.buf[0], world.loadedChunks(0,0,1).mesh.vertexes.alloc[0]);
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.vertexes.buf[1], world.loadedChunks(0,0,1).mesh.vertexes.alloc[1]);
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.indexes.buf[0], world.loadedChunks(0,0,1).mesh.indexes.alloc[0]);
-    vmaDestroyBuffer(render.VMAllocator, world.loadedChunks(0,0,1).mesh.indexes.buf[1], world.loadedChunks(0,0,1).mesh.indexes.alloc[1]);
-    vmaDestroyImage(render.VMAllocator, dyn_mesh2.voxels.image[0], dyn_mesh2.voxels.alloc[0]);
-    vmaDestroyImage(render.VMAllocator, dyn_mesh2.voxels.image[1], dyn_mesh2.voxels.alloc[1]);
-    vkDestroyImageView(render.device, dyn_mesh2.voxels.view[0], NULL);
-    vkDestroyImageView(render.device, dyn_mesh2.voxels.view[1], NULL);
+    render.free_mesh(&dyn_mesh1);
+    render.free_mesh(&dyn_mesh2);
     vkDeviceWaitIdle(render.device);
 
     render.cleanup();

@@ -1,3 +1,5 @@
+// #include "renderer/primitives.hpp"
+#include "defines.hpp"
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -7,6 +9,7 @@
 #include <glm/ext/matrix_projection.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/vector_int3.hpp>
+#include <glm/ext/vector_uint4.hpp>
 #include <glm/trigonometric.hpp>
 #include <io.h>
 // #include <glm/fwd.hpp>
@@ -28,25 +31,25 @@ using namespace std;
 using namespace glm;
 
 //they are global because its easier lol
-const vector<const char*> debugInstanceLayers = {
+static int itime = 0;
+
+//no debug device extensions
+static vector<const char*> instanceLayers = {
 #ifndef VKNDEBUG
     "VK_LAYER_KHRONOS_validation",
 #endif
     "VK_LAYER_LUNARG_monitor",
 };
-vector<const char*> debugInstanceExtensions = {
+static vector<const char*> instanceExtensions = {
+    VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 #ifndef VKNDEBUG
     VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
-};
-static int itime = 0;
 
-//no debug device extensions
-vector<const char*> instanceLayers = {};
-vector<const char*> instanceExtensions = {
-    VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+    VK_KHR_SURFACE_EXTENSION_NAME,
+    "VK_KHR_win32_surface",
 };
-vector<const char*>   deviceExtensions = {
+static vector<const char*>   deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
     // "VK_KHR_shader_non_semantic_info"
@@ -58,11 +61,8 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     // _world = world;
     create_Window();
     VK_CHECK(volkInitialize());
-
-    get_Layers();
     get_Instance_Extensions();
-    get_PhysicalDevice_Extensions();
-
+    // get_PhysicalDevice_Extensions();
     create_Instance();
     volkLoadInstance(instance);   
     
@@ -135,7 +135,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         {swapChainExtent.height, swapChainExtent.width, 1});
-    create_Image_Storages(originBlocksImages, originBlocksImageAllocations, originBlocksImageViews,
+    create_Image_Storages(originSingleChunkImages, originSingleChunkImageAllocations, originBlocksImageViews,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R32_SINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -237,7 +237,7 @@ void Renderer::cleanup(){
         vmaDestroyImage(VMAllocator,           rayGenNormImages[i],           rayGenNormImageAllocations[i]);
         vmaDestroyImage(VMAllocator,          rayGenDepthImages[i],          rayGenDepthImageAllocations[i]);
         vmaDestroyImage(VMAllocator,         rayGenPosMatImages[i],         rayGenPosMatImageAllocations[i]);
-        vmaDestroyImage(VMAllocator,         originBlocksImages[i],         originBlocksImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,         originSingleChunkImages[i],         originSingleChunkImageAllocations[i]);
         vmaDestroyImage(VMAllocator,        rayGenPosDiffImages[i],        rayGenPosDiffImageAllocations[i]);
         vmaDestroyImage(VMAllocator,       raytraceBlocksImages[i],       raytraceBlocksImageAllocations[i]);
         vmaDestroyImage(VMAllocator,   originBlockPaletteImages[i]  , originBlockPaletteImageAllocations[i]);
@@ -321,26 +321,15 @@ void Renderer::cleanup(){
     vkDestroyInstance(instance, NULL);
     glfwDestroyWindow(window.pointer);
 }
-void Renderer::get_Layers(){
-    for(auto layer : debugInstanceLayers){
-        instanceLayers.push_back(layer);
-    }
-    
-    //actual verify part
-    // for(auto layer : instanceLayers){
-        
-    // }
-}
 
 void Renderer::get_Instance_Extensions(){
-    u32 glfwExtCount;
+    u32 glfwExtCount = 0;
     const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtCount);
-    
+    assert(glfwExtensions!=NULL);
+    assert(glfwExtCount>0);
     for(u32 i=0; i < glfwExtCount; i++){
         instanceExtensions.push_back(glfwExtensions[i]);
-    }
-    for(auto ext : debugInstanceExtensions){
-        instanceExtensions.push_back(ext);
+        printl(glfwExtensions[i]);
     }
 
     //actual verify part
@@ -359,10 +348,6 @@ void Renderer::get_Instance_Extensions(){
             exit(1);
         }
     }
-}
-
-void Renderer::get_PhysicalDevice_Extensions(){
-    //empty - they are in global vector. Might change in future tho
 }
 
 void Renderer::create_Allocator(){
@@ -404,8 +389,9 @@ void Renderer::create_Window(){
     assert(glfwRes != 0);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-    window.width  = mode->width  / 2;
-    window.height = mode->height / 2;
+    assert(mode!=NULL);
+    window.width  = mode->width  / 1;
+    window.height = mode->height / 1;
     
     // window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", glfwGetPrimaryMonitor(), 0);
     window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", 0, 0);
@@ -436,8 +422,8 @@ void Renderer::create_Instance(){
         createInfo.pApplicationInfo = &app_info;
         createInfo.enabledExtensionCount   = instanceExtensions.size();
         createInfo.ppEnabledExtensionNames = instanceExtensions.data();
-        createInfo.enabledLayerCount   = debugInstanceLayers.size();
-        createInfo.ppEnabledLayerNames = debugInstanceLayers.data();
+        createInfo.enabledLayerCount   = instanceLayers.size();
+        createInfo.ppEnabledLayerNames = instanceLayers.data();
 
     VK_CHECK(vkCreateInstance(&createInfo, NULL, &instance));
 }
@@ -1567,6 +1553,7 @@ void Renderer::startBlockify(){
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, blockifyLayout, 0, 1, &blockifyDescriptorSets[currentFrame], 0, 0);
 }
 // allocates temp block in palette for every block that intersects with every mesh blockified
+//TODO: MAKE THIS ACTUALLY DYNAMIC
 void Renderer::blockifyMesh(Mesh& mesh){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
@@ -2761,6 +2748,7 @@ void Renderer::update_Block_Palette(Block* blockPalette){
     VkDeviceSize bufferSize = sizeof(Block)*BLOCK_PALETTE_SIZE;
     table3d<MatID_t> blockPaletteLinear = {};
     blockPaletteLinear.allocate(16, 16, 16*BLOCK_PALETTE_SIZE);
+    blockPaletteLinear.set(0);
     for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
     for(i32 x=0; x<BLOCK_SIZE; x++){
     for(i32 y=0; y<BLOCK_SIZE; y++){
@@ -2831,8 +2819,10 @@ void Renderer::update_Material_Palette(Material* materialPalette){
 
 //TODO: do smth with frames in flight
 //TODO: currently its update chunk
-void Renderer::update_Chunk(BlockID_t* blocks){
+void Renderer::update_SingleChunk(BlockID_t* blocks){
+println
     VkDeviceSize bufferSize = sizeof(BlockID_t)*8*8*8;
+    printl(bufferSize);
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSize;
@@ -2842,12 +2832,18 @@ void Renderer::update_Chunk(BlockID_t* blocks){
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
-    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
-
+println
+    // printl(&stagingBufferInfo);
+    // printl(&stagingAllocInfo);
+    // printl(&stagingBuffer);
+    // printl(&stagingAllocation);
+    VK_CHECK(vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
     void* data;
+println
     vmaMapMemory(VMAllocator, stagingAllocation, &data);
         memcpy(data, blocks, bufferSize);
     vmaUnmapMemory(VMAllocator, stagingAllocation);
+println
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -2855,10 +2851,12 @@ void Renderer::update_Chunk(BlockID_t* blocks){
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         VmaAllocationCreateInfo allocInfo = {};
 
-        copy_Buffer(stagingBuffer, originBlocksImages[i], bufferSize, uvec3(8,8,8), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, originSingleChunkImages[i], bufferSize, uvec3(8,8,8), VK_IMAGE_LAYOUT_GENERAL);
     }
+println
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
+println
 }
 
 char* readFileBuffer(const char* path, size_t* size) {
@@ -2871,28 +2869,45 @@ char* readFileBuffer(const char* path, size_t* size) {
     return buffer;
 }
 
-namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
-    #include <ogt_vox.h>
-    #include <ogt_voxel_meshify.hpp>
-} //so we'll have to use ogt::ogt_func :(
+// namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
+#include <ogt_vox.hpp>
+#include <ogt_voxel_meshify.hpp>
+// } //so we'll have to use ogt::ogt_func :(
 
 //TODO: alloca
-
-void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool make_vertices){
+// void load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices=true, bool extrude_palette=true);
+// void load_mesh(Mesh* mesh, Voxel* voxel_mem, int x_size, int y_size, int z_size, bool _make_vertices=true, bool extrude_palette=true);
+void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette){
     size_t buffer_size;
     char* buffer = readFileBuffer(vox_file, &buffer_size);
     const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
     free(buffer);
 
     assert(scene->num_models == 1);
-    load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
+    
+    if(extrude_palette and not _has_palette){
+        _has_palette = true;
+        for(int i=0; i<MATERIAL_PALETTE_SIZE; i++){   
+            mat_palette[i].color = vec4(
+                scene->palette.color[i].r / 256.0,
+                scene->palette.color[i].g / 256.0,
+                scene->palette.color[i].b / 256.0,
+                scene->palette.color[i].a / 256.0
+            );
+            mat_palette[i].emmit = scene->materials.matl[i].emit;
+            mat_palette[i].rough = scene->materials.matl[i].rough;
+        }
+        // (scene->palette);
+    }
+
     ogt::vox_destroy_scene(scene);
 }
 
-void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool if_make_vertices){
+void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices){
     mesh->size = ivec3(x_size, y_size, z_size);
     mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
-    if(if_make_vertices){
+    if(_make_vertices){
         make_vertices(mesh, Voxels, x_size, y_size, z_size);
     }
 }
@@ -2914,6 +2929,10 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
     mesh->icount = ogt_mesh->index_count;
 }
 
+// void Renderer::extrude_palette(Material* mat_palette){
+    
+// }
+
 void Renderer::load_vertices(Mesh* mesh, Vertex* vertices){
-    crush("not implemented yet");
+    crash("not implemented yet");
 }
