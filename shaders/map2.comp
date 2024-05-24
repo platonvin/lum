@@ -1,0 +1,53 @@
+#version 450 core
+
+//version with world from model
+
+precision highp int;
+precision highp float;
+
+//TODO: move per-workgroup computations to different shader
+//TODO: AND test shared perfomance
+layout(push_constant) uniform constants{
+    mat4 inverse_trans; //to map modelVoxels to game voxel world
+    vec3 shift;
+} PushConstants;
+
+layout(set = 0, binding = 0, r8ui)  readonly uniform uimage3D modelVoxels;
+//blocks and blockPalettes are copies 
+layout(set = 0, binding = 1, r32i)           uniform iimage3D blocks;
+layout(set = 0, binding = 2, r8ui) writeonly uniform uimage3D blockPalette;
+
+ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
+    return relative_voxel_pos + ivec3(0,0,16*(block_id));
+}
+//TODO: balance, X>Y>Z for coherence
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+//TODO: temp
+void main(void){
+    const ivec3 model_size = imageSize(modelVoxels);
+    //sqrt(1.5) is for more precise mapping so holes do not appear 
+     vec3  absolute_but_relative_to_shift_voxel = gl_GlobalInvocationID.xyz / 2.0;
+    ivec3 iabsolute_but_relative_to_shift_voxel = ivec3(absolute_but_relative_to_shift_voxel);
+     vec3  absolute_voxel = absolute_but_relative_to_shift_voxel + PushConstants.shift;
+    ivec3 iabsolute_voxel = ivec3(absolute_voxel);
+    ivec3 itarget_block = iabsolute_voxel/16;
+
+    //part where actual transformation happens
+     vec3  relative_vox = (PushConstants.inverse_trans * vec4(absolute_voxel,1)).xyz;
+    ivec3 irelative_vox = ivec3(relative_vox);
+
+
+    if (any(greaterThan(irelative_vox, model_size))) return;
+    if (any(   lessThan(irelative_vox, ivec3(0)))) return;
+
+    int target_block_in_palette = int(itarget_block.x + (itarget_block.y*5) + (itarget_block.z*5*5) + 3);
+
+    ivec3 target_palette_voxel = voxel_in_palette(iabsolute_voxel.xyz % 16, target_block_in_palette);
+
+    uvec4 voxel = imageLoad(modelVoxels, irelative_vox);
+    // voxel = uvec4(56);
+    if (voxel.r != 0){
+        imageStore(blockPalette, target_palette_voxel, voxel); // maybe atomic?.. Could use temporal shared block for this
+    }
+}

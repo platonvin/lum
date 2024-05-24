@@ -19,7 +19,7 @@ Renderer render = {};
 int itimish = 0;
 int main() {
     // Renderer::init(
-    render.init();
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024);
     vkDeviceWaitIdle(render.device);
     // world.init();
 
@@ -29,21 +29,28 @@ int main() {
     table3d<BlockID_t> single_chunk = {};
     //user responsible for managing chunks somehow and also in future translating them to main chunk
     single_chunk.allocate(8,8,8);
-    single_chunk.set(0) ;
+    single_chunk.set(0);
     render.update_SingleChunk(single_chunk.data());
 
     // dyn_mesh.vertexes = world.loadedChunks(0,0,0).mesh.vertexes;
     // dyn_mesh.indexes  = world.loadedChunks(0,0,0).mesh.indexes;
     // dyn_mesh = world.loadedChunks(0,0,0).mesh;
-    Mesh dyn_mesh1 = {};
-    render.load_mesh(&dyn_mesh1, "assets/scene.vox");
-    // dyn_mesh1 = world.loadedChunks(0,0,0).mesh;
-    // dyn_mesh1.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
-    // dyn_mesh1.size = ivec3(16);
-    dyn_mesh1.transform = identity<mat4>();
-    dyn_mesh1.transform = translate(dyn_mesh1.transform, vec3(20));
-    Mesh dyn_mesh2 = {};
-    render.load_mesh(&dyn_mesh2, "assets/mirror.vox");
+    Mesh robot = {};
+        render.load_mesh(&robot, "assets/scene.vox");
+        // render.load_mesh(&robot, "assets/robot.vox");
+        // robot.size = ivec3(16);
+        robot.transform = translate(robot.transform, vec3(30,30,1));
+    // printl(robot.size.x);
+    // printl(robot.size.y);
+    // printl(robot.size.z);
+    // Mesh dyn_mesh1 = {};
+    //     render.load_mesh(&dyn_mesh1, "assets/scene.vox");
+    //     dyn_mesh1.transform = identity<mat4>();
+    //     dyn_mesh1.transform = translate(dyn_mesh1.transform, vec3(20));
+    // Mesh dyn_mesh2 = {};
+    //     render.load_mesh(&dyn_mesh2, "assets/mirror.vox");
+    //     dyn_mesh2.transform = identity<mat4>();
+    //     dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
 
     //TEMP: emtpy palette just to make things run. No static block atm
     Block* block_palette = (Block*)calloc(BLOCK_PALETTE_SIZE, sizeof(Block));
@@ -52,8 +59,6 @@ int main() {
     // dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
     // dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[2].voxels, {16,16,16});
     // dyn_mesh2.size = ivec3(16);
-    dyn_mesh2.transform = identity<mat4>();
-    dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
     // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(16,16,0));
     // dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
     // dyn_mesh.transform = translate(dyn_mesh.transform, vec3(16,16,16));
@@ -86,27 +91,30 @@ int main() {
         glfwPollEvents();
         render.start_Frame();
             render.startRaygen();
-                render.RaygenMesh(dyn_mesh1);
-                render.RaygenMesh(dyn_mesh2);
+                // render.RaygenMesh(robot);
+                // render.RaygenMesh(dyn_mesh1);
+                // render.RaygenMesh(dyn_mesh2);
             render.endRaygen();
-                dyn_mesh1.transform = rotate(dyn_mesh1.transform, +0.0037f, vec3(0,1,0));
+                robot.transform = rotate(robot.transform, -0.00037f, vec3(0,0,1));
                 // dyn_mesh1.transform = rotate(dyn_mesh1.transform, -0.0027f, vec3(1,0,0));
                 // dyn_mesh1.transform = rotate(dyn_mesh1.transform, +0.0017f, vec3(0,0,1));
-                dyn_mesh2.transform = rotate(dyn_mesh2.transform, -0.0024f, vec3(0,0,1));
+                // dyn_mesh2.transform = rotate(dyn_mesh2.transform, -0.0024f, vec3(0,0,1));
                 // dyn_mesh2.transform = rotate(dyn_mesh2.transform, +0.0017f, vec3(0,0,1));
-                // dyn_mesh.transform = translate(dyn_mesh.transform, vec3(.0,.0,1.0));
+                // robot.transform = translate(robot.transform, vec3(.0,.1,0));
             // dyn_mesh.transform = translate(dyn_mesh.transform, (vec3(0.01, 0.002, 0)));
             // itimish
             // cout << glm::to_string(dyn_mesh.transform) << "\n\n";
             render.startCompute();
                 render.startBlockify();
-                    render.blockifyMesh(dyn_mesh1);
-                    render.blockifyMesh(dyn_mesh2);
+                    // render.blockifyMesh(robot);
+                    // render.blockifyMesh(dyn_mesh1);
+                    // render.blockifyMesh(dyn_mesh2);
                 render.endBlockify();
-                render.execCopies();
+                // render.execCopies();
                 render.startMap();
-                    render.mapMesh(dyn_mesh1);
-                    render.mapMesh(dyn_mesh2);
+                    // render.mapMesh(robot);
+                    // render.mapMesh(dyn_mesh1);
+                    // render.mapMesh(dyn_mesh2);
                 render.endMap();
                 render.raytrace();
             render.endCompute();
@@ -121,8 +129,9 @@ int main() {
     //TODO: temp
 
 
-    render.free_mesh(&dyn_mesh1);
-    render.free_mesh(&dyn_mesh2);
+    render.free_mesh(&robot);
+    // render.free_mesh(&dyn_mesh1);
+    // render.free_mesh(&dyn_mesh2);
     vkDeviceWaitIdle(render.device);
 
     render.cleanup();

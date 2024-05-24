@@ -52,11 +52,13 @@ static vector<const char*> instanceExtensions = {
 static vector<const char*>   deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+    VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME
+    // VK_NV_device_diagnostic_checkpoints
     // "VK_KHR_shader_non_semantic_info"
 };
 
 void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size){
-    ivec3 world_size = ivec3(x_size, y_size, z_size);
+    world_size = ivec3(x_size, y_size, z_size);
 // void init(VisualWorld &_world){
     // _world = world;
     create_Window();
@@ -135,7 +137,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         {swapChainExtent.height, swapChainExtent.width, 1});
-    create_Image_Storages(originSingleChunkImages, originSingleChunkImageAllocations, originBlocksImageViews,
+    create_Image_Storages(originWorldImages, originWorldImageAllocations, originBlocksImageViews,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R32_SINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -160,8 +162,8 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-        {16, 16, 16*block_palette_size}); //TODO: dynamic
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        {16, 16, 16*BLOCK_PALETTE_SIZE}); //TODO: dynamic
     create_Image_Storages(raytraceBlockPaletteImages, raytraceBlockPaletteImageAllocations, raytraceBlockPaletteImageViews,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8_UINT,
@@ -169,8 +171,8 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-        {16, 16, 16*block_palette_size}); //TODO: dynamic
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        {16, 16, 16*BLOCK_PALETTE_SIZE}); //TODO: dynamic
     create_Image_Storages(raytraceVoxelPaletteImages, raytraceVoxelPaletteImageAllocations, raytraceVoxelPaletteImageViews,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
@@ -237,7 +239,7 @@ void Renderer::cleanup(){
         vmaDestroyImage(VMAllocator,           rayGenNormImages[i],           rayGenNormImageAllocations[i]);
         vmaDestroyImage(VMAllocator,          rayGenDepthImages[i],          rayGenDepthImageAllocations[i]);
         vmaDestroyImage(VMAllocator,         rayGenPosMatImages[i],         rayGenPosMatImageAllocations[i]);
-        vmaDestroyImage(VMAllocator,         originSingleChunkImages[i],         originSingleChunkImageAllocations[i]);
+        vmaDestroyImage(VMAllocator,         originWorldImages[i],         originWorldImageAllocations[i]);
         vmaDestroyImage(VMAllocator,        rayGenPosDiffImages[i],        rayGenPosDiffImageAllocations[i]);
         vmaDestroyImage(VMAllocator,       raytraceBlocksImages[i],       raytraceBlocksImageAllocations[i]);
         vmaDestroyImage(VMAllocator,   originBlockPaletteImages[i]  , originBlockPaletteImageAllocations[i]);
@@ -611,6 +613,7 @@ void Renderer::create_Logical_Device(){
     }
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
+        deviceFeatures.robustBufferAccess = true;
 
     VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1543,8 +1546,16 @@ void Renderer::startCompute(){
     vkCmdFillBuffer(commandBuffer,    copyCounterBuffers[currentFrame], sizeof(int)*2, sizeof(int)*1, 0);
     vkCmdFillBuffer(commandBuffer, paletteCounterBuffers[currentFrame], sizeof(int)*0, sizeof(int)*1, 2);
     //TODO: remove
-    copy_Whole_Image({16,16, 16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+// println
+    copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
     originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
+// println
+    copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+    originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
+// println
+    copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+    originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
+    // vkDeviceWaitIdle(device);
 }
 void Renderer::startBlockify(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1562,9 +1573,9 @@ void Renderer::blockifyMesh(Mesh& mesh){
     // vkCmdDispatch(commandBuffer, (mesh.size.x+15+16*2)/16, 
     //                              (mesh.size.y+15+16*2)/16, 
     //                              (mesh.size.z+15+16*2)/16); //adds 1 block to size for each axis
-    vkCmdDispatch(commandBuffer, 5, 
-                                 5, 
-                                 5); //adds 1 block to size for each axis
+    vkCmdDispatch(commandBuffer, 8, 
+                                 8, 
+                                 8); //adds 1 block to size for each axis
 }
 void Renderer::endBlockify(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1645,6 +1656,43 @@ void Renderer::startMap(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipeline);
 }
+struct AABB {
+  vec3 min;
+  vec3 max;
+};
+static AABB get_shift(mat4 trans, ivec3 size){
+    vec3 box = vec3(size-1);
+    vec3 zero = vec3(0);
+    vec3 corners[8];
+    corners[0] = zero;
+    corners[1] = vec3(zero.x, box.y, zero.z);
+    corners[2] = vec3(zero.x, box.y, box.z);
+    corners[3] = vec3(zero.x, zero.y, box.z);
+    corners[4] = vec3(box.x, zero.y, zero.z);
+    corners[5] = vec3(box.x, box.y, zero.z);
+    corners[6] = box;
+    corners[7] = vec3(box.x, zero.y, box.z);
+        
+    // transform the first corner
+    vec3 tmin = vec3(trans * vec4(corners[0],1.0));
+    vec3 tmax = tmin;
+        
+    // transform the other 7 corners and compute the result AABB
+    for(int i = 1; i < 8; i++)
+    {
+        vec3 point = vec3(trans * vec4(corners[i],1.0));
+
+        tmin = min(tmin, point);
+        tmax = max(tmax, point);
+    }
+    AABB rbox;
+    
+    rbox.min = tmin;
+    rbox.max = tmax;
+    
+    return rbox;
+}
+
 void Renderer::mapMesh(Mesh& mesh){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     
@@ -1682,19 +1730,35 @@ void Renderer::mapMesh(Mesh& mesh){
             blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             blockPaletteWrite.dstSet = NULL;
             blockPaletteWrite.dstBinding = 2;
-            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.dstArrayElement = 0;      
             blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             blockPaletteWrite.descriptorCount = 1;
             blockPaletteWrite.pImageInfo = &blockPaletteInfo;
         vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite, blocksWrite, blockPaletteWrite};
 
     vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-    mat4 trans = mesh.transform;
+    // mat4 inversed_transform = inverse(mesh.transform); //from world to model space
+    //  vec3 shift = (get_shift(mesh.transform, mesh.size).min);
+    // ivec3 dispatch_size = ivec3(ceil(get_shift(mesh.transform, mesh.size).max));
+    // // mat4 shift_matrix = translate(identity<mat4>(), shift);
+    // // mat4 shifted_inversed_transform = inversed_transform * shift_matrix;
+    // // printl(shift.x);printl(shift.y);printl(shift.z);
+    // // printl(dispatch_size.x);printl(dispatch_size.y);printl(dispatch_size.z);
+
+    // struct {mat4 trans; vec3 shift;} trans_size = {inversed_transform, shift};
+    // //  trans = glm::scale(trans, vec3(0.95));
+    // vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(trans_size), &trans_size);
+    // // ivec3 adjusted_size = ivec3(round(vec3(mesh.size) * vec3(5.0)));
+    // vkCmdDispatch(commandBuffer, dispatch_size.x*2 / 4, dispatch_size.y*2 / 4, dispatch_size.z*2 / 4);
+    struct {mat4 trans; ivec3 size;} trans_size = {mesh.transform, mesh.size};
     // trans = glm::scale(trans, vec3(0.95));
-    vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(mat4), &trans);
-    ivec3 adjusted_size = ivec3(round(vec3(mesh.size) * vec3(sqrt(1.5))));
-    vkCmdDispatch(commandBuffer, (adjusted_size.x +1) / 4, (adjusted_size.y +1) / 4, (adjusted_size.z +1) / 4);
+    vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(trans_size), &trans_size);
+    ivec3 adjusted_size = mesh.size * ivec3(10.0);
+    vkCmdDispatch(commandBuffer, (adjusted_size.x) / 4, (adjusted_size.y) / 4, (adjusted_size.z) / 4);
+
+    
 }
+
 void Renderer::endMap(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
@@ -1883,6 +1947,8 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocati
             imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         VmaAllocationCreateInfo allocInfo = {};
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+            allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            // allocInfo.requiredFlags = 
         VK_CHECK(vmaCreateImage(VMAllocator, &imageInfo, &allocInfo, &images[i], &allocs[i], NULL));
 
         VkImageViewCreateInfo viewInfo = {};
@@ -2007,7 +2073,7 @@ Images Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size){
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT,
-        {16, 16, 16}); //TODO: dynamic
+        size);
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSize;
@@ -2025,7 +2091,7 @@ Images Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, images[i], bufferSize, {16,16,16}, VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, images[i], bufferSize, size, VK_IMAGE_LAYOUT_GENERAL);
     }
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
     return {images, views, allocations};
@@ -2481,7 +2547,7 @@ void Renderer::create_Map_Pipeline(){
 
     VkPushConstantRange pushRange = {};
         // pushRange.size = 256;
-        pushRange.size = sizeof(mat4);
+        pushRange.size = sizeof(mat4)+sizeof(ivec3); //trans + model_size
         pushRange.offset = 0;
         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
@@ -2698,11 +2764,12 @@ void Renderer::copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkIma
         barrier.subresourceRange.baseArrayLayer = 0;
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT ;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT ;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 
     vkCmdPipelineBarrier(
         cmdbuf,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0,
         0, NULL,
         0, NULL,
@@ -2766,9 +2833,9 @@ void Renderer::update_Block_Palette(Block* blockPalette){
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     void* data = NULL;
-    printl((u64) VMAllocator);
-    printl((u64) stagingAllocation);
-    printl((u64) data);
+    // printl((u64) VMAllocator);
+    // printl((u64) stagingAllocation);
+    // printl((u64) data);
     // fflush(stdout);
     vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
 
@@ -2785,7 +2852,7 @@ void Renderer::update_Block_Palette(Block* blockPalette){
     // vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, originBlockPaletteImages[i], bufferSize, uvec3(16,16,BLOCK_PALETTE_SIZE*16), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, originBlockPaletteImages[i], bufferSize, uvec3(16,16,16*BLOCK_PALETTE_SIZE), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
@@ -2819,9 +2886,10 @@ void Renderer::update_Material_Palette(Material* materialPalette){
 
 //TODO: do smth with frames in flight
 //TODO: currently its update chunk
+//has to match world_size
 void Renderer::update_SingleChunk(BlockID_t* blocks){
-println
-    VkDeviceSize bufferSize = sizeof(BlockID_t)*8*8*8;
+// println
+    VkDeviceSize bufferSize = sizeof(BlockID_t)*world_size.x*world_size.y*world_size.z;
     printl(bufferSize);
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -2832,18 +2900,18 @@ println
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
-println
+// println
     // printl(&stagingBufferInfo);
     // printl(&stagingAllocInfo);
     // printl(&stagingBuffer);
     // printl(&stagingAllocation);
     VK_CHECK(vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
     void* data;
-println
+// println
     vmaMapMemory(VMAllocator, stagingAllocation, &data);
         memcpy(data, blocks, bufferSize);
     vmaUnmapMemory(VMAllocator, stagingAllocation);
-println
+// println
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -2851,12 +2919,12 @@ println
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         VmaAllocationCreateInfo allocInfo = {};
 
-        copy_Buffer(stagingBuffer, originSingleChunkImages[i], bufferSize, uvec3(8,8,8), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, originWorldImages[i], bufferSize, world_size, VK_IMAGE_LAYOUT_GENERAL);
     }
-println
+// println
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
-println
+// println
 }
 
 char* readFileBuffer(const char* path, size_t* size) {
@@ -2896,7 +2964,9 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
                 scene->palette.color[i].a / 256.0
             );
             mat_palette[i].emmit = scene->materials.matl[i].emit;
-            mat_palette[i].rough = scene->materials.matl[i].rough;
+            // mat_palette[i].emmit = scene->materials.matl[i].;
+            // mat_palette[i].emmit = 
+            mat_palette[i].rough = (scene->materials.matl[i].rough+scene->materials.matl[i].metal)/2.0;
         }
         // (scene->palette);
     }
@@ -2907,6 +2977,7 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
 void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices){
     mesh->size = ivec3(x_size, y_size, z_size);
     mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
+    mesh->transform = identity<mat4>();
     if(_make_vertices){
         make_vertices(mesh, Voxels, x_size, y_size, z_size);
     }
@@ -2923,7 +2994,7 @@ void Renderer::free_mesh(Mesh* mesh){
 
 void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
     ogt::ogt_voxel_meshify_context ctx = {};
-    ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
+    ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_greedy(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
 
     tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers((Vertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
     mesh->icount = ogt_mesh->index_count;

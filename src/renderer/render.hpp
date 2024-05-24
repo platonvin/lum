@@ -30,7 +30,7 @@ using namespace glm;
 
 #define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, string); exit(69);} while(0)
 
-#define NDEBUG
+// #define NDEBUG
 #ifdef NDEBUG
 // #define VMA_NAME(allocation) 
 #define VKNDEBUG
@@ -46,6 +46,8 @@ using namespace glm;
         fprintf(stderr, "LINE %d: Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
         exit(1);\
     }} while (0)
+#define malloc(x)   ({void* res_ptr =(malloc)(x  ); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
+#define calloc(x,y) ({void* res_ptr =(calloc)(x,y); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
 #endif
 
 #ifdef SET_ALLOC_NAMES
@@ -108,6 +110,7 @@ public:
     // void extrude_palette(Material* material_palette);
     Material mat_palette[MATERIAL_PALETTE_SIZE];
 private:
+    ivec3(world_size);
     bool _has_palette = false;
 public:
     void start_Frame();
@@ -273,7 +276,7 @@ public:
     vector<VkImage>           rayGenPosDiffImages;
     vector<VkImage>          rayGenDepthImages;
     vector<VkImage>       raytraceBlocksImages;
-    vector<VkImage>         originSingleChunkImages; //TODO: change single chunk to multiple chunks
+    vector<VkImage>          originWorldImages; //TODO: make multiple chunks be translated to main world
     vector<VkImage> raytraceBlockPaletteImages;
     vector<VkImage>   originBlockPaletteImages;
     vector<VkImage> raytraceVoxelPaletteImages;
@@ -289,7 +292,7 @@ public:
     vector<VmaAllocation>            rayGenPosDiffImageAllocations;
     vector<VmaAllocation>           rayGenDepthImageAllocations;
     vector<VmaAllocation>        raytraceBlocksImageAllocations;
-    vector<VmaAllocation>          originSingleChunkImageAllocations;
+    vector<VmaAllocation>           originWorldImageAllocations;
     vector<VmaAllocation>  raytraceBlockPaletteImageAllocations;
     vector<VmaAllocation>    originBlockPaletteImageAllocations;
     vector<VmaAllocation>  raytraceVoxelPaletteImageAllocations;

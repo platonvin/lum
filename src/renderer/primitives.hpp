@@ -15,7 +15,7 @@ using namespace std;
 //Everything is X -> Y -> Z order in arrays (vectors)
 #define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
-#define    BLOCK_PALETTE_SIZE 128 //0 always empty
+#define    BLOCK_PALETTE_SIZE 129 //0 always empty
 
 typedef   u8 MatID_t;
 typedef  i32 BlockID_t;

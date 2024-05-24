@@ -10,7 +10,7 @@ layout(location = 2)      out vec3 pos_old;
 layout(location = 3) flat out float MatID; //uint8 thing. But in float
 
 
-vec3 cameraRayDir = normalize(vec3(1, 0.1, .2));
+vec3 cameraRayDir = normalize(vec3(1, 0.1, -.2));
 // vec3 cameraRayDir = normalize(vec3(-1, 0, .1));
 // vec3 cameraRayDir = normalize(vec3(12, 21, 7));
 // vec3 cameraRayDir = normalize(vec3(1, 1, 0));
@@ -19,7 +19,7 @@ vec3 globalLightDir = normalize(vec3(1, -1, 0));
 vec3 cameraRayDirPlane = vec3(cameraRayDir.xy, 0);
 vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
 vec3 vertiline = normalize(cross(cameraRayDir, horizline));
-vec3 cameraPos = vec3(-13, -22, -8)*1.5;
+vec3 cameraPos = vec3(-10, -1, 40);
 // vec3 cameraPos = vec3(-13, -22, -8)*1.5/16.0;
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
@@ -34,13 +34,13 @@ precision highp float;
 
 void main() {
     mat4 m2w = pco.trans_m2w;
-        m2w[3][0] /= 16.0;
-        m2w[3][1] /= 16.0;
-        m2w[3][2] /= 16.0;
+        // m2w[3][0] /= 16.0;
+        // m2w[3][1] /= 16.0;
+        // m2w[3][2] /= 16.0;
     mat4 m2w_old = pco.trans_m2w_old;
-        m2w_old[3][0] /= 16.0;
-        m2w_old[3][1] /= 16.0;
-        m2w_old[3][2] /= 16.0;
+        // m2w_old[3][0] /= 16.0;
+        // m2w_old[3][1] /= 16.0;
+        // m2w_old[3][2] /= 16.0;
     // vec4 clip_coords = w2s * world_pos;
     // clip_coords /= 1280.0;
     // clip_coords.z = clip_coords.z/10.0+0.5;

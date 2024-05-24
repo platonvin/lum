@@ -869,8 +869,11 @@ void _greedy_meshify_voxels_in_face_direction(
                 float max_z = (float)k1;
 
                 // cache the color
+#ifndef _MY_VERTEX_STRUCT_
                 ogt_mesh_rgba color = palette[color_index];
-
+#else
+                ogt_mesh_rgba color = (ogt_mesh_rgba){};
+#endif
                 // write the verts for this face
                 vertex_data[0] = _mesh_make_vertex(_transform_point(transform, _make_vec3(min_x, min_y, max_z)), normal, color, color_index);
                 vertex_data[1] = _mesh_make_vertex(_transform_point(transform, _make_vec3(max_x, min_y, max_z)), normal, color, color_index);
