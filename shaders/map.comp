@@ -17,8 +17,14 @@ layout(set = 0, binding = 0, r8ui)  readonly uniform uimage3D modelVoxels;
 layout(set = 0, binding = 1, r32i)           uniform iimage3D blocks;
 layout(set = 0, binding = 2, r8ui) writeonly uniform uimage3D blockPalette;
 
+//should be 2^n
+const int BLOCK_PALETTE_SIZE_X = 32;
+
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
-    return relative_voxel_pos + ivec3(0,0,16*(block_id));
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+16*block_x, 0+16*block_y,0);
 }
 //TODO: balance, X>Y>Z for coherence
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
@@ -27,17 +33,17 @@ layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 // const ivec3 model_size = ivec3(16);
 void main(void){
     //sqrt(1.5) is for more precise mapping so holes do not appear 
-     vec3  relative_vox = vec3(gl_GlobalInvocationID.xyz) / vec3(10.0);
+     vec3  relative_vox = vec3(gl_GlobalInvocationID.xyz) / vec3(2.0);
     //  vec3  relative_vox = gl_GlobalInvocationID.xyz / 2;
     //  vec3  relative_vox = gl_GlobalInvocationID.xyz;
-    // if(
-    //     (relative_vox.x < 0.8)
-    //   ||(relative_vox.y < 0.8)
-    //   ||(relative_vox.z < 0.8)
-    //   ||(relative_vox.x > (float(PushConstants.model_size.x)-0.8)) 
-    //   ||(relative_vox.y > (float(PushConstants.model_size.y)-0.8)) 
-    //   ||(relative_vox.z > (float(PushConstants.model_size.z)-0.8)) //TODO float() on cpu
-    // ) return;
+    if(
+        (relative_vox.x < 0.8)
+      ||(relative_vox.y < 0.8)
+      ||(relative_vox.z < 0.8)
+      ||(relative_vox.x > (float(PushConstants.model_size.x)-0.8)) 
+      ||(relative_vox.y > (float(PushConstants.model_size.y)-0.8)) 
+      ||(relative_vox.z > (float(PushConstants.model_size.z)-0.8)) //TODO float() on cpu
+    ) return;
 
     ivec3 irelative_vox   = ivec3(relative_vox);
     // ivec3 irelative_block = ivec3(relative_vox)/16;
@@ -70,7 +76,7 @@ void main(void){
     //TODO: test different approaches to cast and dot etc...
     //WHERE IS MY IDOT
     // int target_block_in_palette = int(imageLoad(blocks, target_block).r);
-    int target_block_in_palette = int(itarget_block.x + (itarget_block.y*5) + (itarget_block.z*5*5) + 3);
+    int target_block_in_palette = int(itarget_block.x + (itarget_block.y*8) + (itarget_block.z*8*8) + 3);
     // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to

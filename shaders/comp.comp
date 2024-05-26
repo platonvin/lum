@@ -10,21 +10,9 @@ layout(push_constant) uniform constants{
 layout(set = 0, binding = 0, rgba32f) readonly uniform image2D posMat;
 layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norms;
 layout(set = 0, binding = 2, rgba32f) readonly uniform image2D diffs;
-
 layout(set = 0, binding = 3, r32i) uniform iimage3D blocks;
-
-//
 layout(set = 0, binding = 4, r8ui) uniform uimage3D blockPalette;
-
-/* <- Width -> 
-|rgb a emm rough 
-|rgb a emm rough
-....
-|rgb a emm rough
-|rgb a emm rough
-*/
 layout(set = 0, binding = 5, r32f) readonly uniform image2D voxelPalette;
-
 layout(set = 0, binding = 6, rgba8) uniform   image2D frame;
 layout(set = 0, binding = 7       ) uniform sampler2D frame_sampler;
 
@@ -38,7 +26,7 @@ vec3 cameraRayDirPlane = vec3(cameraRayDir.xy, 0);
 vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
 vec3 vertiline = normalize(cross(cameraRayDir, horizline));
 vec3 cameraPos = vec3(-10, -1, 6);
-
+const int BLOCK_PALETTE_SIZE_X = 32;
 #define MAX_DEPTH 4
 #define NUM_SAMPLES 1
 #define PI 3.1415926535
@@ -142,6 +130,13 @@ int GetBlock(in ivec3 block_pos){
 
     return block;
 }
+
+ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+16*block_x, 0+16*block_y,0);
+}
 int GetVoxel(in ivec3 pos){
     int voxel;
 
@@ -152,9 +147,8 @@ int GetVoxel(in ivec3 pos){
     ivec3 block_pos = pos / 16;
     ivec3 relative_voxel_pos = pos % 16;
 
-    int block = GetBlock(block_pos);
-    ivec3 voxel_pos = relative_voxel_pos + ivec3(0,0,16)*block;
-    // ivec3 voxel_pos = pos + ivec3(0,0,16)*1;
+    int block_id = GetBlock(block_pos);
+    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
     
     voxel = int((imageLoad(blockPalette, ivec3(
         voxel_pos.x,
@@ -165,13 +159,11 @@ int GetVoxel(in ivec3 pos){
     return voxel;
 }
 void SetVoxel(in ivec3 pos, in int voxel){
-
-
     ivec3 block_pos = pos / 16;
     ivec3 relative_voxel_pos = pos % 16;
 
-    int block = GetBlock(block_pos);
-    ivec3 voxel_pos = relative_voxel_pos + ivec3(0,0,16)*block;
+    int block_id = GetBlock(block_pos);
+    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
     // ivec3 voxel_pos = pos + ivec3(0,0,16)*1;
     
     imageStore(blockPalette, ivec3(
@@ -203,7 +195,7 @@ Material GetMat(in int voxel){
     // mat.transparancy = 0.0;
     // mat.color = vec3(8,9,10)/14;
     // mat.smoothness   = .2;
-    mat.emmitance    = 0.2;
+    // mat.emmitance    = 0.2;
     mat.transparancy = 0;
     mat.smoothness   = 0.05;
     // mat.transparancy = 0;
@@ -409,11 +401,11 @@ bool CastRay(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out ve
             block_hit = true;
             break;
         }
-        if (iterations++ >= 1024) {
+        if (iterations++ >= 128) {
             block_hit = false;
             break;
         }
-        if (any(lessThanEqual(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos,ivec3(16*5)))) {
+        if (any(lessThanEqual(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos,ivec3(16*8)))) {
             block_hit = false;
             break;
         }
@@ -584,7 +576,8 @@ void main(void){
 
     vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
     randvec = vec3(pos,pos.x*pos.y) / (0.1+sin(PushConstants.timeSeed));
-    randvec = Random3D();
+    // randvec = Random3D();
+    // randvec = Random3D();
     // randvec = (((randvec)));
 
     float       fmat =  imageLoad(posMat, pix).w;
@@ -604,24 +597,25 @@ void main(void){
 
 
     // float fvoxel = GetVoxel(ivec3(origin+direction*4.9));
+    // float dist = 0;
+    // while (dist < 2.0){
+    //     SetVoxel(ivec3(origin + normal*dist), 0);
+    //     dist += 0.1;
+    // }
     SetVoxel(ivec3(origin), 0);
-    SetVoxel(ivec3(origin+normal*0.2), 0);
-    SetVoxel(ivec3(origin+normal*0.35), 0);
-    SetVoxel(ivec3(origin+normal*0.5), 0);
-    SetVoxel(ivec3(origin+normal*0.7), 0);
-    SetVoxel(ivec3(origin+normal*1.0), 0);
-    SetVoxel(ivec3(origin+normal*1.2), 0);
-    SetVoxel(ivec3(origin+normal*1.4), 0);
-    float fvoxel = GetVoxel(ivec3(origin));
     // GetVoxel
-    fvoxel=99999999.0;
+    // fvoxel=99999999.0;
 
     origin += normal*0.001;
-    // ProcessHit(origin, direction,
-    //     0.0, normal, material,
-    //     accumulated_light, accumulated_reflection);
-    // imageStore(frame, pix, vec4((GetMat(int(fvoxel)).color),1));
-    // imageStore(frame, pix, vec4((abs(direction)),1));
+    ProcessHit(origin, direction,
+        0.0, normal, material,
+        accumulated_light, accumulated_reflection);
+
+        
+    float fvoxel = GetVoxel(ivec3(origin+direction));
+
+    imageStore(frame, pix, vec4((GetMat(int(fvoxel)).color),1));
+    // imageStore(frame, pix, vec4(vec3(dot(cameraRayDir, normal)<0),1));
     // if(length(direction)<0.9) 
     // imageStore(frame, pix, vec4(0.5+(direction)/2,1));
     // imageStore(frame, pix, vec4(vec3(dot(normal, direction)<0),1));
@@ -638,7 +632,7 @@ void main(void){
     // accumulated_reflection *= material.color;
     // accumulated_light += vec3(0.8) * 0.2 * accumulated_reflection;
 
-    origin = 20*cameraRayDir+ vec3(0,0,20) + (pos-0.5).x * (horizline*200.0) + (pos-0.5).y * (vertiline*100.0) ;
+    // origin = 20*cameraRayDir+ vec3(0,0,20) + (pos-0.5).x * (horizline*200.0) + (pos-0.5).y * (vertiline*100.0) ;
     // imageStore(frame, pix, vec4(((direction)/2+0.5),1));
 
     vec3 color = vec3(0);

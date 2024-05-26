@@ -163,7 +163,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-        {16, 16, 16*BLOCK_PALETTE_SIZE}); //TODO: dynamic
+        {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
     create_Image_Storages(raytraceBlockPaletteImages, raytraceBlockPaletteImageAllocations, raytraceBlockPaletteImageViews,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8_UINT,
@@ -172,7 +172,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-        {16, 16, 16*BLOCK_PALETTE_SIZE}); //TODO: dynamic
+        {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
     create_Image_Storages(raytraceVoxelPaletteImages, raytraceVoxelPaletteImageAllocations, raytraceVoxelPaletteImageViews,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
@@ -1547,14 +1547,14 @@ void Renderer::startCompute(){
     vkCmdFillBuffer(commandBuffer, paletteCounterBuffers[currentFrame], sizeof(int)*0, sizeof(int)*1, 2);
     //TODO: remove
 // println
-    copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+    copy_Whole_Image({16*BLOCK_PALETTE_SIZE_X,16*BLOCK_PALETTE_SIZE_Y,16}, commandBuffer, 
     originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
 // println
-    copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
-    originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
+    // copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+    // originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
 // println
-    copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
-    originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
+    // copy_Whole_Image({16,16,16*BLOCK_PALETTE_SIZE}, commandBuffer, 
+    // originBlockPaletteImages[currentFrame], raytraceBlockPaletteImages[currentFrame]);
     // vkDeviceWaitIdle(device);
 }
 void Renderer::startBlockify(){
@@ -1753,7 +1753,7 @@ void Renderer::mapMesh(Mesh& mesh){
     struct {mat4 trans; ivec3 size;} trans_size = {mesh.transform, mesh.size};
     // trans = glm::scale(trans, vec3(0.95));
     vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(trans_size), &trans_size);
-    ivec3 adjusted_size = mesh.size * ivec3(10.0);
+    ivec3 adjusted_size = mesh.size * ivec3(2.0);
     vkCmdDispatch(commandBuffer, (adjusted_size.x) / 4, (adjusted_size.y) / 4, (adjusted_size.z) / 4);
 
     
@@ -2810,17 +2810,23 @@ void Renderer::transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkIma
 
 //TODO: make use of frames in flight - do not wait for this things
 //TODO: do smth with frames in flight
+static tuple<int, int> get_block_xy(int N){
+    int x = N % BLOCK_PALETTE_SIZE_X;
+    int y = N / BLOCK_PALETTE_SIZE_X;
+    return tuple(x,y);
+}
 //block palette on cpu side is expected to be array of pointers to blocks
 void Renderer::update_Block_Palette(Block* blockPalette){
-    VkDeviceSize bufferSize = sizeof(Block)*BLOCK_PALETTE_SIZE;
+    VkDeviceSize bufferSize = sizeof(Block)*BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y;
     table3d<MatID_t> blockPaletteLinear = {};
-    blockPaletteLinear.allocate(16, 16, 16*BLOCK_PALETTE_SIZE);
-    blockPaletteLinear.set(0);
+        blockPaletteLinear.allocate(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16);
+        blockPaletteLinear.set(0);
     for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
-    for(i32 x=0; x<BLOCK_SIZE; x++){
-    for(i32 y=0; y<BLOCK_SIZE; y++){
-    for(i32 z=0; z<BLOCK_SIZE; z++){
-        blockPaletteLinear(x,y,z+16*N) = blockPalette[N].voxels[x][y][z];
+        for(i32 x=0; x<BLOCK_SIZE; x++){
+        for(i32 y=0; y<BLOCK_SIZE; y++){
+        for(i32 z=0; z<BLOCK_SIZE; z++){
+            auto [block_x, block_y] = get_block_xy(N);
+            blockPaletteLinear(x+16*block_x, y+16*block_y, z) = blockPalette[N].voxels[x][y][z];
     }}}}
     // cout << "(i32)blockPaletteLinear(0,0,0)" " "<< (i32)((i32*)blockPaletteLinear.data())[0] << "\n";
     // printl((i32)blockPaletteLinear(0,0,0));
@@ -2852,7 +2858,7 @@ void Renderer::update_Block_Palette(Block* blockPalette){
     // vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, originBlockPaletteImages[i], bufferSize, uvec3(16,16,16*BLOCK_PALETTE_SIZE), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, originBlockPaletteImages[i], bufferSize, uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);

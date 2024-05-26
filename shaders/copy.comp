@@ -21,14 +21,14 @@ layout(set = 0, binding = 1) readonly buffer copyCounterBuffer {
 //16 by x
 //16 by y
 //16 * NUMBER OF BLOCKS TO COPY by z
-const int STATIC_BLOCKS_COUNT = 12;
+// const int STATIC_BLOCKS_COUNT = 12;
 
+const int BLOCK_PALETTE_SIZE_X = 32;
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
-    ivec3 absolute_voxel_pos = (
-        relative_voxel_pos+
-        ivec3(0,0,16)*block_id
-    );
-    return absolute_voxel_pos;
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+16*block_x, 0+16*block_y,0);
 }
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;

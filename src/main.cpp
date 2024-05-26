@@ -91,7 +91,7 @@ int main() {
         glfwPollEvents();
         render.start_Frame();
             render.startRaygen();
-                // render.RaygenMesh(robot);
+                render.RaygenMesh(robot);
                 // render.RaygenMesh(dyn_mesh1);
                 // render.RaygenMesh(dyn_mesh2);
             render.endRaygen();
@@ -106,13 +106,13 @@ int main() {
             // cout << glm::to_string(dyn_mesh.transform) << "\n\n";
             render.startCompute();
                 render.startBlockify();
-                    // render.blockifyMesh(robot);
+                    render.blockifyMesh(robot);
                     // render.blockifyMesh(dyn_mesh1);
                     // render.blockifyMesh(dyn_mesh2);
                 render.endBlockify();
-                // render.execCopies();
+                render.execCopies();
                 render.startMap();
-                    // render.mapMesh(robot);
+                    render.mapMesh(robot);
                     // render.mapMesh(dyn_mesh1);
                     // render.mapMesh(dyn_mesh2);
                 render.endMap();

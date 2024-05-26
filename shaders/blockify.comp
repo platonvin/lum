@@ -50,7 +50,7 @@ void main(void){
 
     // if (any(greaterThanEqual(irelative_pos, ivec3(4)))) return;
 
-    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*5) + (irelative_pos.z*5*5) + 3));
+    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 3));
     return;
 
     //position of this block in real world grid

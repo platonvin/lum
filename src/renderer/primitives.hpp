@@ -15,7 +15,11 @@ using namespace std;
 //Everything is X -> Y -> Z order in arrays (vectors)
 #define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
-#define    BLOCK_PALETTE_SIZE 129 //0 always empty
+
+// on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
+#define    BLOCK_PALETTE_SIZE_X 32
+#define    BLOCK_PALETTE_SIZE_Y 32
+#define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
 
 typedef   u8 MatID_t;
 typedef  i32 BlockID_t;
