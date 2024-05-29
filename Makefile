@@ -5,9 +5,9 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common
 L = -L${VULKAN_SDK}/Lib
-F = -pipe -fno-exceptions -fno-rtti -g -Wl,--stack,4194304
+F = -pipe -fno-exceptions -fno-rtti
 D = -DNDEBUG
-SA = 
+SA = -O0
 A = $(I) $(F) $(args)
 
 objs := \
@@ -44,12 +44,13 @@ _shaders:= \
 # flags = 
 all: client
 	@echo compiled this ****
+measure: client
 
 obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
 	g++ common/ogt_vox.cpp -c -o obj/ogt_vox.o $(F) $(I) $(args)
 obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp
 	g++ common/ogt_voxel_meshify.cpp -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
-obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/primitives.hpp
+obj/render.o: src/renderer/render.cpp src/renderer/primitives.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
 # obj/visible_world.o: src/renderer/visible_world.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
 # 	g++ src/renderer/visible_world.cpp -c -o obj/visible_world.o $(F) $(I) $(args)
@@ -57,6 +58,8 @@ obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/primi
 # 	g++ src/renderer/window.cpp -c -o obj/window.o $(F) $(I) $(args)
 obj/main.o: src/main.cpp $(headers)
 	g++ src/main.cpp -c -o obj/main.o $(F) $(I) $(args)
+# obj/main.pch: src/main.h
+# 	g++ src/main.cpp -c -o obj/main.o $(F) $(I) $(args)
 client: $(objs) $(_shaders)
 	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk $(args)
 client_opt: $(src) $(headers) $(_shaders)
@@ -90,7 +93,8 @@ fun:
 	@echo fun was never an option
 opt: client_opt
 	client.exe
-
+clean:
+	-del "obj\*.o" 
 test: test.cpp
 	g++ test.cpp -o test
 	test

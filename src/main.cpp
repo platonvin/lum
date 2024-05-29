@@ -1,18 +1,9 @@
-// #include "renderer/primitives.hpp"
-// #include "renderer/primitives.hpp"
+// #include <renderer/window.hpp>
+// #include "main_pch.hpp"
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/scalar_constants.hpp>
-// #include <iostream>
-// #include <ostream>
-// #include <stdio.h>
-#include <Volk/volk.h>
-#include <GLFW/glfw3.h>
-#include <renderer/visible_world.hpp>
 #include <renderer/render.hpp>
-// #include <renderer/window.hpp>
 #include <defines.hpp>
-// #include <string>
-#include <glm/gtx/string_cast.hpp>
 
 // VisualWorld world = {};
 Renderer render = {};
@@ -30,23 +21,33 @@ int main() {
     //user responsible for managing chunks somehow and also in future translating them to main chunk
     single_chunk.allocate(8,8,8);
     single_chunk.set(0);
+    // for(int x=0; x<16; x++){
+    // for(int y=0; y<16; y++){
+    //     single_chunk(x,y,0) = 1;
+    // }}
     render.update_SingleChunk(single_chunk.data());
 
     // dyn_mesh.vertexes = world.loadedChunks(0,0,0).mesh.vertexes;
     // dyn_mesh.indexes  = world.loadedChunks(0,0,0).mesh.indexes;
     // dyn_mesh = world.loadedChunks(0,0,0).mesh;
     Mesh robot = {};
-        render.load_mesh(&robot, "assets/scene.vox");
-        // render.load_mesh(&robot, "assets/robot.vox");
+        // render.load_mesh(&robot, "assets/scene.vox");
+        render.load_mesh(&robot, "assets/robot.vox");
         // robot.size = ivec3(16);
-        robot.transform = translate(robot.transform, vec3(30,30,1));
-    // printl(robot.size.x);
-    // printl(robot.size.y);
-    // printl(robot.size.z);
+        robot.transform = translate(robot.transform, vec3(60,60,20));
+        // robot.transform = rotate(robot.transform, pi<float>()/2, vec3(0,0,1));
+        // robot.transform = rotate(robot.transform, 0.01f, vec3(0,1,0));
+    printl(robot.size.x);
+    printl(robot.size.y);
+    printl(robot.size.z);
+
+    printl(render.swapChainExtent.width);
+    printl(render.swapChainExtent.height);
+
     // Mesh dyn_mesh1 = {};
     //     render.load_mesh(&dyn_mesh1, "assets/scene.vox");
-    //     dyn_mesh1.transform = identity<mat4>();
-    //     dyn_mesh1.transform = translate(dyn_mesh1.transform, vec3(20));
+    //     dyn_mesh1.transform = identity<mat4>();,
+    //     dyn_mesh1.transform = translate(dyn_mesh1.transform vec3(20));
     // Mesh dyn_mesh2 = {};
     //     render.load_mesh(&dyn_mesh2, "assets/mirror.vox");
     //     dyn_mesh2.transform = identity<mat4>();
@@ -54,6 +55,14 @@ int main() {
 
     //TEMP: emtpy palette just to make things run. No static block atm
     Block* block_palette = (Block*)calloc(BLOCK_PALETTE_SIZE, sizeof(Block));
+    for(int x=0; x<16; x++){
+    for(int y=0; y<16; y++){
+    for(int z=0; z<16; z++){
+        block_palette[1].voxels[x][y][z] = 154;
+    }}}
+    // Mesh block154 = {};
+        // render.make_vertices(&block154, &block_palette[1].voxels[0][0][0], 16, 16, 16);
+
     render.update_Block_Palette(block_palette);
     render.update_Material_Palette(render.mat_palette);
     // dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
@@ -92,10 +101,19 @@ int main() {
         render.start_Frame();
             render.startRaygen();
                 render.RaygenMesh(robot);
-                // render.RaygenMesh(dyn_mesh1);
+
+                // for(int x=0; x<16; x++){
+                // for(int y=0; y<16; y++){
+                //     block154.transform = translate(identity<mat4>(), vec3(x*16,y*16,0));
+                //     // render.RaygenMesh(block154);
+                // }}
                 // render.RaygenMesh(dyn_mesh2);
             render.endRaygen();
-                robot.transform = rotate(robot.transform, -0.00037f, vec3(0,0,1));
+                // robot.transform = translate(robot.transform, -vec3(60,60,16));
+                // robot.transform = translate(robot.transform, -vec3(robot.size)/2.0f);
+                robot.transform = rotate(robot.transform, 0.0001f, vec3(0,0,1));
+                // robot.transform = translate(robot.transform, +vec3(0.01));
+                // robot.transform = translate(robot.transform, vec3(60,60,16));
                 // dyn_mesh1.transform = rotate(dyn_mesh1.transform, -0.0027f, vec3(1,0,0));
                 // dyn_mesh1.transform = rotate(dyn_mesh1.transform, +0.0017f, vec3(0,0,1));
                 // dyn_mesh2.transform = rotate(dyn_mesh2.transform, -0.0024f, vec3(0,0,1));
@@ -130,6 +148,7 @@ int main() {
 
 
     render.free_mesh(&robot);
+    // render.free_mesh(&block154);
     // render.free_mesh(&dyn_mesh1);
     // render.free_mesh(&dyn_mesh2);
     vkDeviceWaitIdle(render.device);

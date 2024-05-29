@@ -4,11 +4,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <defines.hpp>
-#include <stdio.h>
 #include <io.h>
-#include <iostream>
-#include <vector>
-#include <tuple>
 
 #include "render.hpp"
 

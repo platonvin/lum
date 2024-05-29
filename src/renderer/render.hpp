@@ -1,5 +1,8 @@
 #pragma once
 
+// #include "pch/render_pch.hpp"
+#pragma once
+
 #include <vector>
 #include <tuple>
 
@@ -14,11 +17,143 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
-#include "vulkan/vulkan_core.h"
-// #include "window.hpp"
-#include "primitives.hpp"
-// #include "visible_world.hpp"
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <cstring>
+#include <glm/detail/qualifier.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_projection.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/vector_int3.hpp>
+#include <glm/ext/vector_uint4.hpp>
+#include <glm/trigonometric.hpp>
+#include <io.h>
+#include <vulkan/vulkan_core.h>
+#include <set>
+#include <iostream>
+#include <limits>
+#include <fstream>
+
+
+#include <vulkan/vulkan_core.h>
+#include <cstring>
+#include <vector>
+
+#include <vulkan/vulkan.h>
+#include <VMA/vk_mem_alloc.h>
+#include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
+
+// #include <vulkan/vulkan_core.h>
+// #include "primitives.hpp"
 #include <defines.hpp>
+
+using namespace glm;
+using namespace std;
+
+//Everything is X -> Y -> Z order in arrays (vectors)
+#define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
+#define MATERIAL_PALETTE_SIZE 256 //0 always empty
+
+// on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
+#define    BLOCK_PALETTE_SIZE_X 32
+#define    BLOCK_PALETTE_SIZE_Y 32
+#define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
+
+typedef   u8 MatID_t;
+typedef  i32 BlockID_t;
+
+typedef struct Material {
+    // glm::vec4<u8> casd;
+    vec4 color; //colo   r AND transparancy
+    f32 emmit; //emmits same color as reflect
+    f32 rough;
+} Material;
+typedef u8 Voxel;
+typedef struct Vertex {
+    vec3 pos;
+    vec3 norm;
+    MatID_t matID;
+} Vertex;
+// typedef struct MeshData {
+//     vector<VkBuffer> vertices;
+//     vector<VkBuffer>  indices;
+//     vector<VmaAllocation> verticesAllocation;
+//     vector<VmaAllocation>  indicesAllocation;
+//     u32 icount;
+// } MeshData;
+// typedef struct VoxelData {
+//     vector<VkBuffer> vertices;
+//     vector<VkBuffer>  indices;
+//     vector<VmaAllocation> verticesAllocation;
+//     vector<VmaAllocation>  indicesAllocation;
+//     u32 icount;
+// } MeshData;
+typedef struct Buffer {
+    vector<VkBuffer> buf;
+    vector<VmaAllocation> alloc;
+} Buffers;
+typedef struct Image {
+    vector<VkImage> image;
+    vector<VkImageView> view;
+    vector<VmaAllocation> alloc;
+} Images;
+
+typedef struct Mesh {
+    //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
+    //VkBuffers for ray generation
+    Buffers vertexes;
+    Buffers indexes;
+    u32 icount;
+    Images voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
+
+    mat4 transform; //used to transform from self coordinate system to world coordinate system
+    mat4 old_transform; //for denoising
+    
+    ivec3 size;
+    // Voxel* host_voxels; // single copy of voxel memory on cpu. If NULL then you store your data yourself
+} Mesh;
+
+
+typedef struct Block {
+    Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
+} Block;
+
+//just 3d array. Content invalid after allocate()
+template <typename Type> class table3d {
+private:
+    Type* memory = NULL;
+    ivec3 _size = {};
+public:
+    //makes content invalid 
+    void allocate(int x, int y, int z) {
+        _size = ivec3(x,y,z);
+        this->memory = (Type*)malloc(sizeof(Type)*x*y*z);
+    }
+    void set(Type val) {
+        for(int x=0; x<_size.x; x++){
+        for(int y=0; y<_size.y; y++){
+        for(int z=0; z<_size.z; z++){
+            this->memory [x + _size.x*y + (_size.x*_size.y)*z] = val;
+        }}}
+        // memset(dst);
+        // this->memory = (Type*)malloc(x*y*z);
+    }
+    //makes content invalid 
+    void allocate(ivec3 size) {
+        this->allocate(size.x, size.y, size.z);
+    }
+    Type* data() {
+        return this->memory;
+    }
+    uvec3 size() {
+        return _size;
+    }
+    Type& operator()(int x, int y, int z) {
+        return this->memory [x + _size.x*y + (_size.x*_size.y)*z];
+    }
+};
 
 using namespace std;
 using namespace glm;
@@ -43,7 +178,7 @@ using namespace glm;
 #define VK_CHECK(func) do{\
     VkResult result = (func);\
     if (result != VK_SUCCESS) {\
-        fprintf(stderr, "LINE %d: Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
+        fprintf(stderr, "LINE :%d Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
         exit(1);\
     }} while (0)
 #define malloc(x)   ({void* res_ptr =(malloc)(x  ); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
@@ -180,7 +315,7 @@ private:
 
     void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlags access, 
-    uvec3 hwd);
+    uvec3 size);
     void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, VkMemoryPropertyFlags required_flags = 0);
     void create_Blockify_Pipeline();
     void create_Copy_Pipeline();
@@ -198,7 +333,7 @@ private:
 
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
     void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size); 
-    void copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, VkDeviceSize size, uvec3 hwd, VkImageLayout layout);
+    void copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkImageLayout layout);
     u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);

@@ -24,7 +24,7 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
     int block_y = block_id / BLOCK_PALETTE_SIZE_X;
 
-    return relative_voxel_pos + ivec3(0+16*block_x, 0+16*block_y,0);
+    return relative_voxel_pos + ivec3(16*block_x, 16*block_y,0);
 }
 //TODO: balance, X>Y>Z for coherence
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
@@ -33,24 +33,27 @@ layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 // const ivec3 model_size = ivec3(16);
 void main(void){
     //sqrt(1.5) is for more precise mapping so holes do not appear 
-     vec3  relative_vox = vec3(gl_GlobalInvocationID.xyz) / vec3(2.0);
+    vec3  relative_vox = vec3(gl_GlobalInvocationID.xyz) / vec3(2.0);
+    // if(
+    //     (relative_vox.x < 0.8)
+    //   ||(relative_vox.y < 0.8)
+    //   ||(relative_vox.z < 0.8)
+    //   ||(relative_vox.x > (float(PushConstants.model_size.x)-0.8)) 
+    //   ||(relative_vox.y > (float(PushConstants.model_size.y)-0.8)) 
+    //   ||(relative_vox.z > (float(PushConstants.model_size.z)-0.8)) //TODO float() on cpu
+    // ) return;
+    vec3 size = imageSize(modelVoxels);
     //  vec3  relative_vox = gl_GlobalInvocationID.xyz / 2;
     //  vec3  relative_vox = gl_GlobalInvocationID.xyz;
-    if(
-        (relative_vox.x < 0.8)
-      ||(relative_vox.y < 0.8)
-      ||(relative_vox.z < 0.8)
-      ||(relative_vox.x > (float(PushConstants.model_size.x)-0.8)) 
-      ||(relative_vox.y > (float(PushConstants.model_size.y)-0.8)) 
-      ||(relative_vox.z > (float(PushConstants.model_size.z)-0.8)) //TODO float() on cpu
-    ) return;
 
     ivec3 irelative_vox   = ivec3(relative_vox);
     // ivec3 irelative_block = ivec3(relative_vox)/16;
 
 
     //part where actual transformation happens
-    ivec3 itarget_vox = ivec3((PushConstants.trans * vec4(relative_vox,1)).xyz);
+    // vec3 shrinked_relative_vox = (relative_vox - size/2.0)*((size-1.0)/size) + (size/2.0);
+    vec3 shrinked_relative_vox = relative_vox;
+    ivec3 itarget_vox = ivec3((PushConstants.trans * vec4(shrinked_relative_vox,1)).xyz); 
     ivec3 itarget_block = itarget_vox / 16;
 
     // vec3   target_block = ((PushConstants.trans * vec4(relative_vox,1)).xyz);
@@ -64,8 +67,8 @@ void main(void){
     //+1 for propper rounding, so 15 results into 1
     // ivec3 model_size_in_blocks = (model_size + ivec3(1)) / 16;
     //if this is extra "out-of-bounds" voxel
-    if (any(greaterThan(irelative_vox, PushConstants.model_size))) return;
-    // if (any(   lessThan(irelative_vox, ivec3(0)))) return;
+    if (any(greaterThanEqual(irelative_vox, imageSize(modelVoxels)))) return;
+    if (any(   lessThan     (irelative_vox, ivec3(0)))) return;
 
     //let it have X->Y->Z order for blocks in palette
     //so we have target voxel position, initial one and target block position in the world
@@ -74,9 +77,13 @@ void main(void){
     //then we load it to target block in palette
     //then we set target block in world to block in palette ID
     //TODO: test different approaches to cast and dot etc...
-    //WHERE IS MY IDOT
+    //WHERE IS MY IDOT 
     // int target_block_in_palette = int(imageLoad(blocks, target_block).r);
-    int target_block_in_palette = int(itarget_block.x + (itarget_block.y*8) + (itarget_block.z*8*8) + 3);
+    int target_block_in_palette;
+    // if(itarget_block.z == 0) {
+    //     target_block_in_palette = 1;
+    // } else 
+    target_block_in_palette = int(itarget_block.x + (itarget_block.y*8) + (itarget_block.z*8*8) + 2);
     // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to

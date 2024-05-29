@@ -49,8 +49,11 @@ void main(void){
     ivec3 irelative_pos = ivec3(relative_pos);
 
     // if (any(greaterThanEqual(irelative_pos, ivec3(4)))) return;
+    // if(irelative_pos.z == 0) {
+    // imageStore(blocks, irelative_pos, ivec4(1));
+    // } else 
+    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 2));
 
-    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 3));
     return;
 
     //position of this block in real world grid
