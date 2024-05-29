@@ -10,17 +10,17 @@ layout(location = 1) flat out vec3 norm;
 layout(location = 2)      out vec3 pos_old;
 layout(location = 3) flat out float MatID; //uint8 thing. But in float
 
-
-const vec3 cameraRayDir = normalize(vec3(1, 0.1, -0.5));
+const vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
+const vec3 cameraPos = vec3(60, 0, 50);
 // vec3 cameraRayDir = normalize(vec3(-1, 0, .1));
 // vec3 cameraRayDir = normalize(vec3(12, 21, 7));
 // vec3 cameraRayDir = normalize(vec3(1, 1, 0));
-const vec3 globalLightDir = normalize(vec3(1, -1, 0));
+const vec3 globalLightDir = normalize(vec3(0.5, 1, -0.5));
 // vec3 globalLightDir = cameraRayDir;
 const vec3 cameraRayDirPlane = normalize(vec3(cameraRayDir.xy, 0));
 const vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
 const vec3 vertiline = normalize(cross(cameraRayDir, horizline));
-const vec3 cameraPos = vec3(-40, +40, 100);
+
 // vec3 cameraPos = vec3(-13, -22, -8)*1.5/16.0;
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {

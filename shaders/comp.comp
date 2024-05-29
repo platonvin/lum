@@ -16,16 +16,17 @@ layout(set = 0, binding = 5, r32f) readonly uniform image2D voxelPalette;
 layout(set = 0, binding = 6, rgba8) uniform   image2D frame;
 layout(set = 0, binding = 7       ) uniform sampler2D frame_sampler;
 
-const vec3 cameraRayDir = normalize(vec3(1, 0.1, -0.5));
+const vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
+const vec3 cameraPos = vec3(60, 0, 50);
 // vec3 cameraRayDir = normalize(vec3(-1, 0, .1));
 // vec3 cameraRayDir = normalize(vec3(12, 21, 7));
 // vec3 cameraRayDir = normalize(vec3(1, 1, 0));
-const vec3 globalLightDir = normalize(vec3(1, 1, -0.3));
+const vec3 globalLightDir = normalize(vec3(0.5, 1, -0.5));
 // vec3 globalLightDir = cameraRayDir;
 const vec3 cameraRayDirPlane = normalize(vec3(cameraRayDir.xy, 0));
 const vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
 const vec3 vertiline = normalize(cross(cameraRayDir, horizline));
-const vec3 cameraPos = vec3(-40, +40, 100);
+
 // vec3 cameraPos = vec3(-13, -22, -8)*1.5/16.0;
 
 const int BLOCK_PALETTE_SIZE_X = 32;
@@ -238,7 +239,7 @@ Material GetMat(in int voxel){
     // mat.smoothness   = .2;
     // mat.emmitance    = 0.2;
     mat.transparancy = 0;
-    mat.smoothness   = 0.6;
+    mat.smoothness   = .5;
     // mat.transparancy = 0;
     // if (voxel == 154) {
         // mat.color = vec3(255, 0, 0) / 256.0;
@@ -446,7 +447,7 @@ bool CastRay(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out ve
             block_hit = true;
             break;
         }
-        if (iterations++ >= 512) {
+        if (iterations++ >= 128) {
             block_hit = false;
             break;
         }
@@ -611,7 +612,8 @@ bool ssr_intersects(in float test_depth, in vec2 pix, inout bool smooth_intersec
     bool ssr = false;
     smooth_intersection = false;
     if(diff > 0.0)    {ssr = true;}
-    if(diff < 0.5) {smooth_intersection = true;}
+    if(diff < 1.0) {smooth_intersection = true;}
+    // smooth_intersection = true;
     return ssr;
 }
 bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out float fraction, out vec3 normal, out Material material){
@@ -660,7 +662,7 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out floa
             
             //return fraction
         }
-        if (fraction > 8.0) return false;
+        if (fraction > 5.0) return false;
     }
 }
 
@@ -701,6 +703,7 @@ void main(void){
     // vec3 ndirection = normalize(mix(normalize(hemisphereDistributedDirection), idealReflection, 0.0));
 
 
+    // imageStore(frame, pix, vec4((material.color),1));
     float fvoxel = GetVoxel(ivec3(origin+direction));
     // fvoxel = 999.0;
 
@@ -734,7 +737,6 @@ void main(void){
         
 
     // imageStore(frame, pix, vec4((GetMat(int(fvoxel)).color),1));
-    // imageStore(frame, pix, vec4((material.color),1));
     // imageStore(frame, pix, vec4(vec3(dot(hemisphereDistributedDirection, idealReflection)>0),1));
     // imageStore(frame, pix, vec4(vec3(abs(hemisphereDistributedDirection)),1));
     // imageStore(frame, pix, vec4(vec3(abs(normal)),1));
@@ -755,6 +757,6 @@ void main(void){
     // vec2 old_uv   = old_clip;
     // ivec2 pix_shift = ivec2(size * clip_shift.xy * 10);
     vec3 old_color = texture(frame_sampler, old_uv).xyz;
-    color = mix(color, old_color, 0.95);
+    color = mix(color, old_color, 0.965);
     imageStore(frame, pix, vec4(color, 1));
-}
+} 

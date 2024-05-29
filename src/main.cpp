@@ -32,9 +32,10 @@ int main() {
     // dyn_mesh = world.loadedChunks(0,0,0).mesh;
     Mesh robot = {};
         // render.load_mesh(&robot, "assets/scene.vox");
-        render.load_mesh(&robot, "assets/robot.vox");
+        // render.load_mesh(&robot, "assets/robot.vox");
+        render.load_mesh(&robot, "assets/Room_1.vox");
         // robot.size = ivec3(16);
-        robot.transform = translate(robot.transform, vec3(60,60,20));
+        robot.transform = translate(robot.transform, vec3(14,10,10));
         // robot.transform = rotate(robot.transform, pi<float>()/2, vec3(0,0,1));
         // robot.transform = rotate(robot.transform, 0.01f, vec3(0,1,0));
     printl(robot.size.x);
@@ -111,7 +112,7 @@ int main() {
             render.endRaygen();
                 // robot.transform = translate(robot.transform, -vec3(60,60,16));
                 // robot.transform = translate(robot.transform, -vec3(robot.size)/2.0f);
-                robot.transform = rotate(robot.transform, 0.0001f, vec3(0,0,1));
+                // robot.transform = rotate(robot.transform, -0.0001f, vec3(0,0,1));
                 // robot.transform = translate(robot.transform, +vec3(0.01));
                 // robot.transform = translate(robot.transform, vec3(60,60,16));
                 // dyn_mesh1.transform = rotate(dyn_mesh1.transform, -0.0027f, vec3(1,0,0));

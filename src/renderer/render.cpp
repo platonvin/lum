@@ -2955,13 +2955,24 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
                 scene->palette.color[i].b / 256.0,
                 scene->palette.color[i].a / 256.0
             );
-            mat_palette[i].emmit = scene->materials.matl[i].emit;
+            mat_palette[i].emmit = scene->materials.matl[i].emit * (1.0 + scene->materials.matl[i].flux*4.0);
             // mat_palette[i].emmit = scene->materials.matl[i].;
             // mat_palette[i].emmit = 
-            mat_palette[i].rough = (scene->materials.matl[i].rough+scene->materials.matl[i].metal)/2.0;
+            mat_palette[i].rough = (scene->materials.matl[i].rough + (1-scene->materials.matl[i].metal))/2.0;
         }
         // (scene->palette);
     }
+    
+/*
+roughness
+IOR
+Specular
+Metallic
+
+Emmission
+Power - radiant flux
+Ldr
+*/
 
     ogt::vox_destroy_scene(scene);
 }
