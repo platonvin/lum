@@ -112,7 +112,7 @@ int main() {
             render.endRaygen();
                 // robot.transform = translate(robot.transform, -vec3(60,60,16));
                 // robot.transform = translate(robot.transform, -vec3(robot.size)/2.0f);
-                // robot.transform = rotate(robot.transform, -0.0001f, vec3(0,0,1));
+                robot.transform = rotate(robot.transform, -0.0001f, vec3(0,0,1));
                 // robot.transform = translate(robot.transform, +vec3(0.01));
                 // robot.transform = translate(robot.transform, vec3(60,60,16));
                 // dyn_mesh1.transform = rotate(dyn_mesh1.transform, -0.0027f, vec3(1,0,0));

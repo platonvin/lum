@@ -163,7 +163,7 @@ using namespace glm;
 #define STRINGIZE2(x) #x
 #define __LINE_STRING__ STRINGIZE(__LINE__)
 
-#define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, string); exit(69);} while(0)
+#define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, #string); exit(69);} while(0)
 
 // #define NDEBUG
 #ifdef NDEBUG
@@ -406,9 +406,10 @@ public:
     vector<VkFence>  raytraceInFlightFences;
     vector<VkFence>    rayGenInFlightFences;    
     
-    vector<VkImage>         rayGenPosMatImages;
-    vector<VkImage>           rayGenNormImages;
-    vector<VkImage>           rayGenPosDiffImages;
+    //g buffer of prev_pixel pos, matid and normal
+    vector<VkImage>         gBufferImages;
+    // vector<VkImage>           rayGenNormImages;
+    // vector<VkImage>           rayGenPosDiffImages;
     vector<VkImage>          rayGenDepthImages;
     vector<VkImage>       raytraceBlocksImages;
     vector<VkImage>          originWorldImages; //TODO: make multiple chunks be translated to main world
@@ -422,9 +423,10 @@ public:
     // vector<VkImage>   originVoxelPaletteImages; //unused - voxel mat palette does not change
     vector<VkImage>            raytracedImages;
     vector<VkImage>            swapChainImages;
-    vector<VmaAllocation>          rayGenPosMatImageAllocations;
-    vector<VmaAllocation>            rayGenNormImageAllocations;
-    vector<VmaAllocation>            rayGenPosDiffImageAllocations;
+    //g buffer of prev_pixel pos, matid and normal
+    vector<VmaAllocation>          gBufferImageAllocations;
+    // vector<VmaAllocation>            rayGenNormImageAllocations;
+    // vector<VmaAllocation>            rayGenPosDiffImageAllocations;
     vector<VmaAllocation>           rayGenDepthImageAllocations;
     vector<VmaAllocation>        raytraceBlocksImageAllocations;
     vector<VmaAllocation>           originWorldImageAllocations;
@@ -436,9 +438,10 @@ public:
     vector<VmaAllocation>        paletteCounterBufferAllocations;
     vector<VmaAllocation>           copyCounterBufferAllocations;
     vector<VmaAllocation>           RayGenUniformBufferAllocations;
-    vector<VkImageView>         rayGenPosMatImageViews;
-    vector<VkImageView>           rayGenNormImageViews;
-    vector<VkImageView>           rayGenPosDiffImageViews;
+    //g buffer of prev_pixel pos, matid and normal
+    vector<VkImageView>         gBufferImageViews;
+    // vector<VkImageView>           rayGenNormImageViews;
+    // vector<VkImageView>           rayGenPosDiffImageViews;
     vector<VkImageView>          rayGenDepthImageViews;
     vector<VkImageView>       raytraceBlocksImageViews;
     vector<VkImageView>         originBlocksImageViews;

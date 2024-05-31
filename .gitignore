@@ -19,3 +19,7 @@ assets/MechGolem.zip
 run.py
 #memory dump from VMA
 dump.json
+imgui.ini
+nv_traces
+amd_traces
+intel_traces
