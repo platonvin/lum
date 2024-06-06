@@ -5,7 +5,7 @@ struct CopyOperation {
     int dst;
 };
 
-layout(set = 0, binding = 0, r8ui) uniform uimage3D blocksPalette;
+layout(set = 0, binding = 0, rg8ui) uniform uimage3D blocksPalette;
     //copy_x and copy_y are set to 16 by vk set buffer
 layout(set = 0, binding = 1) readonly buffer copyCounterBuffer {
     int copy_x; //16

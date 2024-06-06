@@ -153,6 +153,9 @@ public:
     Type& operator()(int x, int y, int z) {
         return this->memory [x + _size.x*y + (_size.x*_size.y)*z];
     }
+    void deallocate(){
+        free(memory);
+    }
 };
 
 using namespace std;
@@ -270,7 +273,7 @@ public:
 
     tuple<Buffers, Buffers> create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount); 
     tuple<Buffers, Buffers> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices); 
-    Images  create_RayTrace_VoxelImages(MatID_t* voxels, ivec3 size);
+    Images  create_RayTrace_VoxelImages(u16* voxels, ivec3 size);
     void update_Block_Palette(Block* blockPalette);
     void update_Material_Palette(Material* materialPalette);
     void update_SingleChunk(BlockID_t* blocks);

@@ -15,7 +15,7 @@ layout(push_constant) uniform constants{
 layout(set = 0, binding = 0, r8ui)  readonly uniform uimage3D modelVoxels;
 //blocks and blockPalettes are copies 
 layout(set = 0, binding = 1, r32i)           uniform iimage3D blocks;
-layout(set = 0, binding = 2, r8ui) writeonly uniform uimage3D blockPalette;
+layout(set = 0, binding = 2, rg8ui) writeonly uniform uimage3D blockPalette;
 
 //should be 2^n
 const int BLOCK_PALETTE_SIZE_X = 32;

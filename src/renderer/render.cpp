@@ -1,4 +1,6 @@
 #include <climits>
+#include <cmath>
+#include <glm/fwd.hpp>
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 // #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
@@ -9,6 +11,8 @@
 
 using namespace std;
 using namespace glm;
+
+#define copy_Buffer(a, ...) do {println; (copy_Buffer)(a, __VA_ARGS__);} while(0)
 
 //they are global because its easier lol
 static int itime = 0;
@@ -132,7 +136,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     create_Image_Storages(originWorldImages, originWorldImageAllocations, originBlocksImageViews,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R32_SINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -141,7 +145,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     create_Image_Storages(raytraceBlocksImages, raytraceBlocksImageAllocations, raytraceBlocksImageViews,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R32_SINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -149,8 +153,8 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         world_size); //TODO: dynamic
     create_Image_Storages(originBlockPaletteImages, originBlockPaletteImageAllocations, originBlockPaletteImageViews,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_FORMAT_R8G8_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -158,8 +162,8 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
     create_Image_Storages(raytraceBlockPaletteImages, raytraceBlockPaletteImageAllocations, raytraceBlockPaletteImageViews,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_FORMAT_R8G8_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -168,7 +172,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     create_Image_Storages(raytraceVoxelPaletteImages, raytraceVoxelPaletteImageAllocations, raytraceVoxelPaletteImageViews,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2057,8 +2061,23 @@ assert (&data);
         {indexBuffers, indexAllocations}
     };
 }
-Images Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size){
-    VkDeviceSize bufferSize = sizeof(Voxel)*size.x*size.y*size.z;
+// static void blit_buffer_to_(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkImageLayout layout) {
+//     VkCommandBuffer commandBuffer= begin_Single_Time_Commands();
+
+//     VkBufferImageCopy copyRegion = {};
+//     // copyRegion.size = size;
+//         copyRegion.imageExtent.width  = size.x;
+//         copyRegion.imageExtent.height = size.y;
+//         copyRegion.imageExtent.depth  = size.z;
+//         copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+//         copyRegion.imageSubresource.layerCount = 1;
+//     vkCmdCopyBufferToImage(commandBuffer, srcBuffer, dstImage, layout, 1, &copyRegion);
+
+//     end_Single_Time_Commands(commandBuffer);
+// }
+
+Images Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
+    VkDeviceSize bufferSize = (sizeof(u8)*2)*size.x*size.y*size.z;
 
     vector<VkImage>   images(MAX_FRAMES_IN_FLIGHT);
     vector<VkImageView>  views(MAX_FRAMES_IN_FLIGHT);
@@ -2066,7 +2085,7 @@ Images Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size){
 
     create_Image_Storages(images, allocations, views,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8_UINT,
+        VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         VK_IMAGE_LAYOUT_GENERAL,
@@ -2640,6 +2659,7 @@ void Renderer::create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemo
     VK_CHECK(vkBindBufferMemory(device, buffer, bufferMemory, 0));
 }
 
+#undef copy_Buffer
 void Renderer::copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
     VkCommandBuffer commandBuffer= begin_Single_Time_Commands();
 
@@ -2649,6 +2669,7 @@ void Renderer::copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize 
 
     end_Single_Time_Commands(commandBuffer);
 }
+
 void Renderer::copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkImageLayout layout) {
     VkCommandBuffer commandBuffer= begin_Single_Time_Commands();
 
@@ -2663,6 +2684,8 @@ void Renderer::copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkI
 
     end_Single_Time_Commands(commandBuffer);
 }
+
+#define copy_Buffer(a, ...) do {println; (copy_Buffer)(a, __VA_ARGS__);} while(0)
 
 VkCommandBuffer Renderer::begin_Single_Time_Commands() {
     VkCommandBufferAllocateInfo allocInfo{};
@@ -2815,19 +2838,22 @@ static tuple<int, int> get_block_xy(int N){
     assert(y <= BLOCK_PALETTE_SIZE_Y);
     return tuple(x,y);
 }
+
+struct bp_tex {u8 r; u8 g;};
 //block palette on cpu side is expected to be array of pointers to blocks
 void Renderer::update_Block_Palette(Block* blockPalette){
-    VkDeviceSize bufferSize = sizeof(Block)*BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y;
-    table3d<MatID_t> blockPaletteLinear = {};
+    //block palette is in u8, but for easy copying we convert it to u16 cause block palette is R16_UNIT
+    VkDeviceSize bufferSize = (sizeof(Block)/sizeof(Voxel)*sizeof(u8)*2)*BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y;
+    table3d<bp_tex> blockPaletteLinear = {};
         blockPaletteLinear.allocate(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16);
-        blockPaletteLinear.set(0);
+        blockPaletteLinear.set({});
     for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
         for(i32 x=0; x<BLOCK_SIZE; x++){
         for(i32 y=0; y<BLOCK_SIZE; y++){
         for(i32 z=0; z<BLOCK_SIZE; z++){
             auto [block_x, block_y] = get_block_xy(N);
             // blockPaletteLinear(x+16*block_x, y+16*block_y, z) = blockPalette[N].voxels[x][y][z];
-            blockPaletteLinear(x+16*block_x, y+16*block_y, z) = blockPalette[N].voxels[x][y][z];
+            blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = (u16) blockPalette[N].voxels[x][y][z];
     }}}}
     // cout << "(i32)blockPaletteLinear(0,0,0)" " "<< (i32)((i32*)blockPaletteLinear.data())[0] << "\n";
     // printl((i32)blockPaletteLinear(0,0,0));
@@ -2959,6 +2985,7 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
     free(buffer);
 
     assert(scene->num_models == 1);
+
     load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
     
     if(extrude_palette and not _has_palette){
@@ -2995,17 +3022,27 @@ Emmission
 Power - radiant flux
 Ldr
 */
-
     ogt::vox_destroy_scene(scene);
 }
 
 void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices){
     mesh->size = ivec3(x_size, y_size, z_size);
-    mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
-    mesh->transform = identity<mat4>();
     if(_make_vertices){
         make_vertices(mesh, Voxels, x_size, y_size, z_size);
     }
+
+    table3d<u16> voxels_extended = {};
+    voxels_extended.allocate(x_size, y_size, z_size);
+    for (int x=0; x < x_size; x++){
+    for (int y=0; y < y_size; y++){
+    for (int z=0; z < z_size; z++){
+        voxels_extended(x,y,z) = (u16) Voxels[x + y*x_size + z*x_size*y_size];
+    }}}
+
+    mesh->voxels = create_RayTrace_VoxelImages(voxels_extended.data(), mesh->size);
+    mesh->transform = identity<mat4>();
+    
+    voxels_extended.deallocate();
 }
 //frees only gpu side stuff, not mesh ptr
 void Renderer::free_mesh(Mesh* mesh){

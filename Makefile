@@ -82,8 +82,10 @@ shaders/compiled/copy.spv: shaders/copy.comp
 	glslc shaders/copy.comp -o shaders/compiled/copy.spv $(SA)
 shaders/compiled/map.spv: shaders/map.comp
 	glslc shaders/map.comp -o shaders/compiled/map.spv $(SA)
-shaders/compiled/comp.spv: shaders/comp.comp
-	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
+# shaders/compiled/comp.spv: shaders/comp.comp
+# 	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
+shaders/compiled/comp.spv: shaders/compopt.comp
+	glslc shaders/compopt.comp -o shaders/compiled/comp.spv $(SA)
 
 init:
 	mkdir obj
