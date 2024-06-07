@@ -39,6 +39,7 @@ _shaders:= \
 	shaders/compiled/blockify.spv\
 	shaders/compiled/copy.spv\
 	shaders/compiled/map.spv\
+	shaders/compiled/df.spv\
 	shaders/compiled/comp.spv\
 
 # flags = 
@@ -82,6 +83,8 @@ shaders/compiled/copy.spv: shaders/copy.comp
 	glslc shaders/copy.comp -o shaders/compiled/copy.spv $(SA)
 shaders/compiled/map.spv: shaders/map.comp
 	glslc shaders/map.comp -o shaders/compiled/map.spv $(SA)
+shaders/compiled/df.spv: shaders/df.comp
+	glslc shaders/df.comp -o shaders/compiled/df.spv $(SA)
 # shaders/compiled/comp.spv: shaders/comp.comp
 # 	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
 shaders/compiled/comp.spv: shaders/compopt.comp

@@ -264,6 +264,7 @@ public:
                 void startMap();
                 void mapMesh(Mesh &mesh);
                 void   endMap();
+            void recalculate_df();
             void raytrace();
         void   endCompute();
         // End of computeCommandBuffer
@@ -310,6 +311,7 @@ private:
     void setup_Blockify_Descriptors();
     void setup_Copy_Descriptors();
     void setup_Map_Descriptors();
+    void setup_Df_Descriptors();
     void setup_Raytrace_Descriptors();
     void setup_Graphical_Descriptors();
     void setup_RayGen_Descriptors();
@@ -323,6 +325,7 @@ private:
     void create_Blockify_Pipeline();
     void create_Copy_Pipeline();
     void create_Map_Pipeline();
+    void create_Df_Pipeline();
     void create_Raytrace_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
     //creates framebuffers that point to attachments view specified views
@@ -376,6 +379,7 @@ public:
     VkShaderModule   blockifyShaderModule;
     VkShaderModule       copyShaderModule;
     VkShaderModule        mapShaderModule;
+    VkShaderModule         dfShaderModule;
     VkShaderModule   raytraceShaderModule;
 
 //rasterization pipeline things
@@ -464,6 +468,7 @@ public:
     VkDescriptorSetLayout  blockifyDescriptorSetLayout;
     VkDescriptorSetLayout      copyDescriptorSetLayout;
     VkDescriptorSetLayout       mapDescriptorSetLayout;
+    VkDescriptorSetLayout        dfDescriptorSetLayout;
     VkDescriptorSetLayout graphicalDescriptorSetLayout;
     VkDescriptorPool descriptorPool;
     
@@ -473,6 +478,7 @@ public:
     vector<VkDescriptorSet>  blockifyDescriptorSets;
     vector<VkDescriptorSet>      copyDescriptorSets;
     vector<VkDescriptorSet>       mapDescriptorSets;
+    vector<VkDescriptorSet>        dfDescriptorSets;
     vector<VkDescriptorSet> graphicalDescriptorSets;
     vector<VkDescriptorSet>    RayGenDescriptorSets;
 
@@ -481,10 +487,12 @@ public:
     VkPipelineLayout blockifyLayout;
     VkPipelineLayout     copyLayout;
     VkPipelineLayout      mapLayout;
+    VkPipelineLayout       dfLayout;
     VkPipeline raytracePipeline;
     VkPipeline blockifyPipeline;
     VkPipeline     copyPipeline;
     VkPipeline      mapPipeline;
+    VkPipeline       dfPipeline;
 
     VmaAllocator VMAllocator; 
 private:

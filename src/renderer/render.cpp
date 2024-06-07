@@ -209,12 +209,15 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     setup_Blockify_Descriptors();
     setup_Copy_Descriptors();
     //setup for map?
+    setup_Df_Descriptors();
     setup_Raytrace_Descriptors();
     setup_Graphical_Descriptors();
     setup_RayGen_Descriptors();
+
     create_Blockify_Pipeline();
     create_Copy_Pipeline();
     create_Map_Pipeline();
+    create_Df_Pipeline();
     create_Raytrace_Pipeline();
     create_Graphics_Pipeline();
     create_RayGen_Pipeline();
@@ -258,6 +261,7 @@ void Renderer::cleanup(){
     vkDestroyDescriptorSetLayout(device,   blockifyDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,       copyDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,        mapDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,         dfDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,   raytraceDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,  graphicalDescriptorSetLayout, NULL);
     for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
@@ -287,6 +291,7 @@ void Renderer::cleanup(){
     vkDestroyPipeline(device, blockifyPipeline, NULL);
     vkDestroyPipeline(device,     copyPipeline, NULL);
     vkDestroyPipeline(device,      mapPipeline, NULL);
+    vkDestroyPipeline(device,       dfPipeline, NULL);
     vkDestroyPipeline(device, raytracePipeline, NULL);
     vkDestroyPipeline(device, graphicsPipeline, NULL);
 
@@ -294,6 +299,7 @@ void Renderer::cleanup(){
     vkDestroyPipelineLayout(device, blockifyLayout, NULL);
     vkDestroyPipelineLayout(device,     copyLayout, NULL);
     vkDestroyPipelineLayout(device,      mapLayout, NULL);
+    vkDestroyPipelineLayout(device,       dfLayout, NULL);
     vkDestroyPipelineLayout(device, raytraceLayout, NULL);
     vkDestroyPipelineLayout(device, graphicsLayout, NULL);
 
@@ -389,8 +395,8 @@ void Renderer::create_Window(){
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     assert(mode!=NULL);
-    window.width  = mode->width  / 1;
-    window.height = mode->height / 1;
+    window.width  = mode->width  / 2;
+    window.height = mode->height / 2;
     
     // window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", glfwGetPrimaryMonitor(), 0);
     window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", 0, 0);
@@ -1788,6 +1794,39 @@ void Renderer::endMap(){
         1, &barrier
     );
 }
+
+void Renderer::recalculate_df(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfPipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfLayout, 0, 1, &dfDescriptorSets[currentFrame], 0, 0);
+
+        // vkCmdPushConstants(commandBuffer, dfLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*BLOCK_PALETTE_SIZE);
+    
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = raytraceBlockPaletteImages[currentFrame];
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
+}
 void Renderer::raytrace(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
@@ -2180,6 +2219,10 @@ void Renderer::create_Descriptor_Set_Layouts(){
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, mapDescriptorSetLayout, device,
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+    create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // blockPalette
+        }, 
+        VK_SHADER_STAGE_COMPUTE_BIT, dfDescriptorSetLayout, device);
 
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //g buffer
@@ -2211,16 +2254,16 @@ void Renderer::create_Descriptor_Pool(){
 
     VkDescriptorPoolSize STORAGE_IMAGE_PoolSize = {};
         STORAGE_IMAGE_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        STORAGE_IMAGE_PoolSize.descriptorCount = STORAGE_IMAGE_DESCRIPTOR_COUNT*5;
+        STORAGE_IMAGE_PoolSize.descriptorCount = STORAGE_IMAGE_DESCRIPTOR_COUNT*7;
     VkDescriptorPoolSize COMBINED_IMAGE_SAMPLER_PoolSize = {};
         COMBINED_IMAGE_SAMPLER_PoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        COMBINED_IMAGE_SAMPLER_PoolSize.descriptorCount = COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT*5;
+        COMBINED_IMAGE_SAMPLER_PoolSize.descriptorCount = COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT*7;
     VkDescriptorPoolSize STORAGE_BUFFER_PoolSize = {};
         STORAGE_BUFFER_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        STORAGE_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*5;
+        STORAGE_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*7;
     VkDescriptorPoolSize UNIFORM_BUFFER_PoolSize = {};
         UNIFORM_BUFFER_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        UNIFORM_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*5;
+        UNIFORM_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*7;
 
     vector<VkDescriptorPoolSize> poolSizes = {
         STORAGE_IMAGE_PoolSize, 
@@ -2232,7 +2275,7 @@ void Renderer::create_Descriptor_Pool(){
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = poolSizes.size();
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*5; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
+        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*7; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, NULL, &descriptorPool));
 }
@@ -2253,6 +2296,7 @@ void Renderer::allocate_Descriptors(){
     allocate_Descriptors_helper(     copyDescriptorSets,      copyDescriptorSetLayout, descriptorPool, device); 
     //we do not allocate this because it's descriptors are managed trough push_descriptor mechanism
     // allocate_Descriptors_helper(      mapDescriptorSets,       mapDescriptorSetLayout, descriptorPool, device); 
+    allocate_Descriptors_helper(     dfDescriptorSets,      dfDescriptorSetLayout, descriptorPool, device); 
     allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
     allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
 }
@@ -2331,6 +2375,35 @@ void Renderer::setup_Copy_Descriptors(){
 void Renderer::setup_Map_Descriptors(){
     // for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     // }
+}
+void Renderer::setup_Df_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkDescriptorImageInfo inputBlockPaletteInfo = {};
+            inputBlockPaletteInfo.imageView = raytraceBlockPaletteImageViews[i];
+            inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        // VkDescriptorBufferInfo copyCounterBufferInfo = {};
+        //     copyCounterBufferInfo.buffer = copyCounterBuffers[i];
+        //     copyCounterBufferInfo.offset = 0;
+        //     copyCounterBufferInfo.range = VK_WHOLE_SIZE;
+
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = dfDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 0;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
+        // VkWriteDescriptorSet copyCounterWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        //     copyCounterWrite.dstSet = copyDescriptorSets[i];
+        //     copyCounterWrite.dstBinding = 1;
+        //     copyCounterWrite.dstArrayElement = 0;
+        //     copyCounterWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        //     copyCounterWrite.descriptorCount = 1;
+        //     copyCounterWrite.pBufferInfo = &copyCounterBufferInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {blockPaletteWrite};
+
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
 }
 void Renderer::setup_Raytrace_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -2585,6 +2658,42 @@ void Renderer::create_Map_Pipeline(){
         pipelineInfo.layout = mapLayout;
 
     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &mapPipeline));
+//I<3Vk
+}
+void Renderer::create_Df_Pipeline(){
+    auto compShaderCode = read_Shader("shaders/compiled/df.spv");
+
+    dfShaderModule = create_Shader_Module(compShaderCode);
+    
+    //single stage
+    VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+        compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        compShaderStageInfo.module = dfShaderModule;
+        compShaderStageInfo.pName = "main";
+
+    VkPushConstantRange pushRange = {};
+        pushRange.size = 0;
+        // pushRange.size = sizeof(mat4)+sizeof(ivec3); //trans + model_size
+        pushRange.offset = 0;
+        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
+        pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
+        pipelineLayoutInfo.pSetLayouts = &dfDescriptorSetLayout;
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+        // pipelineLayoutInfo.pushConstantRangeCount = 0;
+        // pipelineLayoutInfo.pPushConstantRanges = NULL;
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &dfLayout));
+
+    VkComputePipelineCreateInfo pipelineInfo = {};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
+        pipelineInfo.layout = dfLayout;
+
+    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &dfPipeline));
 //I<3Vk
 }
 void Renderer::create_Raytrace_Pipeline(){

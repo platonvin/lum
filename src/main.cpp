@@ -136,6 +136,7 @@ int main() {
                     // render.mapMesh(dyn_mesh1);
                     // render.mapMesh(dyn_mesh2);
                 render.endMap();
+                // render.recalculate_df();
                 render.raytrace();
             render.endCompute();
 

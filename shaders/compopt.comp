@@ -206,6 +206,24 @@ int GetVoxel(in ivec3 pos){
 
     return voxel;
 }
+float GetDf(in ivec3 pos){
+    int df;
+
+// if (pos.x < 0 || pos.x >= 16* WIDTH_B) return 0;
+// if (pos.y < 0 || pos.y >= 16*LENGTH_B) return 0;
+// if (pos.z < 0 || pos.z >= 16*HEIGHT_B) return 0;
+    ivec3 block_pos = pos / 16;
+    ivec3 relative_voxel_pos = pos % 16;
+
+    int block_id = GetBlock(block_pos);
+    // if (block_id==0) {return 0;}
+    
+    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+    
+    df = int(imageLoad(blockPalette, voxel_pos).g);
+
+    return sqrt(float(df));
+}
 void SetVoxel(in ivec3 pos, in uint voxel){
 // if (pos.x < 0 || pos.x >= 16* WIDTH_B) return;
 // if (pos.y < 0 || pos.y >= 16*LENGTH_B) return;
@@ -312,7 +330,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
             block_hit = true;
             break;
         }
-        if (iterations++ >= 128) {
+        if (iterations++ >= 256) {
             block_hit = false;
             break;
         }
@@ -412,15 +430,20 @@ bool CastRay_fast(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, o
     bool block_hit = false; 
     //TODO: sampler to know more precisely
     current_voxel = GetVoxel(ivec3(current_pos));
+    int counter = 0;
+    
     while (block_fraction < 64.0) {
         if ((current_voxel != 0)){
             block_hit = true;
             break;
         }
         // fstep_Diretion =  vec3(0);
-        current_pos += pos_diff;
+        current_pos = rayOrigin + block_fraction*rayDirection;
         block_fraction += fract_diff;
         current_voxel = GetVoxel(ivec3(current_pos));
+        
+        // float current_df = GetDf(ivec3(current_pos));
+        // block_fraction += current_df;
 
         if (any(lessThan(current_pos,vec3(0))) || any(greaterThanEqual(current_pos,vec3(imageSize(blocks)*16.0)))) {
             block_hit = false;
@@ -691,10 +714,10 @@ void main(void){
     if (pix.x >= size.x || pix.y >= size.y) {return;}
     vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
 
-    randvec = vec3(pos.x,pos.y, 100*PushConstants.timeSeed);
-    randvec = Random3D();
-    randvec = Random3D();
-    randvec = Random3D();
+    randvec = vec3(pos.x,pos.y, 10*PushConstants.timeSeed);
+    // randvec = Random3D();
+    // randvec = Random3D();
+    // randvec = Random3D();
        
     float depth = load_depth(pix);
     Material material = GetMat(load_mat(pix));
@@ -771,7 +794,7 @@ void main(void){
     for (int i = 0; (i < 4); i++)
     {
             // hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0);
-            hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0);
+        hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0);
 
         if(!hit) break;
         ProcessHit(origin, direction, 
@@ -789,6 +812,6 @@ void main(void){
 
     vec3 color = accumulated_light;   
     vec3 old_color = texture(frame_sampler, load_old_uv(pix)).xyz;
-    color = mix(color, old_color, 0.96);
+    // color = mix(color, old_color, 0.96);
     imageStore(frame, pix, vec4(color, 1));
 } 
