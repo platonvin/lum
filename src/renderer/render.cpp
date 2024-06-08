@@ -2268,6 +2268,7 @@ void Renderer::create_Descriptor_Set_Layouts(){
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //voxel palette
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //out frame (raytraced)
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //frame sampled
+        // VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //block palette sampled
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, raytraceDescriptorSetLayout, device);
 
@@ -2454,6 +2455,7 @@ void Renderer::setup_Raytrace_Descriptors(){
         VkDescriptorImageInfo inputBlockInfo = {};
             inputBlockInfo.imageView = raytraceBlocksImageViews[i];
             inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            // inputBlockInfo.sampler = blockPaletteImageSamplers[i];
         VkDescriptorImageInfo inputBlockPaletteInfo = {};
             inputBlockPaletteInfo.imageView = raytraceBlockPaletteImageViews[i];
             inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -2464,6 +2466,12 @@ void Renderer::setup_Raytrace_Descriptors(){
             outputFrameInfo.imageView = raytracedImageViews[i];
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             outputFrameInfo.sampler = raytracedImageSamplers[i];
+        VkDescriptorImageInfo readFrameInfo = {};
+            readFrameInfo.imageView = raytracedImageViews[i];
+            readFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            int previous_frame = i - 1;
+            if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
+            readFrameInfo.sampler = raytracedImageSamplers[i];
             
         VkWriteDescriptorSet gBufferWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             gBufferWrite.dstSet = raytraceDescriptorSets[i];
@@ -2520,8 +2528,15 @@ void Renderer::setup_Raytrace_Descriptors(){
             outReadSampler.dstArrayElement = 0;
             outReadSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             outReadSampler.descriptorCount = 1;
-            outReadSampler.pImageInfo = &outputFrameInfo;
-        vector<VkWriteDescriptorSet> descriptorWrites = {gBufferWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, outWrite, outReadSampler};
+            outReadSampler.pImageInfo = &readFrameInfo; // to prevent reading what you write
+        // VkWriteDescriptorSet blockPaletteSampler = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        //     blockPaletteSampler.dstSet = raytraceDescriptorSets[i];
+        //     blockPaletteSampler.dstBinding = 6;
+        //     blockPaletteSampler.dstArrayElement = 0;
+        //     blockPaletteSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        //     blockPaletteSampler.descriptorCount = 1;
+        //     blockPaletteSampler.pImageInfo = &inputBlockInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {gBufferWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, outWrite, outReadSampler, /*blockPaletteSampler*/};
 
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
@@ -2550,6 +2565,15 @@ void Renderer::create_samplers(){
     for (auto& sampler : raytracedImageSamplers) {
         VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
     }
+
+    // samplerInfo.unnormalizedCoordinates = VK_TRUE;
+    // samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    // samplerInfo.minFilter = VK_FILTER_NEAREST;
+    // samplerInfo.magFilter = VK_FILTER_NEAREST;
+    // blockPaletteImageSamplers.resize(MAX_FRAMES_IN_FLIGHT);
+    // for (auto& sampler : blockPaletteImageSamplers) {
+    //     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
+    // }
 }
 
 void Renderer::setup_Graphical_Descriptors(){

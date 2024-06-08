@@ -462,6 +462,7 @@ public:
     vector<VkImageView>            swapChainImageViews;
     //buffers dont need view
     vector<VkSampler>  raytracedImageSamplers;
+    // vector<VkSampler>  blockPaletteImageSamplers; //for df
     
     vector<void*> RayGenUniformMapped;
 

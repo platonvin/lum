@@ -65,7 +65,7 @@ void main(void){
 
     ivec3 voxel_pos = ipos % 16;
 
-    int size = 2;
+    int size = 3;
     // int dist = size*size*3;
     int dist = size*size;
     

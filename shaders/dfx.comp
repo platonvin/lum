@@ -65,7 +65,7 @@ void main(void){
     
     //for nearby pixel in this direction
     // float dist = 999.0;
-    int size = 2;
+    int size = 3;
     // int dist = size*size*3;
     int dist = size*size;
     
