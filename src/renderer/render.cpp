@@ -214,13 +214,12 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     setup_Graphical_Descriptors();
     setup_RayGen_Descriptors();
 
-    create_Blockify_Pipeline();
-    create_Copy_Pipeline();
-    create_Map_Pipeline();
-    create_Df_Pipeline();
-    create_Raytrace_Pipeline();
-    create_Graphics_Pipeline();
     create_RayGen_Pipeline();
+    create_Graphics_Pipeline();
+
+    create_compute_pipelines();
+
+    
     create_Sync_Objects();
 }
 void Renderer::cleanup(){
@@ -262,6 +261,8 @@ void Renderer::cleanup(){
     vkDestroyDescriptorSetLayout(device,       copyDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,        mapDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,         dfDescriptorSetLayout, NULL);
+    // vkDestroyDescriptorSetLayout(device,         dfyDescriptorSetLayout, NULL);
+    // vkDestroyDescriptorSetLayout(device,         dfzDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,   raytraceDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,  graphicalDescriptorSetLayout, NULL);
     for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
@@ -291,7 +292,9 @@ void Renderer::cleanup(){
     vkDestroyPipeline(device, blockifyPipeline, NULL);
     vkDestroyPipeline(device,     copyPipeline, NULL);
     vkDestroyPipeline(device,      mapPipeline, NULL);
-    vkDestroyPipeline(device,       dfPipeline, NULL);
+    vkDestroyPipeline(device,       dfxPipeline, NULL);
+    vkDestroyPipeline(device,       dfyPipeline, NULL);
+    vkDestroyPipeline(device,       dfzPipeline, NULL);
     vkDestroyPipeline(device, raytracePipeline, NULL);
     vkDestroyPipeline(device, graphicsPipeline, NULL);
 
@@ -299,16 +302,19 @@ void Renderer::cleanup(){
     vkDestroyPipelineLayout(device, blockifyLayout, NULL);
     vkDestroyPipelineLayout(device,     copyLayout, NULL);
     vkDestroyPipelineLayout(device,      mapLayout, NULL);
-    vkDestroyPipelineLayout(device,       dfLayout, NULL);
+    vkDestroyPipelineLayout(device,       dfxLayout, NULL);
+    vkDestroyPipelineLayout(device,       dfyLayout, NULL);
+    vkDestroyPipelineLayout(device,       dfzLayout, NULL);
     vkDestroyPipelineLayout(device, raytraceLayout, NULL);
     vkDestroyPipelineLayout(device, graphicsLayout, NULL);
 
     vkDestroyShaderModule(device, rayGenVertShaderModule, NULL);
     vkDestroyShaderModule(device, rayGenFragShaderModule, NULL); 
-    vkDestroyShaderModule(device, blockifyShaderModule, NULL);
-    vkDestroyShaderModule(device,     copyShaderModule, NULL);
-    vkDestroyShaderModule(device,      mapShaderModule, NULL);
-    vkDestroyShaderModule(device, raytraceShaderModule, NULL); 
+    // vkDestroyShaderModule(device, blockifyShaderModule, NULL);
+    // vkDestroyShaderModule(device,     copyShaderModule, NULL);
+    // vkDestroyShaderModule(device,      mapShaderModule, NULL);
+    // vkDestroyShaderModule(device,       dfShaderModule, NULL);
+    // vkDestroyShaderModule(device, raytraceShaderModule, NULL); 
     vkDestroyShaderModule(device, graphicsVertShaderModule, NULL);
     vkDestroyShaderModule(device, graphicsFragShaderModule, NULL); 
     for (auto imageView : swapChainImageViews) {
@@ -395,8 +401,8 @@ void Renderer::create_Window(){
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     assert(mode!=NULL);
-    window.width  = mode->width  / 2;
-    window.height = mode->height / 2;
+    window.width  = mode->width  / sqrt(1);
+    window.height = mode->height / sqrt(1);
     
     // window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", glfwGetPrimaryMonitor(), 0);
     window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", 0, 0);
@@ -622,7 +628,8 @@ void Renderer::create_Logical_Device(){
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
 #ifndef VKNDEBUG
-        deviceFeatures.robustBufferAccess = true;
+        // deviceFeatures.robustBufferAccess = true;
+        // deviceFeatures.co
 #endif
     VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -654,7 +661,7 @@ VkSurfaceFormatKHR Renderer::choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR
 VkPresentModeKHR Renderer::choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes) {
     for (auto mode : availablePresentModes) {
         // if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+        if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
             return mode;}
     }
     // cout << "fifo\n";
@@ -1798,12 +1805,6 @@ void Renderer::endMap(){
 void Renderer::recalculate_df(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfPipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfLayout, 0, 1, &dfDescriptorSets[currentFrame], 0, 0);
-
-        // vkCmdPushConstants(commandBuffer, dfLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
-        vkCmdDispatch(commandBuffer, 1, 1, 16*BLOCK_PALETTE_SIZE);
-    
     VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1818,14 +1819,48 @@ void Renderer::recalculate_df(){
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;
-    vkCmdPipelineBarrier(
-        commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        0,
-        0, NULL,
-        0, NULL,
-        1, &barrier
-    );
+        
+    // vkCmdPipelineBarrier(
+    //     commandBuffer,
+    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    //     0,
+    //     0, NULL,
+    //     0, NULL,
+    //     1, &barrier
+    // );
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfxLayout, 0, 1, &dfDescriptorSets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfxPipeline);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*BLOCK_PALETTE_SIZE);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfyLayout, 0, 1, &dfDescriptorSets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfyPipeline);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*BLOCK_PALETTE_SIZE);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        ); 
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfzLayout, 0, 1, &dfDescriptorSets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfzPipeline);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*BLOCK_PALETTE_SIZE);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
 }
 void Renderer::raytrace(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -2551,187 +2586,241 @@ void Renderer::setup_RayGen_Descriptors(){
         vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
     }
 }
+void Renderer::create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size){
+    auto compShaderCode = read_Shader(name);
 
-void Renderer::create_Blockify_Pipeline(){
-    auto compShaderCode = read_Shader("shaders/compiled/blockify.spv");
-
-    blockifyShaderModule = create_Shader_Module(compShaderCode);
+    VkShaderModule module = create_Shader_Module(compShaderCode);
     
     //single stage
     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        compShaderStageInfo.module = blockifyShaderModule;
+        compShaderStageInfo.module = module;
         compShaderStageInfo.pName = "main";
 
     VkPushConstantRange pushRange = {};
         // pushRange.size = 256;
-        pushRange.size = sizeof(mat4) + sizeof(int); //trans
+        pushRange.size = push_size; //trans
         pushRange.offset = 0;
         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
-        pipelineLayoutInfo.pSetLayouts = &blockifyDescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+        if(push_size != 0) {
+            pipelineLayoutInfo.pushConstantRangeCount = 1;
+            pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+        }
         // pipelineLayoutInfo.pushConstantRangeCount = 0;
         // pipelineLayoutInfo.pPushConstantRanges = NULL;
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &blockifyLayout));
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, pipelineLayout));
 
     VkComputePipelineCreateInfo pipelineInfo = {};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
-        pipelineInfo.layout = blockifyLayout;
+        pipelineInfo.layout = *pipelineLayout;
 
-    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &blockifyPipeline));
-//I<3Vk
+    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, pipeline));
+    vkDestroyShaderModule(device, module, NULL);
 }
-void Renderer::create_Copy_Pipeline(){
-    auto compShaderCode = read_Shader("shaders/compiled/copy.spv");
 
-    copyShaderModule = create_Shader_Module(compShaderCode);
+void Renderer::create_compute_pipelines(){
+    create_compute_pipelines_helper("shaders/compiled/blockify.spv", blockifyDescriptorSetLayout, &blockifyLayout, &blockifyPipeline, sizeof(mat4) + sizeof(int));
+    create_compute_pipelines_helper("shaders/compiled/copy.spv"    , copyDescriptorSetLayout    , &copyLayout    , &copyPipeline    , 0);
+    create_compute_pipelines_helper("shaders/compiled/map.spv"     , mapDescriptorSetLayout     , &mapLayout     , &mapPipeline     , sizeof(mat4) + sizeof(ivec3));
+    create_compute_pipelines_helper("shaders/compiled/dfx.spv"      , dfDescriptorSetLayout      , &dfxLayout      , &dfxPipeline      , 0);
+    create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
+    create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
+    create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(i32)*1);
+    // create_Blockify_Pipeline();
+    // create_Copy_Pipeline();
+    // create_Map_Pipeline();
+    // create_Df_Pipeline();
+    // create_Raytrace_Pipeline();
+
+}
+
+// void Renderer::create_Blockify_Pipeline(){
+//     auto compShaderCode = read_Shader("shaders/compiled/blockify.spv");
+
+//     blockifyShaderModule = create_Shader_Module(compShaderCode);
     
-    //single stage
-    VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
-        compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        compShaderStageInfo.module = copyShaderModule;
-        compShaderStageInfo.pName = "main";
+//     //single stage
+//     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+//         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+//         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+//         compShaderStageInfo.module = blockifyShaderModule;
+//         compShaderStageInfo.pName = "main";
 
-    VkPushConstantRange pushRange = {};
-        // pushRange.size = 256;
-        pushRange.size = 0;
-        pushRange.offset = 0;
-        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+//     VkPushConstantRange pushRange = {};
+//         // pushRange.size = 256;
+//         pushRange.size = sizeof(mat4) + sizeof(int); //trans
+//         pushRange.offset = 0;
+//         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
-        pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
-        pipelineLayoutInfo.pSetLayouts = &copyDescriptorSetLayout;
-        // pipelineLayoutInfo.pushConstantRangeCount = 1;
-        // pipelineLayoutInfo.pPushConstantRanges = &pushRange;
-        pipelineLayoutInfo.pushConstantRangeCount = 0;
-        pipelineLayoutInfo.pPushConstantRanges = NULL;
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &copyLayout));
+//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+//         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
+//         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
+//         pipelineLayoutInfo.pSetLayouts = &blockifyDescriptorSetLayout;
+//         pipelineLayoutInfo.pushConstantRangeCount = 1;
+//         pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+//         // pipelineLayoutInfo.pushConstantRangeCount = 0;
+//         // pipelineLayoutInfo.pPushConstantRanges = NULL;
+//     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &blockifyLayout));
 
-    VkComputePipelineCreateInfo pipelineInfo = {};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
-        pipelineInfo.layout = copyLayout;
+//     VkComputePipelineCreateInfo pipelineInfo = {};
+//         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+//         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
+//         pipelineInfo.layout = blockifyLayout;
 
-    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &copyPipeline));
-//I<3Vk
-}
-void Renderer::create_Map_Pipeline(){
-    auto compShaderCode = read_Shader("shaders/compiled/map.spv");
+//     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &blockifyPipeline));
+// //I<3Vk
+// }
+// void Renderer::create_Copy_Pipeline(){
+//     auto compShaderCode = read_Shader("shaders/compiled/copy.spv");
 
-    mapShaderModule = create_Shader_Module(compShaderCode);
+//     copyShaderModule = create_Shader_Module(compShaderCode);
     
-    //single stage
-    VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
-        compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        compShaderStageInfo.module = mapShaderModule;
-        compShaderStageInfo.pName = "main";
+//     //single stage
+//     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+//         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+//         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+//         compShaderStageInfo.module = copyShaderModule;
+//         compShaderStageInfo.pName = "main";
 
-    VkPushConstantRange pushRange = {};
-        // pushRange.size = 256;
-        pushRange.size = sizeof(mat4)+sizeof(ivec3); //trans + model_size
-        pushRange.offset = 0;
-        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+//     VkPushConstantRange pushRange = {};
+//         // pushRange.size = 256;
+//         pushRange.size = 0;
+//         pushRange.offset = 0;
+//         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
-        pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
-        pipelineLayoutInfo.pSetLayouts = &mapDescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
-        // pipelineLayoutInfo.pushConstantRangeCount = 0;
-        // pipelineLayoutInfo.pPushConstantRanges = NULL;
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &mapLayout));
+//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+//         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
+//         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
+//         pipelineLayoutInfo.pSetLayouts = &copyDescriptorSetLayout;
+//         // pipelineLayoutInfo.pushConstantRangeCount = 1;
+//         // pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+//         pipelineLayoutInfo.pushConstantRangeCount = 0;
+//         pipelineLayoutInfo.pPushConstantRanges = NULL;
+//     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &copyLayout));
 
-    VkComputePipelineCreateInfo pipelineInfo = {};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
-        pipelineInfo.layout = mapLayout;
+//     VkComputePipelineCreateInfo pipelineInfo = {};
+//         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+//         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
+//         pipelineInfo.layout = copyLayout;
 
-    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &mapPipeline));
-//I<3Vk
-}
-void Renderer::create_Df_Pipeline(){
-    auto compShaderCode = read_Shader("shaders/compiled/df.spv");
+//     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &copyPipeline));
+// //I<3Vk
+// }
+// void Renderer::create_Map_Pipeline(){
+//     auto compShaderCode = read_Shader("shaders/compiled/map.spv");
 
-    dfShaderModule = create_Shader_Module(compShaderCode);
+//     mapShaderModule = create_Shader_Module(compShaderCode);
     
-    //single stage
-    VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
-        compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        compShaderStageInfo.module = dfShaderModule;
-        compShaderStageInfo.pName = "main";
+//     //single stage
+//     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+//         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+//         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+//         compShaderStageInfo.module = mapShaderModule;
+//         compShaderStageInfo.pName = "main";
 
-    VkPushConstantRange pushRange = {};
-        pushRange.size = 0;
-        // pushRange.size = sizeof(mat4)+sizeof(ivec3); //trans + model_size
-        pushRange.offset = 0;
-        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+//     VkPushConstantRange pushRange = {};
+//         // pushRange.size = 256;
+//         pushRange.size = sizeof(mat4)+sizeof(ivec3); //trans + model_size
+//         pushRange.offset = 0;
+//         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
-        pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
-        pipelineLayoutInfo.pSetLayouts = &dfDescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
-        // pipelineLayoutInfo.pushConstantRangeCount = 0;
-        // pipelineLayoutInfo.pPushConstantRanges = NULL;
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &dfLayout));
+//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+//         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
+//         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
+//         pipelineLayoutInfo.pSetLayouts = &mapDescriptorSetLayout;
+//         pipelineLayoutInfo.pushConstantRangeCount = 1;
+//         pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+//         // pipelineLayoutInfo.pushConstantRangeCount = 0;
+//         // pipelineLayoutInfo.pPushConstantRanges = NULL;
+//     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &mapLayout));
 
-    VkComputePipelineCreateInfo pipelineInfo = {};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
-        pipelineInfo.layout = dfLayout;
+//     VkComputePipelineCreateInfo pipelineInfo = {};
+//         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+//         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
+//         pipelineInfo.layout = mapLayout;
 
-    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &dfPipeline));
-//I<3Vk
-}
-void Renderer::create_Raytrace_Pipeline(){
-    auto compShaderCode = read_Shader("shaders/compiled/comp.spv");
+//     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &mapPipeline));
+// //I<3Vk
+// }
+// void Renderer::create_Df_Pipeline(){
+//     auto compShaderCode = read_Shader("shaders/compiled/df.spv");
 
-    raytraceShaderModule = create_Shader_Module(compShaderCode);
+//     dfShaderModule = create_Shader_Module(compShaderCode);
     
-    //single stage
-    VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
-        compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        compShaderStageInfo.module = raytraceShaderModule;
-        compShaderStageInfo.pName = "main";
+//     //single stage
+//     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+//         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+//         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+//         compShaderStageInfo.module = dfShaderModule;
+//         compShaderStageInfo.pName = "main";
 
-    VkPushConstantRange pushRange = {};
-        // pushRange.size = 256;
-        pushRange.size = sizeof(i32)*1;
-        pushRange.offset = 0;
-        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+//     VkPushConstantRange pushRange = {};
+//         pushRange.size = 0;
+//         // pushRange.size = sizeof(mat4)+sizeof(ivec3); //trans + model_size
+//         pushRange.offset = 0;
+//         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
-        pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
-        pipelineLayoutInfo.pSetLayouts = &raytraceDescriptorSetLayout;
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
-        // pipelineLayoutInfo.pushConstantRangeCount = 0;
-        // pipelineLayoutInfo.pPushConstantRanges = NULL;
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &raytraceLayout));
+//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+//         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
+//         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
+//         pipelineLayoutInfo.pSetLayouts = &dfDescriptorSetLayout;
+//         pipelineLayoutInfo.pushConstantRangeCount = 0;
+//         pipelineLayoutInfo.pPushConstantRanges = NULL;
+//         // pipelineLayoutInfo.pushConstantRangeCount = 0;
+//         // pipelineLayoutInfo.pPushConstantRanges = NULL;
+//     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &dfLayout));
 
-    VkComputePipelineCreateInfo pipelineInfo = {};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
-        pipelineInfo.layout = raytraceLayout;
+//     VkComputePipelineCreateInfo pipelineInfo = {};
+//         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+//         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
+//         pipelineInfo.layout = dfLayout;
 
-    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &raytracePipeline));
-//I<3Vk
-}
+//     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &dfPipeline));
+// //I<3Vk
+// }
+// void Renderer::create_Raytrace_Pipeline(){
+//     auto compShaderCode = read_Shader("shaders/compiled/comp.spv");
+
+//     raytraceShaderModule = create_Shader_Module(compShaderCode);
+    
+//     //single stage
+//     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+//         compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+//         compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+//         compShaderStageInfo.module = raytraceShaderModule;
+//         compShaderStageInfo.pName = "main";
+
+//     VkPushConstantRange pushRange = {};
+//         // pushRange.size = 256;
+//         pushRange.size = sizeof(i32)*1;
+//         pushRange.offset = 0;
+//         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+//     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+//         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; 
+//         pipelineLayoutInfo.setLayoutCount = 1; // 1 input (image from swapchain)  for now
+//         pipelineLayoutInfo.pSetLayouts = &raytraceDescriptorSetLayout;
+//         pipelineLayoutInfo.pushConstantRangeCount = 1;
+//         pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+//         // pipelineLayoutInfo.pushConstantRangeCount = 0;
+//         // pipelineLayoutInfo.pPushConstantRanges = NULL;
+//     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &raytraceLayout));
+
+//     VkComputePipelineCreateInfo pipelineInfo = {};
+//         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+//         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
+//         pipelineInfo.layout = raytraceLayout;
+
+//     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &raytracePipeline));
+// //I<3Vk
+// }
 
 u32 Renderer::find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties){
     VkPhysicalDeviceMemoryProperties memProperties;
@@ -3106,17 +3195,38 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
                 scene->palette.color[i].b / 256.0,
                 scene->palette.color[i].a / 256.0
             );
-            mat_palette[i].emmit = scene->materials.matl[i].emit * (1.0 + scene->materials.matl[i].flux*4.0);
+            mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux*4.0);
             // mat_palette[i].emmit = scene->materials.matl[i].;
             // mat_palette[i].emmit = 
-            if(scene->materials.matl[i].type == ogt::matl_type_metal) {
-                if(scene->materials.matl[i].content_flags & ogt::k_vox_matl_have_metal){
-                    mat_palette[i].rough = (scene->materials.matl[i].rough + 0.2)/2.0;
-                } else mat_palette[i].rough = scene->materials.matl[i].rough;
-                // mat_palette[i].rough = 0.2;
-            } else if(scene->materials.matl[i].type == ogt::matl_type_diffuse){
-                mat_palette[i].rough = 0.9;
-            } else printl(scene->materials.matl[i].type);
+            float rough;
+            switch (scene->materials.matl[i].type) {
+                case ogt::matl_type_diffuse: {
+                    rough = 0.85;
+                    break;
+                }
+                case ogt::matl_type_emit: {
+                    rough = 0.5;
+                    break;
+                }
+                case ogt::matl_type_metal: {
+                    rough = (scene->materials.matl[i].rough + 0.25)/2.0;
+                    break;
+                }
+                default: {
+                    rough = 0;
+                    break;
+                } 
+            }   
+            mat_palette[i].rough = rough;
+            // if(scene->materials.matl[i].type == ogt::matl_type_metal) {
+            //     if(scene->materials.matl[i].content_flags & ogt::k_vox_matl_have_metal){
+            //         mat_palette[i].rough = (scene->materials.matl[i].rough + 0.2)/2.0;
+            //     } else mat_palette[i].rough = scene->materials.matl[i].rough;
+            //     // mat_palette[i].rough = 0.2;
+                
+            // } else if(scene->materials.matl[i].type == ogt::matl_type_diffuse){
+            //     mat_palette[i].rough = 0.8;
+            // } else printl(scene->materials.matl[i].type);
         }
         // (scene->palette);
     }

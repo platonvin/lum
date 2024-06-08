@@ -1,0 +1,106 @@
+#version 450 core
+
+// struct CopyOperation {
+//     int src;
+//     int dst;
+// };
+
+layout(set = 0, binding = 0, r8ui) uniform uimage3D blocksPalette;
+//to update only up
+// layout(set = 0, binding = 1) readonly buffer copyCounterBuffer {
+    // int copy_x; //16
+    // int copy_y; //16
+    // int copy_z_counter;  //16 * copies_count
+    // CopyOperation copies[1024];
+// };
+
+//TODO: balance
+//16 by x
+//16 by y
+//16 * NUMBER OF BLOCKS TO COPY by z
+// const int STATIC_BLOCKS_COUNT = 12;
+
+const int BLOCK_PALETTE_SIZE_X = 32;
+ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+16*block_x, 0+16*block_y,0);
+}
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+//we may pack all passes 
+const int df_distance = 4;
+
+bool get_voxel(ivec3 voxel_pos, int block_id){
+    //so to prevent weird things needs to assume border IS non-empty 
+    if(any(greaterThanEqual(voxel_pos, ivec3(16)))) return true;
+    if(any(   lessThan     (voxel_pos, ivec3(0)))) return true;
+
+    uint voxel = imageLoad(blocksPalette, voxel_in_palette(voxel_pos, block_id)).x;
+
+    if(voxel == 0) return false;
+    else return true;
+}
+int get_dist(ivec3 src_pos, ivec3 current_pos){
+    ivec3 diff = abs(current_pos - src_pos);
+
+    diff = max(ivec3(0), diff-1);
+
+    return diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+}
+
+// int calc_dist(in ivec3 pos){
+
+// }
+
+void main(void){
+     vec3  pos = gl_GlobalInvocationID.xyz;
+    ivec3 ipos = ivec3(pos);       
+    
+    int block_to_df = ipos.z / 16;
+
+    ivec3 voxel_pos = ipos % 16;
+    
+    //for nearby pixel in this direction
+    // float dist = 999.0;
+    int size = 2;
+    // int dist = size*size*3;
+    int dist = size*size;
+    
+    ivec3 corner_1 = voxel_pos - size;
+    ivec3 corner_2 = voxel_pos + size;
+
+    // corner_1 = clamp(corner_1, ivec3(0), ivec3(15));
+    // corner_2 = clamp(corner_2, ivec3(0), ivec3(15));
+
+    // #pragma optionNV (unroll all)
+
+    for(int x = corner_1.x; x <= corner_2.x; x++){
+        bool voxel = get_voxel(ivec3(x,voxel_pos.y,voxel_pos.z), block_to_df);
+        // int dist = calc_dist(ivec3(x,y,z));
+        if (voxel) {
+            dist = min(dist, get_dist(voxel_pos, ivec3(x,voxel_pos.y,voxel_pos.z)));
+        }
+    }
+
+    // final_dist = 10;
+    uvec2 current_value = imageLoad(blocksPalette, voxel_in_palette(voxel_pos, block_to_df)).xy;
+    imageStore(blocksPalette, voxel_in_palette(voxel_pos, block_to_df), uvec4(current_value.x, dist, 0, 0));
+    
+    // for (int z = voxel_pos.z-df_distance; z < voxel_pos.z+df_distance; z++){
+    //     ivec3 current_pos = voxel_pos + ivec3(0,0,z);
+
+    //     bool is_full = get_voxel(current_pos, block_to_df);
+        
+    //     if(is_full) {
+    //         dist = min(dist, get_dist(voxel_pos, current_pos));
+    //         //that is the first pass, so we just reme
+    //     }
+    // }
+    
+    //so we make passes in order of ALL_Z => ALL_X => Y (maybe all)
+
+    return;
+}

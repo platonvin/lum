@@ -322,11 +322,13 @@ private:
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlags access, 
     uvec3 size);
     void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, VkMemoryPropertyFlags required_flags = 0);
-    void create_Blockify_Pipeline();
-    void create_Copy_Pipeline();
-    void create_Map_Pipeline();
-    void create_Df_Pipeline();
-    void create_Raytrace_Pipeline(); 
+    void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size);
+    void create_compute_pipelines();
+    // void create_Blockify_Pipeline();
+    // void create_Copy_Pipeline();
+    // void create_Map_Pipeline();
+    // void create_Df_Pipeline();
+    // void create_Raytrace_Pipeline(); 
     VkShaderModule create_Shader_Module(vector<char>& code);
     //creates framebuffers that point to attachments view specified views
     void create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector<vector<VkImageView>> &views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height);
@@ -376,11 +378,11 @@ public:
 
     VkShaderModule rayGenVertShaderModule;
     VkShaderModule rayGenFragShaderModule;
-    VkShaderModule   blockifyShaderModule;
-    VkShaderModule       copyShaderModule;
-    VkShaderModule        mapShaderModule;
-    VkShaderModule         dfShaderModule;
-    VkShaderModule   raytraceShaderModule;
+    // VkShaderModule   blockifyShaderModule;
+    // VkShaderModule       copyShaderModule;
+    // VkShaderModule        mapShaderModule;
+    // VkShaderModule         dfShaderModule;
+    // VkShaderModule   raytraceShaderModule;
 
 //rasterization pipeline things
     VkRenderPass    rayGenRenderPass;
@@ -469,6 +471,8 @@ public:
     VkDescriptorSetLayout      copyDescriptorSetLayout;
     VkDescriptorSetLayout       mapDescriptorSetLayout;
     VkDescriptorSetLayout        dfDescriptorSetLayout;
+    // VkDescriptorSetLayout        dfyDescriptorSetLayout;
+    // VkDescriptorSetLayout        dfzDescriptorSetLayout;
     VkDescriptorSetLayout graphicalDescriptorSetLayout;
     VkDescriptorPool descriptorPool;
     
@@ -479,6 +483,8 @@ public:
     vector<VkDescriptorSet>      copyDescriptorSets;
     vector<VkDescriptorSet>       mapDescriptorSets;
     vector<VkDescriptorSet>        dfDescriptorSets;
+    // vector<VkDescriptorSet>        dfyDescriptorSets;
+    // vector<VkDescriptorSet>        dfzDescriptorSets;
     vector<VkDescriptorSet> graphicalDescriptorSets;
     vector<VkDescriptorSet>    RayGenDescriptorSets;
 
@@ -487,12 +493,16 @@ public:
     VkPipelineLayout blockifyLayout;
     VkPipelineLayout     copyLayout;
     VkPipelineLayout      mapLayout;
-    VkPipelineLayout       dfLayout;
+    VkPipelineLayout       dfxLayout;
+    VkPipelineLayout       dfyLayout;
+    VkPipelineLayout       dfzLayout;
     VkPipeline raytracePipeline;
     VkPipeline blockifyPipeline;
     VkPipeline     copyPipeline;
     VkPipeline      mapPipeline;
-    VkPipeline       dfPipeline;
+    VkPipeline       dfxPipeline;
+    VkPipeline       dfyPipeline;
+    VkPipeline       dfzPipeline;
 
     VmaAllocator VMAllocator; 
 private:

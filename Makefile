@@ -39,7 +39,9 @@ _shaders:= \
 	shaders/compiled/blockify.spv\
 	shaders/compiled/copy.spv\
 	shaders/compiled/map.spv\
-	shaders/compiled/df.spv\
+	shaders/compiled/dfx.spv\
+	shaders/compiled/dfy.spv\
+	shaders/compiled/dfz.spv\
 	shaders/compiled/comp.spv\
 
 # flags = 
@@ -51,7 +53,7 @@ obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
 	g++ common/ogt_vox.cpp -c -o obj/ogt_vox.o $(F) $(I) $(args)
 obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp
 	g++ common/ogt_voxel_meshify.cpp -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
-obj/render.o: src/renderer/render.cpp src/renderer/primitives.hpp
+obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/primitives.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
 # obj/visible_world.o: src/renderer/visible_world.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
 # 	g++ src/renderer/visible_world.cpp -c -o obj/visible_world.o $(F) $(I) $(args)
@@ -83,8 +85,12 @@ shaders/compiled/copy.spv: shaders/copy.comp
 	glslc shaders/copy.comp -o shaders/compiled/copy.spv $(SA)
 shaders/compiled/map.spv: shaders/map.comp
 	glslc shaders/map.comp -o shaders/compiled/map.spv $(SA)
-shaders/compiled/df.spv: shaders/df.comp
-	glslc shaders/df.comp -o shaders/compiled/df.spv $(SA)
+shaders/compiled/dfx.spv: shaders/dfx.comp
+	glslc shaders/dfx.comp -o shaders/compiled/dfx.spv $(SA)
+shaders/compiled/dfy.spv: shaders/dfy.comp
+	glslc shaders/dfy.comp -o shaders/compiled/dfy.spv $(SA)
+shaders/compiled/dfz.spv: shaders/dfz.comp
+	glslc shaders/dfz.comp -o shaders/compiled/dfz.spv $(SA)
 # shaders/compiled/comp.spv: shaders/comp.comp
 # 	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
 shaders/compiled/comp.spv: shaders/compopt.comp

@@ -206,6 +206,24 @@ int GetVoxel(in ivec3 pos){
 
     return voxel;
 }
+ivec2 GetVoxelAndDf(in ivec3 pos){
+    ivec2 voxel_df;
+
+// if (pos.x < 0 || pos.x >= 16* WIDTH_B) return 0;
+// if (pos.y < 0 || pos.y >= 16*LENGTH_B) return 0;
+// if (pos.z < 0 || pos.z >= 16*HEIGHT_B) return 0;
+    ivec3 block_pos = pos / 16;
+    ivec3 relative_voxel_pos = pos % 16;
+
+    int block_id = GetBlock(block_pos);
+    // if (block_id==0) {return 0;}
+    
+    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+    
+    voxel_df = ivec2(imageLoad(blockPalette, voxel_pos).rg);
+
+    return voxel_df;
+}
 float GetDf(in ivec3 pos){
     int df;
 
@@ -252,7 +270,7 @@ Material GetMat(in int voxel){
     mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
     mat.smoothness   = 1.0 - imageLoad(voxelPalette, ivec2(5,voxel)).r;
     mat.transparancy = 0;
-    mat.smoothness   = 0.8;
+    // mat.smoothness   = 0.0;
 return mat;
 }
 
@@ -299,10 +317,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
     ivec3 voxel_pos = ivec3(0);
     float block_fraction = 0.0;
 
-    lowp int What_Is_Step = 0;
-    ivec3 istep_Diretion = ivec3(0);
     vec3 fcurrentStepDiretion = vec3(0);
-
 
     initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
     int current_voxel = GetVoxel(voxel_pos);
@@ -310,6 +325,21 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
     while (true) {
         // initTvals(tMax, tDelta, voxel_pos, rayOrigin+dot(tMax - tDelta, fcurrentStepDiretion)*rayDirection, rayDirection); //does not intersect with scene
         // fstep_Diretion =  vec3(0);
+        float df = GetDf(ivec3(voxel_pos));
+        // if(df != 0){
+        //     vec3 fvoxel_pos = voxel_pos;
+        //     fvoxel_pos += rayDirection*df;
+
+        //     vec3 block_corner1 = (floor(fvoxel_pos) - fvoxel_pos)/rayDirection; //now corners are relative vectors
+        //     vec3 block_corner2 = (floor(fvoxel_pos) - fvoxel_pos)/rayDirection  + 1.0/rayDirection;
+        //     tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+        //     tMax.y = max(block_corner1.y, block_corner2.y);
+        //     tMax.z = max(block_corner1.z, block_corner2.z);
+
+        //     voxel_pos = ivec3(fvoxel_pos); //round origin to block pos
+        //     //recalculate t
+        // }
+
         fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
         fcurrentStepDiretion.y = float(int((tMax.x >= tMax.y) && (tMax.y <= tMax.z)));
         fcurrentStepDiretion.z = float(int((tMax.z <= tMax.x) && (tMax.z <= tMax.y)));
@@ -330,7 +360,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
             block_hit = true;
             break;
         }
-        if (iterations++ >= 256) {
+        if (iterations++ >= 64) {
             block_hit = false;
             break;
         }
@@ -421,38 +451,48 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
 
 //TODO: fix normals
 bool CastRay_fast(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, out Material material, float ignored_voxel){
-    float block_fraction = 0.0;
-    vec3 current_pos = rayOrigin;
-    int current_voxel = 0;
-
-    float fract_diff = 0.3;
-    vec3 pos_diff = fract_diff*rayDirection;
     bool block_hit = false; 
-    //TODO: sampler to know more precisely
-    current_voxel = GetVoxel(ivec3(current_pos));
-    int counter = 0;
+    const float fract_diff = 0.2;
+    vec3 out_of_bounds_check = vec3(imageSize(blocks)*16 - 1);
+
     
-    while (block_fraction < 64.0) {
+    vec3 current_pos = rayOrigin;
+    int current_voxel = GetVoxel(ivec3(current_pos));
+    float block_fraction = 0.0;
+    int i=0;
+
+
+    float current_diff = fract_diff;
+    while (i++<48) {
+        // fstep_Diretion =  vec3(0);
+        
+        // block_fraction += fract_diff;
+        // if(df > 0.5) {
+        // } else {
+            // current_diff = df;
+        // }
+        // float df = 
+        current_pos += current_diff*rayDirection;
+        
+        ivec2 vox_df = GetVoxelAndDf(ivec3(current_pos));
+        current_voxel = vox_df.r;
+        current_diff = fract_diff + sqrt(float(vox_df.g));
+
         if ((current_voxel != 0)){
             block_hit = true;
             break;
         }
-        // fstep_Diretion =  vec3(0);
-        current_pos = rayOrigin + block_fraction*rayDirection;
-        block_fraction += fract_diff;
-        current_voxel = GetVoxel(ivec3(current_pos));
-        
-        // float current_df = GetDf(ivec3(current_pos));
-        // block_fraction += current_df;
 
-        if (any(lessThan(current_pos,vec3(0))) || any(greaterThanEqual(current_pos,vec3(imageSize(blocks)*16.0)))) {
+        // current_diff = fract_diff;
+        // block_fraction += current_diff;
+
+        if (any(lessThan(current_pos,vec3(0))) || any(greaterThan(current_pos,out_of_bounds_check))) {
             block_hit = false;
             return false;
-            // break;
         }
 
     }
-    vec3 before_hit = current_pos - pos_diff;
+    vec3 before_hit = current_pos - current_diff*rayDirection;
     
 
     if(current_voxel != 0){
@@ -491,11 +531,12 @@ bool CastRay_fast(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, o
         normal = -(vec3(steps) * fcurrentStepDiretion);
         vec3 tFinal = tMax - tDelta;
         block_fraction = dot(tFinal, fcurrentStepDiretion);
+
+        fraction = block_fraction;
+        material = GetMat(current_voxel);
     }
 
 
-    fraction = block_fraction;
-    material = GetMat(current_voxel);
     return (block_hit);
 }
 
@@ -718,28 +759,19 @@ void main(void){
     // randvec = Random3D();
     // randvec = Random3D();
     // randvec = Random3D();
-       
     float depth = load_depth(pix);
     Material material = GetMat(load_mat(pix));
     vec3 direction = cameraRayDir;
     vec3 normal = load_norm(pix);
-
-    // vec2 clip_pos = 2*pos-1.0;
-    vec2 view_size = vec2(view_width, view_height);
-    // vec2 clip_pos_scaled = (2*pos-1.0)*view_size;
-    vec2 clip_pos_scaled = (2.0*view_size)*(pos)-view_size;
-
+        vec2 view_size = vec2(view_width, view_height);
+        vec2 clip_pos_scaled = (2.0*view_size)*(pos)-view_size;
     vec3 origin = cameraPos + 
         (horizline*clip_pos_scaled.x) + 
         (vertiline*clip_pos_scaled.y) + 
         (cameraRayDir*depth);
-    
 
     vec3 accumulated_light      = vec3(0); 
     vec3 accumulated_reflection = vec3(1);
-
-    // float fvoxel = GetVoxel(ivec3(origin+direction));
-    // SetVoxel(ivec3(origin+normal*0.5), 0);
 
 
     ProcessHit(origin, direction,
@@ -750,7 +782,7 @@ void main(void){
     
     vec2 ssr_pix = pix;
     bool smooth_intersection = false;
-    float fraction_step = 0.05;
+    float fraction_step = .1;
     bool ssr = false;
     depth = 0;
     while(true){
@@ -778,10 +810,9 @@ void main(void){
         }
         else if (fraction > 2.0) {break;}
     }
-    // }
 
-    origin += direction*fraction; 
-    // if(true) {}
+    origin += fraction*direction;
+    // origin -= cameraRayDir*1; 
     if(ssr) {
         ProcessHit(origin, direction,
             0, normal, material,
@@ -791,9 +822,9 @@ void main(void){
 
     fraction = 0;
     bool hit = true; 
-    for (int i = 0; (i < 4); i++)
+    for (int i = 0; (i < 3); i++)
     {
-            // hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0);
+        // hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0);
         hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0);
 
         if(!hit) break;
@@ -812,6 +843,6 @@ void main(void){
 
     vec3 color = accumulated_light;   
     vec3 old_color = texture(frame_sampler, load_old_uv(pix)).xyz;
-    // color = mix(color, old_color, 0.96);
+    color = mix(color, old_color, 0.96);
     imageStore(frame, pix, vec4(color, 1));
 } 
