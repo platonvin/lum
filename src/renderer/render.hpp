@@ -57,12 +57,12 @@ using namespace std;
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
 
 // on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
-#define    BLOCK_PALETTE_SIZE_X 32
-#define    BLOCK_PALETTE_SIZE_Y 32
+#define    BLOCK_PALETTE_SIZE_X 16
+#define    BLOCK_PALETTE_SIZE_Y 16
 #define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
 
 typedef   u8 MatID_t;
-typedef  i32 BlockID_t;
+typedef  i16 BlockID_t;
 
 typedef struct Material {
     // glm::vec4<u8> casd;
@@ -90,14 +90,14 @@ typedef struct Vertex {
 //     vector<VmaAllocation>  indicesAllocation;
 //     u32 icount;
 // } MeshData;
-typedef struct Buffer {
-    vector<VkBuffer> buf;
-    vector<VmaAllocation> alloc;
+typedef struct Buffers_t {
+    vector<VkBuffer> buffers;
+    vector<VmaAllocation> allocs;
 } Buffers;
-typedef struct Image {
-    vector<VkImage> image;
-    vector<VkImageView> view;
-    vector<VmaAllocation> alloc;
+typedef struct Images_t {
+    vector<VkImage> images;
+    vector<VkImageView> views;
+    vector<VmaAllocation> allocs;
 } Images;
 
 typedef struct Mesh {
@@ -247,9 +247,12 @@ public:
     void load_vertices(Mesh* mesh, Vertex* vertices);
     // void extrude_palette(Material* material_palette);
     Material mat_palette[MATERIAL_PALETTE_SIZE];
+    table3d<BlockID_t>  origin_world = {};
+    table3d<BlockID_t> current_world = {};
 private:
     ivec3(world_size);
     bool _has_palette = false;
+    // ivec2 warp_size = ivec2(8, 8);
 public:
     void start_Frame();
         void startRaygen();
@@ -319,9 +322,10 @@ private:
     // void update_Descriptors();
 
     void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
-    VkImageType type, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlagBits pipeStage, VkAccessFlags access, 
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size);
-    void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, VkMemoryPropertyFlags required_flags = 0);
+    // void destroy_images
+    void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, bool host = false);
     void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size);
     void create_compute_pipelines();
     // void create_Blockify_Pipeline();
@@ -398,96 +402,82 @@ public:
 
     vector<VkCommandBuffer>    rayGenCommandBuffers;
     //It is so because they are too similar and easy to record (TODO: make concurent)
-    vector<VkCommandBuffer>   computeCommandBuffers; //also used for blockify, copy and map. 
+    vector<VkCommandBuffer>   computeCommandBuffers; 
     vector<VkCommandBuffer> graphicalCommandBuffers;
 
     vector<VkSemaphore>   imageAvailableSemaphores;
     vector<VkSemaphore>   renderFinishedSemaphores;
-    // vector<VkSemaphore> blockifyFinishedSemaphores;
-    // vector<VkSemaphore> copyFinishedSemaphores;
-    // vector<VkSemaphore> mapFinishedSemaphores;
     vector<VkSemaphore> raytraceFinishedSemaphores;
     vector<VkSemaphore>   rayGenFinishedSemaphores;
     vector<VkFence> graphicalInFlightFences;
-    // vector<VkFence>  blockifyInFlightFences;
-    // vector<VkFence>      copyInFlightFences;
-    // vector<VkFence>       mapInFlightFences;
     vector<VkFence>  raytraceInFlightFences;
     vector<VkFence>    rayGenInFlightFences;    
     
     //g buffer of prev_pixel pos, matid and normal
-    vector<VkImage>         gBufferImages;
     // vector<VkImage>           rayGenNormImages;
     // vector<VkImage>           rayGenPosDiffImages;
-    vector<VkImage>          rayGenDepthImages;
-    vector<VkImage>       raytraceBlocksImages;
-    vector<VkImage>          originWorldImages; //TODO: make multiple chunks be translated to main world
-    vector<VkImage> raytraceBlockPaletteImages;
-    vector<VkImage>   originBlockPaletteImages;
-    vector<VkImage> raytraceVoxelPaletteImages;
-    vector<VkBuffer>       paletteCounterBuffers; //atomic
-    vector<VkBuffer>          copyCounterBuffers; //atomic
-
-    vector<VkBuffer> RayGenUniformBuffers;
-    // vector<VkImage>   originVoxelPaletteImages; //unused - voxel mat palette does not change
-    vector<VkImage>            raytracedImages;
-    vector<VkImage>            swapChainImages;
-    //g buffer of prev_pixel pos, matid and normal
-    vector<VmaAllocation>          gBufferImageAllocations;
-    // vector<VmaAllocation>            rayGenNormImageAllocations;
-    // vector<VmaAllocation>            rayGenPosDiffImageAllocations;
-    vector<VmaAllocation>           rayGenDepthImageAllocations;
-    vector<VmaAllocation>        raytraceBlocksImageAllocations;
-    vector<VmaAllocation>           originWorldImageAllocations;
-    vector<VmaAllocation>  raytraceBlockPaletteImageAllocations;
-    vector<VmaAllocation>    originBlockPaletteImageAllocations;
-    vector<VmaAllocation>  raytraceVoxelPaletteImageAllocations;
-    // vector<VmaAllocation>    originVoxelPaletteImageAllocations; //unused - voxel mat palette does not change
-    vector<VmaAllocation>             raytracedImageAllocations;
-    vector<VmaAllocation>        paletteCounterBufferAllocations;
-    vector<VmaAllocation>           copyCounterBufferAllocations;
-    vector<VmaAllocation>           RayGenUniformBufferAllocations;
-    //g buffer of prev_pixel pos, matid and normal
-    vector<VkImageView>         gBufferImageViews;
-    // vector<VkImageView>           rayGenNormImageViews;
-    // vector<VkImageView>           rayGenPosDiffImageViews;
-    vector<VkImageView>          rayGenDepthImageViews;
-    vector<VkImageView>       raytraceBlocksImageViews;
-    vector<VkImageView>         originBlocksImageViews;
-    vector<VkImageView> raytraceBlockPaletteImageViews;
-    vector<VkImageView>   originBlockPaletteImageViews;
-    vector<VkImageView> raytraceVoxelPaletteImageViews;
-    // vector<VkImageView>   originVoxelPaletteImageViews; //unused - voxel mat palette does not change
-    vector<VkImageView>            raytracedImageViews;
-    vector<VkImageView>            swapChainImageViews;
-    //buffers dont need view
-    vector<VkSampler>  raytracedImageSamplers;
-    // vector<VkSampler>  blockPaletteImageSamplers; //for df
+    Images depth;
+    Images gBuffer;
+    Images step_count;
+    Images raytraced_frame;
+        vector<VkSampler>  raytracedImageSamplers;
     
+    Buffers       staging_world;
+    vector<void*> staging_world_mapped;
+    Images                world;
+    Images origin_block_palette;
+    Images        block_palette;
+    Images material_palette;
+    
+    Images swapchain_images;
+    
+    // Buffers 
+    vector<VkBuffer>       paletteCounterBuffers; //atomic
+    vector<VmaAllocation>        paletteCounterBufferAllocations;
+
+    Buffers copy_queue;
+    vector<VkBuffer>          copyCounterBuffers; //atomic
+    vector<VmaAllocation>           copyCounterBufferAllocations;
+
+    Buffers uniform;
+    vector<VkBuffer> RayGenUniformBuffers;
+    vector<VmaAllocation>           RayGenUniformBufferAllocations;
     vector<void*> RayGenUniformMapped;
 
+    //g buffer of prev_pixel pos, matid and normal
+    // vector<VkImageView>           rayGenNormImageViews;
+    // vector<VkImageView>           rayGenPosDiffImageViews;
+    // vector<VkImageView>         originBlocksImageViews;
+    // vector<VkImageView>   originVoxelPaletteImageViews; //unused - voxel mat palette does not change
+
+    //buffers dont need view
+    
+
     VkDescriptorSetLayout    RayGenDescriptorSetLayout;
+    vector<VkDescriptorSet>    RayGenDescriptorSets;
+
     VkDescriptorSetLayout  raytraceDescriptorSetLayout;
+    vector<VkDescriptorSet>  raytraceDescriptorSets;
+
     VkDescriptorSetLayout  blockifyDescriptorSetLayout;
+    vector<VkDescriptorSet>  blockifyDescriptorSets;
+
     VkDescriptorSetLayout      copyDescriptorSetLayout;
+    vector<VkDescriptorSet>      copyDescriptorSets;
+
     VkDescriptorSetLayout       mapDescriptorSetLayout;
+    vector<VkDescriptorSet>       mapDescriptorSets;
+
     VkDescriptorSetLayout        dfDescriptorSetLayout;
-    // VkDescriptorSetLayout        dfyDescriptorSetLayout;
-    // VkDescriptorSetLayout        dfzDescriptorSetLayout;
+    vector<VkDescriptorSet>        dfDescriptorSets;
+
     VkDescriptorSetLayout graphicalDescriptorSetLayout;
+    vector<VkDescriptorSet> graphicalDescriptorSets;
+
     VkDescriptorPool descriptorPool;
     
     //basically just MAX_FRAMES_IN_FLIGHT of same descriptors
     //raygen does not need this, for raygen its inside renderpass thing
-    vector<VkDescriptorSet>  raytraceDescriptorSets;
-    vector<VkDescriptorSet>  blockifyDescriptorSets;
-    vector<VkDescriptorSet>      copyDescriptorSets;
-    vector<VkDescriptorSet>       mapDescriptorSets;
-    vector<VkDescriptorSet>        dfDescriptorSets;
-    // vector<VkDescriptorSet>        dfyDescriptorSets;
-    // vector<VkDescriptorSet>        dfzDescriptorSets;
-    vector<VkDescriptorSet> graphicalDescriptorSets;
-    vector<VkDescriptorSet>    RayGenDescriptorSets;
 
 //compute pipeline things
     VkPipelineLayout raytraceLayout;
@@ -511,6 +501,7 @@ private:
 
     //wraps around MAX_FRAMES_IN_FLIGHT
     u32 currentFrame = 0;
+    int palette_counter = 0;
     // VisualWorld &_world = world;
     VkDebugUtilsMessengerEXT debugMessenger;
 };

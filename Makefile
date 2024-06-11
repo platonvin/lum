@@ -7,7 +7,7 @@ I = -I./src -I${VULKAN_SDK}/Include -I./common
 L = -L${VULKAN_SDK}/Lib
 F = -pipe -fno-exceptions -fno-rtti
 D = -DNDEBUG
-SA = -O
+SA = -O --target-env=vulkan1.1
 A = $(I) $(F) $(args)
 
 objs := \

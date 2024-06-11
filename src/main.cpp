@@ -11,6 +11,7 @@ int itimish = 0;
 int main() {
     // Renderer::init(
     render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024);
+println
     vkDeviceWaitIdle(render.device);
     // world.init();
 
@@ -25,7 +26,9 @@ int main() {
     // for(int y=0; y<16; y++){
     //     single_chunk(x,y,0) = 1;
     // }}
-    render.update_SingleChunk(single_chunk.data());
+println
+    // render.update_SingleChunk(single_chunk.data());
+    render.origin_world.set(0);
 
     // dyn_mesh.vertexes = world.loadedChunks(0,0,0).mesh.vertexes;
     // dyn_mesh.indexes  = world.loadedChunks(0,0,0).mesh.indexes;
@@ -33,11 +36,12 @@ int main() {
     Mesh robot = {};
         // render.load_mesh(&robot, "assets/scene.vox");
         // render.load_mesh(&robot, "assets/robot.vox");
+println
         render.load_mesh(&robot, "assets/Room_1.vox");
         // robot.size = ivec3(16);
-        robot.transform = translate(robot.transform, vec3(14,10,10));
+        robot.transform = translate(robot.transform, vec3(14.1,10.1,10.1));
         // robot.transform = rotate(robot.transform, pi<float>()/2, vec3(0,0,1));
-        // robot.transform = rotate(robot.transform, 0.01f, vec3(0,1,0));
+        robot.transform = rotate(robot.transform, 0.001f, vec3(0,0,1));
     printl(robot.size.x);
     printl(robot.size.y);
     printl(robot.size.z);
@@ -55,15 +59,17 @@ int main() {
     //     dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
 
     //TEMP: emtpy palette just to make things run. No static block atm
+println
     Block* block_palette = (Block*)calloc(BLOCK_PALETTE_SIZE, sizeof(Block));
     for(int x=0; x<16; x++){
     for(int y=0; y<16; y++){
     for(int z=0; z<16; z++){
-        block_palette[1].voxels[x][y][z] = 154;
+        block_palette[1].voxels[x][y][z] = 0;
     }}}
     // Mesh block154 = {};
         // render.make_vertices(&block154, &block_palette[1].voxels[0][0][0], 16, 16, 16);
 
+println
     render.update_Block_Palette(block_palette);
     render.update_Material_Palette(render.mat_palette);
     // dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
@@ -96,7 +102,7 @@ int main() {
     // vmaBuildStatsString(render.VMAllocator, &dump, 1);
     // cout << dump;
     // vmaFreeStatsString(render.VMAllocator, dump);
-
+println
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
         glfwPollEvents();
         render.start_Frame();
@@ -124,13 +130,12 @@ int main() {
             // itimish
             // cout << glm::to_string(dyn_mesh.transform) << "\n\n";
             render.startCompute();
-                render.startBlockify();
+                render.startBlockify();  //dont need it
                     render.blockifyMesh(robot);
                     // render.blockifyMesh(dyn_mesh1);
                     // render.blockifyMesh(dyn_mesh2);
-                render.endBlockify();
-                render.execCopies();
-                //render.recalculate_df();
+                render.endBlockify();  //dont need it
+                // render.execCopies(); //dont need it
                 render.startMap();
                     render.mapMesh(robot);
                     // render.mapMesh(dyn_mesh1);
@@ -148,15 +153,17 @@ int main() {
     vkDeviceWaitIdle(render.device);
 
     //TODO: temp
-
+println
 
     render.free_mesh(&robot);
     // render.free_mesh(&block154);
     // render.free_mesh(&dyn_mesh1);
+println
     // render.free_mesh(&dyn_mesh2);
     vkDeviceWaitIdle(render.device);
 
     render.cleanup();
+println
     // vmaBuildStatsString(render.VMAllocator, &dump, 1);
     // cout << dump;
     // vmaFreeStatsString(render.VMAllocator, dump);

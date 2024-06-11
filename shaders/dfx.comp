@@ -20,7 +20,7 @@ layout(set = 0, binding = 0, r8ui) uniform uimage3D blocksPalette;
 //16 * NUMBER OF BLOCKS TO COPY by z
 // const int STATIC_BLOCKS_COUNT = 12;
 
-const int BLOCK_PALETTE_SIZE_X = 32;
+const int BLOCK_PALETTE_SIZE_X = 16;
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
     int block_y = block_id / BLOCK_PALETTE_SIZE_X;

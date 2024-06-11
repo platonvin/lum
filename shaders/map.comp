@@ -18,7 +18,7 @@ layout(set = 0, binding = 1, r32i)           uniform iimage3D blocks;
 layout(set = 0, binding = 2, rg8ui) writeonly uniform uimage3D blockPalette;
 
 //should be 2^n
-const int BLOCK_PALETTE_SIZE_X = 32;
+const int BLOCK_PALETTE_SIZE_X = 16;
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -78,12 +78,12 @@ void main(void){
     //then we set target block in world to block in palette ID
     //TODO: test different approaches to cast and dot etc...
     //WHERE IS MY IDOT 
-    // int target_block_in_palette = int(imageLoad(blocks, target_block).r);
-    int target_block_in_palette;
+    int target_block_in_palette = int(imageLoad(blocks, itarget_block).r);
+    // int target_block_in_palette;
     // if(itarget_block.z == 0) {
     //     target_block_in_palette = 1;
     // } else 
-    target_block_in_palette = int(itarget_block.x + (itarget_block.y*8) + (itarget_block.z*8*8) + 2);
+    // target_block_in_palette = int(itarget_block.x + (itarget_block.y*8) + (itarget_block.z*8*8) + 2);
     // int target_block_in_palette = 2;
 
     //relative to palette block it will be written to

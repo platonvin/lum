@@ -23,7 +23,7 @@ layout(set = 0, binding = 2, r32i) uniform iimage3D blocks;
 
 layout(push_constant) uniform constants{
     mat4 trans; //to map modelBlocks to game block world
-    int itime;
+    // int itime;
 } PushConstants;
 
     //used to determine if value is taken
@@ -31,7 +31,7 @@ layout(push_constant) uniform constants{
 const int BLOCK_IS_BORROWED = 6942;
     //how many static blocks is there in palette including empty one. Also is index of first allocated dynamic block
     //"air" not countet. So free blocks in palette start from index [1+STATIC_BLOCKS_COUNT] 
-const int STATIC_BLOCKS_COUNT = 12;
+const int STATIC_BLOCKS_COUNT = 0;
 
 const mat4 identity = mat4 (
     1.0f, 0.0f, 0.0f, 0.0f,
@@ -41,71 +41,87 @@ const mat4 identity = mat4 (
 );
 
 //TODO: balance, X>Y>Z for coherence
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 void main(void){
-    //  vec3  relative_pos = gl_GlobalInvocationID.xyz - vec3(1);
-     vec3  relative_pos = gl_GlobalInvocationID.xyz;
+     vec3  relative_pos = gl_GlobalInvocationID.xyz / 2.0;
     ivec3 irelative_pos = ivec3(relative_pos);
 
-    // if (any(greaterThanEqual(irelative_pos, ivec3(4)))) return;
-    // if(irelative_pos.z == 0) {
-    // imageStore(blocks, irelative_pos, ivec4(1));
-    // } else 
-    imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 2));
+    // position of this block in real world grid
+    vec3 absolute_pos = (PushConstants.trans * vec4(relative_pos*16,1)).xyz;
+    ivec3 iabsolute_pos = ivec3(absolute_pos/16);
 
+    if(any(lessThan(iabsolute_pos, ivec3(0))) || any(greaterThan(iabsolute_pos, ivec3(7)))) {
+        return;
+    }
+    // int a = atomicExchange(palette_counter, 0);
+    // atomicExchange(palette_counter, a);
+    // atomicExchange(palette_counter, 0);
+    // atomicXor
+    // atomicCompSwap(palette_counter, 0, );
+    // memoryBarrierAtomicCounter();
+
+    int id = atomicAdd(palette_counter, 1);
+    imageAtomicExchange(blocks, irelative_pos, id);
+        // id = (irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 2);
+    // imageAtomicExchange(blocks, irelative_pos, id);
+    // memoryBarrierBuffer();
+    // id = atomicAdd(palette_counter, 1);
+    // int id = (irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 2);
+    // imageStore(blocks, irelative_pos, ivec4(id));
     return;
+        //if this is extra "out-of-bounds" block then return
+    //TODO: for testing, local size is 1
 
-    //position of this block in real world grid
-    // vec3 absolute_pos = (PushConstants.trans * vec4(relative_pos,1)).xyz;
-    // // vec3 absolute_pos = (identity * vec4(relative_pos,1)).xyz;
-    // ivec3 iabsolute_pos = ivec3(absolute_pos);
-
-    //     //if this is extra "out-of-bounds" block then return
-    // //TODO: for testing, local size is 1
-
-    //     //we borrow block and replace with BLOCK_IS_BORROWED
-    // int borrowed_block = imageAtomicExchange(blocks, iabsolute_pos, BLOCK_IS_BORROWED);
-    //     //block to return back to "blocks"
-    // int new_block = borrowed_block;
+        //we borrow block and replace with BLOCK_IS_BORROWED
+    int borrowed_block = imageAtomicExchange(blocks, iabsolute_pos, BLOCK_IS_BORROWED);
+    int new_block;
+        //block to return back to "blocks"
+    if(borrowed_block == BLOCK_IS_BORROWED) {
+        imageAtomicExchange(blocks, iabsolute_pos, borrowed_block);
+        // return;
+    }
     
-    //     //if borrowed block already is BLOCK_IS_BORROWED then some core has taken care already, so return
-    //     //TODO: if borrowed_block > STATIC return potentially much faster 
+    imageAtomicExchange(blocks, iabsolute_pos, borrowed_block);
+    
+        //if borrowed block already is BLOCK_IS_BORROWED then some core has taken care already, so return
+        //TODO: if borrowed_block > STATIC return potentially much faster 
     // if (borrowed_block == BLOCK_IS_BORROWED) {return;}
 
-    // //so technically i could copy "nothing" ("air") every frame but it is already there so why whould i care
+    //so technically i could copy "nothing" ("air") every frame but it is already there so why whould i care
     // if (borrowed_block == 0) {
+            //"allocate" block in palette and write its num to borrowed_block
+            //all non-static blocks are zeroed so allocating is just modifying counter :)
+        // new_block = atomicAdd(palette_counter, 1);
+        // new_block = atomicAdd(palette_counter, 1);
+    //end
+    // } 
+    // else if (borrowed_block <= STATIC_BLOCKS_COUNT) { // but > 0
     //         //"allocate" block in palette and write its num to borrowed_block
-    //         //all non-static blocks are zeroed so allocating is just modifying counter :)
     //     new_block = atomicAdd(palette_counter, 1);
-    // //end
-    // } else if (borrowed_block <= STATIC_BLOCKS_COUNT) { // but > 0
-    //         //"allocate" block in palette and write its num to borrowed_block
-    //     new_block = atomicAdd(palette_counter, 1);
-    //     // new_block = 2;
 
     //         //also submit copying (increment counter) AND copy operation
     //     int copy_id = atomicAdd(copy_z_counter, 16); //this starts at zero. We hope it will not overflow UB if does
     //     copy_id /= 16;
     //     //     //we copy static block that is not air
     //     //     //to new allocated block in palette
-    //     // copies[copy_id].src = borrowed_block; //TEMP TODO    
     //     copies[copy_id].src = borrowed_block; //TEMP TODO    
     //     copies[copy_id].dst = new_block;
-    //     // copies[0].src = 1; //TEMP TODO    
-    //     // copies[0].dst = 2;
+
     //         //what it means is that after this stage
     //         //we should copy all the blocks in copy queue to their relevant positions in palette 
     // //end
-    // } else {
-    //         //nothing. Block has already been allocated on palette, so just leave it (return borrowed value back to image)
-    // //end
-    // }
-    //     // copy_x=16;//TODO:move away
-    //     // copy_y=16;//TODO:move away
-    //     // copy_z_counter = 16; //this starts at zero. We hope it will not overflow UB if does
-    // //no matter what we have written to our block, we return it
-    // imageAtomicExchange(blocks, iabsolute_pos, new_block);
+    // } 
+    // else {/*nothing. Block has already been allocated on palette, so just leave it (return borrowed value back to image)*/}
 
-    // return;
+    
+        // copy_x=16;//TODO:move away
+        // copy_y=16;//TODO:move away
+        // copy_z_counter = 16; //this starts at zero. We hope it will not overflow UB if does
+    // new_block = (irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 2);
+    //no matter what we have written to our block, we return it
+    // imageAtomicExchange(blocks, iabsolute_pos, new_block);
+    // imageStore(blocks, irelative_pos, ivec4(irelative_pos.x + (irelative_pos.y*8) + (irelative_pos.z*8*8) + 2));
+
+    return;
 }

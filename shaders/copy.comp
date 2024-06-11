@@ -23,7 +23,7 @@ layout(set = 0, binding = 1) readonly buffer copyCounterBuffer {
 //16 * NUMBER OF BLOCKS TO COPY by z
 // const int STATIC_BLOCKS_COUNT = 12;
 
-const int BLOCK_PALETTE_SIZE_X = 32;
+const int BLOCK_PALETTE_SIZE_X = 16;
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
     int block_y = block_id / BLOCK_PALETTE_SIZE_X;
@@ -38,7 +38,7 @@ void main(void){
 
     //if out of bound
     //TODO: optimize (probably can be removed if dispatch_size is  multiply of local_size)
-    if (any(greaterThanEqual(ipos, ivec3(16,16,copy_z_counter)))) return; 
+    // if (any(greaterThanEqual(ipos, ivec3(16,16,copy_z_counter)))) return; 
 
     int copy_op_index = ipos.z / 16;
     CopyOperation copy = copies[copy_op_index];
@@ -53,7 +53,8 @@ void main(void){
     // ivec3 dst_voxel = ivec3(1,1,1+16*2);
     
     imageStore(blocksPalette, dst_voxel,
-        imageLoad(blocksPalette, src_voxel)
+        // imageLoad(blocksPalette, src_voxel)
+        ivec4(0)
     );
 
     return;
