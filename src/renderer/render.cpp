@@ -38,13 +38,13 @@ static vector<const char*>   deviceExtensions = {
     // "VK_KHR_shader_non_semantic_info"
 };
 
-void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size, vec2 ratio){
+void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size, vec2 ratio, bool vsync){
     world_size = ivec3(x_size, y_size, z_size);
      origin_world.allocate(world_size);
     current_world.allocate(world_size);
     _ratio = ratio;
     is_scaled = (ratio != vec2(1));
-    
+    is_vsync = vsync;
 // void init(VisualWorld &_world){
     // _world = world;
     create_Window();
@@ -78,7 +78,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
 
     create_samplers();
 
-#define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R8G8B8A8_UNORM
+#define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
     create_Image_Storages(raytraced_frame,
         VK_IMAGE_TYPE_2D,
         RAYTRACED_IMAGE_FORMAT,
@@ -719,8 +719,10 @@ VkSurfaceFormatKHR Renderer::choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR
 
 VkPresentModeKHR Renderer::choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes) {
     for (auto mode : availablePresentModes) {
-        if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-        // if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+        if (
+            ((mode == VK_PRESENT_MODE_FIFO_KHR) && is_vsync) ||
+            ((mode == VK_PRESENT_MODE_MAILBOX_KHR) && !is_vsync)
+            ) {
             return mode;}
     }
     // cout << "fifo\n";
@@ -2264,6 +2266,7 @@ void Renderer::present(){
     }
 }
 void Renderer::end_Frame(){
+    previousFrame = currentFrame;
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 

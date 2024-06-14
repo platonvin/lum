@@ -11,7 +11,7 @@ int itimish = 0;
 int main() {
     // Renderer::init(
     // render.raytraceExtent.
-    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2(sqrt(4)));
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2(sqrt(4)), false);
     vkDeviceWaitIdle(render.device);
     // world.init();
 

@@ -112,10 +112,20 @@ void main(){
     // float hh_dist = 
     vec3 normal_center = decode(unpackSnorm2x16(imageLoad(highres_Gbuffer, pix).y));
 
-    float ll_weight = float(ll_lowres_mat == highres_mat)* pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, ll_lowres_pix).y))), 0, 1), 1); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000)* (1 / (ll_dist+1e-8)); //);
-    float lh_weight = float(lh_lowres_mat == highres_mat)* pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, lh_lowres_pix).y))), 0, 1), 1); // * exp(- abs((imageLoad(lowres_Gbuffer, lh_lowres_pix).w - highres_depth)/2000)* (1 / (lh_dist+1e-8)); //);
-    float hl_weight = float(hl_lowres_mat == highres_mat)* pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, hl_lowres_pix).y))), 0, 1), 1); // * exp(- abs((imageLoad(lowres_Gbuffer, hl_lowres_pix).w - highres_depth)/2000)* (1 / (hl_dist+1e-8)); //);
-    float hh_weight = float(hh_lowres_mat == highres_mat)* pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, hh_lowres_pix).y))), 0, 1), 1); // * exp(- abs((imageLoad(lowres_Gbuffer, hh_lowres_pix).w - highres_depth)/2000)* (1 / (hh_dist+1e-8)); //);
+    float ll_weight = float(ll_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
+    float lh_weight = float(lh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, lh_lowres_pix).w - highres_depth)/2000); //);
+    float hl_weight = float(hl_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hl_lowres_pix).w - highres_depth)/2000); //);
+    float hh_weight = float(hh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hh_lowres_pix).w - highres_depth)/2000); //);
+
+    ll_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, ll_lowres_pix).y))), 0, 1), 1);
+    lh_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, lh_lowres_pix).y))), 0, 1), 1);
+    hl_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, hl_lowres_pix).y))), 0, 1), 1);
+    hh_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, hh_lowres_pix).y))), 0, 1), 1);
+
+    // ll_weight *= (1 / (ll_dist+1e-8));
+    // lh_weight *= (1 / (lh_dist+1e-8));
+    // hl_weight *= (1 / (hl_dist+1e-8));
+    // hh_weight *= (1 / (hh_dist+1e-8));
 
     vec3 color = (
         ll_lowres_color * ll_weight+

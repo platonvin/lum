@@ -235,7 +235,7 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 class Renderer {
 
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024, vec2 ratio = vec2(1.0));
+    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024, vec2 ratio = vec2(1.0), bool vsync=true);
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -255,6 +255,7 @@ private:
     vec2 _ratio;
 public:
     bool is_scaled = false;
+    bool is_vsync = false;
     void start_Frame();
         void startRaygen();
         void RaygenMesh(Mesh &mesh);
@@ -528,6 +529,7 @@ private:
     //wraps around MAX_FRAMES_IN_FLIGHT
     int itime = 0;
     u32 currentFrame = 0;
+    u32 previousFrame = 0;
     int palette_counter = 0;
     // VisualWorld &_world = world;
     VkDebugUtilsMessengerEXT debugMessenger;

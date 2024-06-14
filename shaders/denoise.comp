@@ -56,7 +56,7 @@ float calculate_weight(
     phiNormal = 128.0;
     // phiDepth = _phiDepth;
     phiDepth = 0.0;
-    phiIllum = .3;
+    phiIllum = 1;
     
           float weightPos = distance(vec2(pix), vec2(center_pix))*.5;
         // weightPos=0;
@@ -81,7 +81,7 @@ vec3 denoise(ivec2 center_pix){
       int   mat_center = load_mat(center_pix);
      vec3  norm_center = load_norm(center_pix);
 
-    const int radius = 5;
+    const int radius = 4;
     for(int xx = -radius; xx <= radius; xx++){
     for(int yy = -radius; yy <= radius; yy++){
         ivec2 pix = center_pix + ivec2(xx,yy);
