@@ -235,7 +235,7 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 class Renderer {
 
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024);
+    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024, vec2 ratio = vec2(1.0));
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -250,10 +250,11 @@ public:
     table3d<BlockID_t>  origin_world = {};
     table3d<BlockID_t> current_world = {};
 private:
-    ivec3(world_size);
-    bool _has_palette = false;
-    // ivec2 warp_size = ivec2(8, 8);
+    ivec3 world_size;
+    bool has_palette = false;
+    vec2 _ratio;
 public:
+    bool is_scaled = false;
     void start_Frame();
         void startRaygen();
         void RaygenMesh(Mesh &mesh);
@@ -263,12 +264,15 @@ public:
                 void startBlockify();
                 void blockifyMesh(Mesh &mesh);
                 void   endBlockify();
+                 void blockifyCustom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
             void execCopies();
                 void startMap();
                 void mapMesh(Mesh &mesh);
                 void   endMap();
             void recalculate_df();
             void raytrace();
+            void denoise();
+            void upscale();
         void   endCompute();
         // End of computeCommandBuffer
         void present();
@@ -311,17 +315,24 @@ private:
     void create_Descriptor_Set_Layouts();
     void create_Descriptor_Pool();
     void allocate_Descriptors();
+
+    //not possible without loosing perfomance
+    // void setup_descriptors_helper(vector<VkDescriptorSet>& descriptor_sets, vector<Buffers> buffers, vector<Images> images);
+
     void setup_Blockify_Descriptors();
     void setup_Copy_Descriptors();
     void setup_Map_Descriptors();
     void setup_Df_Descriptors();
     void setup_Raytrace_Descriptors();
+    void setup_Denoise_Descriptors();
+    void setup_Upscale_Descriptors();
     void setup_Graphical_Descriptors();
     void setup_RayGen_Descriptors();
     void create_samplers();
     // void update_Descriptors();
 
-    void create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
+    void delete_Images(Images* images);
+    void create_Image_Storages(Images& image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size);
     // void destroy_images
@@ -376,6 +387,7 @@ public:
     VkSwapchainKHR swapchain;
     VkFormat   swapChainImageFormat;
     VkExtent2D swapChainExtent;
+    VkExtent2D  raytraceExtent;
 
     VkShaderModule graphicsVertShaderModule;
     VkShaderModule graphicsFragShaderModule;
@@ -418,10 +430,14 @@ public:
     // vector<VkImage>           rayGenPosDiffImages;
     Images depth;
     Images gBuffer;
+    Images gBuffer_downscaled;
     Images step_count;
     Images raytraced_frame;
-        vector<VkSampler>  raytracedImageSamplers;
-    
+    Images  denoised_frame;
+    Images  upscaled_frame;
+    vector<VkSampler>  raytracedImageSamplers;
+    vector<VkSampler>  denoisedImageSamplers;
+
     Buffers       staging_world;
     vector<void*> staging_world_mapped;
     Images                world;
@@ -459,6 +475,12 @@ public:
     VkDescriptorSetLayout  raytraceDescriptorSetLayout;
     vector<VkDescriptorSet>  raytraceDescriptorSets;
 
+    VkDescriptorSetLayout  denoiseDescriptorSetLayout;
+    vector<VkDescriptorSet>  denoiseDescriptorSets;
+
+    VkDescriptorSetLayout  upscaleDescriptorSetLayout;
+    vector<VkDescriptorSet>  upscaleDescriptorSets;
+
     VkDescriptorSetLayout  blockifyDescriptorSetLayout;
     vector<VkDescriptorSet>  blockifyDescriptorSets;
 
@@ -478,9 +500,11 @@ public:
     
     //basically just MAX_FRAMES_IN_FLIGHT of same descriptors
     //raygen does not need this, for raygen its inside renderpass thing
-
+// upscale denoise
 //compute pipeline things
     VkPipelineLayout raytraceLayout;
+    VkPipelineLayout denoiseLayout;
+    VkPipelineLayout upscaleLayout;
     VkPipelineLayout blockifyLayout;
     VkPipelineLayout     copyLayout;
     VkPipelineLayout      mapLayout;
@@ -488,6 +512,8 @@ public:
     VkPipelineLayout       dfyLayout;
     VkPipelineLayout       dfzLayout;
     VkPipeline raytracePipeline;
+    VkPipeline denoisePipeline;
+    VkPipeline upscalePipeline;
     VkPipeline blockifyPipeline;
     VkPipeline     copyPipeline;
     VkPipeline      mapPipeline;
@@ -500,6 +526,7 @@ private:
     u32 imageIndex = 0;
 
     //wraps around MAX_FRAMES_IN_FLIGHT
+    int itime = 0;
     u32 currentFrame = 0;
     int palette_counter = 0;
     // VisualWorld &_world = world;

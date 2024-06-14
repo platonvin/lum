@@ -5,8 +5,6 @@
 #include <glm/fwd.hpp>
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
-// #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
-// #define VMA_VULKAN_VERSION 1003000
 
 #include "render.hpp" 
 #include "defines.hpp"
@@ -17,19 +15,17 @@ using namespace glm;
 // #define copy_Buffer(a, ...) do {println; (copy_Buffer)(a, __VA_ARGS__);} while(0)
 
 //they are global because its easier lol
-static int itime = 0;
-
 static vector<const char*> instanceLayers = {
-#ifndef VKNDEBUG
-"VK_LAYER_KHRONOS_validation",
-#endif
+    #ifndef VKNDEBUG
+    "VK_LAYER_KHRONOS_validation",
+    #endif
     "VK_LAYER_LUNARG_monitor",
 };
 static vector<const char*> instanceExtensions = {
     VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-#ifndef VKNDEBUG
-VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-#endif
+    #ifndef VKNDEBUG
+    VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+    #endif
 
     VK_KHR_SURFACE_EXTENSION_NAME,
     "VK_KHR_win32_surface",
@@ -42,10 +38,12 @@ static vector<const char*>   deviceExtensions = {
     // "VK_KHR_shader_non_semantic_info"
 };
 
-void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size){
+void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size, vec2 ratio){
     world_size = ivec3(x_size, y_size, z_size);
      origin_world.allocate(world_size);
     current_world.allocate(world_size);
+    _ratio = ratio;
+    is_scaled = (ratio != vec2(1));
     
 // void init(VisualWorld &_world){
     // _world = world;
@@ -79,44 +77,66 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
     create_samplers();
-    // 1f depth, 2f normal_enc, 1u8i material, prev_pixel_16x16_ui
-//  2 10 10 10
-// minimum would be 
-//   2+  2+  2+     3+    4
-//  16  16  16  16
-// p.x p.y mat       normal
-//      32  32    32     32
-//  8  8  8  8
-// Images origin_block_palette;
-//     vector<VkImage>   origin_block_palette.images;
-//     vector<VmaAllocation>    origin_block_palette.allocs;
-//     vector<VkImageView>   origin_block_palette.views;
+
 #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R8G8B8A8_UNORM
-    create_Image_Storages(raytraced_frame.images, raytraced_frame.allocs, raytraced_frame.views,
+    create_Image_Storages(raytraced_frame,
         VK_IMAGE_TYPE_2D,
         RAYTRACED_IMAGE_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT,
-        // {swapChainExtent.height, swapChainExtent.width, 1});
-        {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(gBuffer.images, gBuffer.allocs, gBuffer.views,
+        {raytraceExtent.width, raytraceExtent.height, 1});
+    create_Image_Storages(denoised_frame,
         VK_IMAGE_TYPE_2D,
-        VK_FORMAT_R32G32B32A32_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        RAYTRACED_IMAGE_FORMAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, 
+        {raytraceExtent.width, raytraceExtent.height, 1});
+    create_Image_Storages(gBuffer,
+        VK_IMAGE_TYPE_2D,
+        VK_FORMAT_R32G32B32A32_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT,
-        // {swapChainExtent.height, swapChainExtent.width, 1});
         {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(depth.images, depth.allocs, depth.views,
+    if(is_scaled){
+        create_Image_Storages(upscaled_frame,
+            VK_IMAGE_TYPE_2D,
+            RAYTRACED_IMAGE_FORMAT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT, 
+            {swapChainExtent.width, swapChainExtent.height, 1});
+        create_Image_Storages(gBuffer_downscaled,
+            VK_IMAGE_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_UINT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            {raytraceExtent.width, raytraceExtent.height, 1});
+    }
+    create_Image_Storages(depth,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_D32_SFLOAT,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -128,7 +148,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         // {swapChainExtent.height, swapChainExtent.width, 1});
         {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(step_count.images, step_count.allocs, step_count.views,
+    create_Image_Storages(step_count,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R8G8B8A8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT,
@@ -138,44 +158,13 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT ,
-        // {swapChainExtent.height, swapChainExtent.width, 1});
-        {(swapChainExtent.width+7) / 8, (swapChainExtent.height+7) / 8, 1}); // local_size / warp_size of raytracer
-    // create_Image_Storages(rayGenNormImages, rayGenNormImageAllocations, rayGenNormImageViews,
-    //     VK_IMAGE_TYPE_2D,
-    //     VK_FORMAT_R32G32B32A32_SFLOAT,
-    //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    //     VK_IMAGE_ASPECT_COLOR_BIT,
-    //     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    //     VK_ACCESS_SHADER_WRITE_BIT,
-    //     // {swapChainExtent.height, swapChainExtent.width, 1});
-    //     {swapChainExtent.width, swapChainExtent.height, 1});
-    // create_Image_Storages(rayGenPosDiffImages, rayGenPosDiffImageAllocations, rayGenPosDiffImageViews,
-    //     VK_IMAGE_TYPE_2D,
-    //     VK_FORMAT_R32G32B32A32_SFLOAT,
-    //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    //     VK_IMAGE_ASPECT_COLOR_BIT,
-    //     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    //     VK_ACCESS_SHADER_WRITE_BIT,
-    //     // {swapChainExtent.height, swapChainExtent.width, 1});
-    //     {swapChainExtent.width, swapChainExtent.height, 1});
-    // create_Image_Storages(originWorldImages, originWorldImageAllocations, originBlocksImageViews,
-    //     VK_IMAGE_TYPE_3D,
-    //     VK_FORMAT_R32_SINT,
-    //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-    //     VMA_MEMORY_USAGE_AUTO,
-    //     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-    //     VK_IMAGE_ASPECT_COLOR_BIT,
-    //     VK_IMAGE_LAYOUT_GENERAL,
-    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //     VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
-    //     world_size); //TODO: dynamic
+        {(raytraceExtent.width+7) / 8, (raytraceExtent.height+7) / 8, 1}); // local_size / warp_size of raytracer
+
     create_Buffer_Storages(staging_world.buffers, staging_world.allocs,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         world_size.x*world_size.y*world_size.z*sizeof(BlockID_t), true);
 println
-    create_Image_Storages(world.images, world.allocs, world.views,
+    create_Image_Storages(world,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R16_SINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -186,7 +175,7 @@ println
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
         world_size); //TODO: dynamic
-    create_Image_Storages(origin_block_palette.images, origin_block_palette.allocs, origin_block_palette.views,
+    create_Image_Storages(origin_block_palette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
@@ -197,7 +186,7 @@ println
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
-    create_Image_Storages(block_palette.images, block_palette.allocs, block_palette.views,
+    create_Image_Storages(block_palette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -208,7 +197,7 @@ println
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
-    create_Image_Storages(material_palette.images, material_palette.allocs, material_palette.views,
+    create_Image_Storages(material_palette,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -243,16 +232,26 @@ println
 // printl(swapchain_images.images.size());
     // vector<vector<VkImageView>> rayGenVeiws = {gBuffer.views, rayGenNormImageViews, rayGenPosDiffImageViews, depth.view};
     vector<vector<VkImageView>> rayGenVeiws = {gBuffer.views, depth.views};
+
     create_N_Framebuffers(rayGenFramebuffers, rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+println
     
     create_Descriptor_Set_Layouts();
     create_Descriptor_Pool();
     allocate_Descriptors();
+
     setup_Blockify_Descriptors();
     setup_Copy_Descriptors();
+println
     //setup for map?
     setup_Df_Descriptors();
     setup_Raytrace_Descriptors();
+    setup_Denoise_Descriptors();
+println
+    if(is_scaled) {
+        setup_Upscale_Descriptors();
+    }
+println
     setup_Graphical_Descriptors();
     setup_RayGen_Descriptors();
 
@@ -261,34 +260,35 @@ println
 
     create_compute_pipelines();
 
+println
     
     create_Sync_Objects();
 }
-void Renderer::cleanup(){
+void Renderer::delete_Images(Images* images){
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        vkDestroyImageView(device,             raytraced_frame.views[i], NULL);
-        // vkDestroyImageView(device,            rayGenNormImageViews[i], NULL);
-        vkDestroyImageView(device,           depth.views[i], NULL);
-        vkDestroyImageView(device,          gBuffer.views[i], NULL);
-        // vkDestroyImageView(device,          originBlocksImageViews[i], NULL);
-        // vkDestroyImageView(device,         rayGenPosDiffImageViews[i], NULL);
-        vkDestroyImageView(device,        world.views[i], NULL);
-        vkDestroyImageView(device,        step_count.views[i], NULL);
-        vkDestroyImageView(device,    origin_block_palette.views[i], NULL);
-        vkDestroyImageView(device,  block_palette.views[i], NULL);
-        vkDestroyImageView(device,  material_palette.views[i], NULL);
-        vmaDestroyImage(VMAllocator,            raytraced_frame.images[i],            raytraced_frame.allocs[i]);
-        // vmaDestroyImage(VMAllocator,           rayGenNormImages[i],           rayGenNormImageAllocations[i]);
-        vmaDestroyImage(VMAllocator,          depth.images[i],          depth.allocs[i]);
-        vmaDestroyImage(VMAllocator,         gBuffer.images[i],         gBuffer.allocs[i]);
-        // vmaDestroyImage(VMAllocator,         originWorldImages[i],         originWorldImageAllocations[i]);
-        // vmaDestroyImage(VMAllocator,        rayGenPosDiffImages[i],        rayGenPosDiffImageAllocations[i]);
-        vmaDestroyImage(VMAllocator,       world.images[i],       world.allocs[i]);
-        vmaDestroyImage(VMAllocator,       step_count.images[i],       step_count.allocs[i]);
-        vmaDestroyImage(VMAllocator,   origin_block_palette.images[i]  , origin_block_palette.allocs[i]);
-        vmaDestroyImage(VMAllocator, block_palette.images[i], block_palette.allocs[i]);
-        vmaDestroyImage(VMAllocator, material_palette.images[i], material_palette.allocs[i]);
+        vkDestroyImageView(device, images->views[i], NULL);
+        vmaDestroyImage(VMAllocator, images->images[i], images->allocs[i]);
+    }
+}
+void Renderer::cleanup(){
+    delete_Images(&raytraced_frame);
+    delete_Images(&denoised_frame);
+    if(is_scaled) {
+        delete_Images(&upscaled_frame);
+        delete_Images(&gBuffer_downscaled);
+    }
+    delete_Images(&depth);
+    delete_Images(&gBuffer);
+    delete_Images(&world);
+    delete_Images(&step_count);
+    delete_Images(&origin_block_palette);
+    delete_Images(&block_palette);
+    delete_Images(&material_palette);
+
+    for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+
         vkDestroySampler(device, raytracedImageSamplers[i], NULL);
+        vkDestroySampler(device,  denoisedImageSamplers[i], NULL);
         
         vmaDestroyBuffer(VMAllocator, paletteCounterBuffers[i], paletteCounterBufferAllocations[i]);
         vmaDestroyBuffer(VMAllocator, copyCounterBuffers[i], copyCounterBufferAllocations[i]);
@@ -310,6 +310,8 @@ void Renderer::cleanup(){
     // vkDestroyDescriptorSetLayout(device,         dfyDescriptorSetLayout, NULL);
     // vkDestroyDescriptorSetLayout(device,         dfzDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,   raytraceDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,    denoiseDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,    upscaleDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,  graphicalDescriptorSetLayout, NULL);
     for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
         vkDestroySemaphore(device,  imageAvailableSemaphores[i], NULL);
@@ -342,6 +344,8 @@ void Renderer::cleanup(){
     vkDestroyPipeline(device,       dfyPipeline, NULL);
     vkDestroyPipeline(device,       dfzPipeline, NULL);
     vkDestroyPipeline(device, raytracePipeline, NULL);
+    vkDestroyPipeline(device, denoisePipeline, NULL);
+    vkDestroyPipeline(device, upscalePipeline, NULL);
     vkDestroyPipeline(device, graphicsPipeline, NULL);
 
     vkDestroyPipelineLayout(device,   rayGenPipelineLayout, NULL);
@@ -352,6 +356,8 @@ void Renderer::cleanup(){
     vkDestroyPipelineLayout(device,       dfyLayout, NULL);
     vkDestroyPipelineLayout(device,       dfzLayout, NULL);
     vkDestroyPipelineLayout(device, raytraceLayout, NULL);
+    vkDestroyPipelineLayout(device,  denoiseLayout, NULL);
+    vkDestroyPipelineLayout(device,  upscaleLayout, NULL);
     vkDestroyPipelineLayout(device, graphicsLayout, NULL);
 
     vkDestroyShaderModule(device, rayGenVertShaderModule, NULL);
@@ -447,8 +453,8 @@ void Renderer::create_Window(){
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
     assert(mode!=NULL);
-    window.width  = mode->width  / sqrt(1);
-    window.height = mode->height / sqrt(1);
+    window.width  = mode->width ;
+    window.height = mode->height;
     
     // window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", glfwGetPrimaryMonitor(), 0);
     window.pointer = glfwCreateWindow(window.width, window.height, "renderer_vk", 0, 0);
@@ -464,7 +470,10 @@ void Renderer::create_Instance(){
         app_info.engineVersion = VK_MAKE_VERSION(1,0,0);
         app_info.apiVersion = VK_API_VERSION_1_3;
 
-    vector<VkValidationFeatureEnableEXT> enabledFeatures = {VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT};
+    vector<VkValidationFeatureEnableEXT> enabledFeatures = {
+        // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT, 
+        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+    };
 
     VkValidationFeaturesEXT features = {};
         features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
@@ -473,7 +482,9 @@ void Renderer::create_Instance(){
 
     VkInstanceCreateInfo createInfo = {};
     #ifndef VKNDEBUG 
+        // createInfo.
         // createInfo.pNext = &features; // according to spec
+
     #endif 
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &app_info;
@@ -481,6 +492,8 @@ void Renderer::create_Instance(){
         createInfo.ppEnabledExtensionNames = instanceExtensions.data();
         createInfo.enabledLayerCount   = instanceLayers.size();
         createInfo.ppEnabledLayerNames = instanceLayers.data();
+
+        // createInfo.
 
     VK_CHECK(vkCreateInstance(&createInfo, NULL, &instance));
 }
@@ -706,8 +719,8 @@ VkSurfaceFormatKHR Renderer::choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR
 
 VkPresentModeKHR Renderer::choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes) {
     for (auto mode : availablePresentModes) {
-        // if (mode == VK_PRESENT_MODE_FIFO_KHR) {
-        if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+        if (mode == VK_PRESENT_MODE_FIFO_KHR) {
+        // if (mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
             return mode;}
     }
     // cout << "fifo\n";
@@ -778,6 +791,9 @@ void Renderer::create_Swapchain(){
 
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
+    
+    raytraceExtent.width  = swapChainExtent.width  / _ratio.x;
+    raytraceExtent.height = swapChainExtent.height / _ratio.y;
 }
 void Renderer::recreate_Swapchain(){
     // vkDeviceWaitIdle(device);
@@ -936,24 +952,6 @@ void Renderer::create_RenderPass_RayGen(){
         colorAttachmentGbuffer.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachmentGbuffer.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         colorAttachmentGbuffer.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-    // VkAttachmentDescription colorAttachmentNorm = {};
-    //     colorAttachmentNorm.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    //     colorAttachmentNorm.samples = VK_SAMPLE_COUNT_1_BIT;
-    //     colorAttachmentNorm.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    //     colorAttachmentNorm.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
-    //     colorAttachmentNorm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    //     colorAttachmentNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    //     colorAttachmentNorm.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    //     colorAttachmentNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-    // VkAttachmentDescription colorAttachmentPosDiff = {};
-    //     colorAttachmentPosDiff.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    //     colorAttachmentPosDiff.samples = VK_SAMPLE_COUNT_1_BIT;
-    //     colorAttachmentPosDiff.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    //     colorAttachmentPosDiff.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
-    //     colorAttachmentPosDiff.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    //     colorAttachmentPosDiff.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    //     colorAttachmentPosDiff.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    //     colorAttachmentPosDiff.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = VK_FORMAT_D32_SFLOAT;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -967,16 +965,12 @@ void Renderer::create_RenderPass_RayGen(){
     VkAttachmentReference colorAttachmentGbufferRef = {};
         colorAttachmentGbufferRef.attachment = 0;
         colorAttachmentGbufferRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    // VkAttachmentReference colorAttachmentNormRef = {};
-    //     colorAttachmentNormRef.attachment = 1;
-    //     colorAttachmentNormRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    // VkAttachmentReference colorAttachmentPosDiffRef = {};
-    //     colorAttachmentPosDiffRef.attachment = 2;
-    //     colorAttachmentPosDiffRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkAttachmentReference depthAttachmentRef = {};
         depthAttachmentRef.attachment = 1;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
     vector<VkAttachmentDescription> attachments = {colorAttachmentGbuffer, depthAttachment};
+
     vector<VkAttachmentReference>   colorAttachmentRefs = {colorAttachmentGbufferRef};
 
     VkSubpassDescription subpass = {};
@@ -1245,24 +1239,7 @@ VkPipelineColorBlendAttachmentState colorBlendAttachmentGbuffer = {};
         colorBlendAttachmentGbuffer.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
         colorBlendAttachmentGbuffer.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
         colorBlendAttachmentGbuffer.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-    // VkPipelineColorBlendAttachmentState colorBlendAttachmentNorm = {};
-    //     colorBlendAttachmentNorm.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    //     colorBlendAttachmentNorm.blendEnable = VK_FALSE;
-    //     colorBlendAttachmentNorm.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    //     colorBlendAttachmentNorm.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    //     colorBlendAttachmentNorm.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-    //     colorBlendAttachmentNorm.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    //     colorBlendAttachmentNorm.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    //     colorBlendAttachmentNorm.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-    // VkPipelineColorBlendAttachmentState colorBlendAttachmentPosDiff = {};
-    //     colorBlendAttachmentPosDiff.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    //     colorBlendAttachmentPosDiff.blendEnable = VK_FALSE;
-    //     colorBlendAttachmentPosDiff.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    //     colorBlendAttachmentPosDiff.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    //     colorBlendAttachmentPosDiff.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-    //     colorBlendAttachmentPosDiff.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-    //     colorBlendAttachmentPosDiff.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-    //     colorBlendAttachmentPosDiff.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+        
     vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments = {colorBlendAttachmentGbuffer};
 // printl(colorBlendAttachments.size());
     VkPipelineColorBlendStateCreateInfo colorBlending{};
@@ -1375,97 +1352,97 @@ void Renderer::create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, u
     VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data())); 
 }
 
-void Renderer::record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u32 imageIndex){
-    VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0; // Optional
-        beginInfo.pInheritanceInfo = NULL; // Optional
+// void Renderer::record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u32 imageIndex){
+//     VkCommandBufferBeginInfo beginInfo = {};
+//         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//         beginInfo.flags = 0; // Optional
+//         beginInfo.pInheritanceInfo = NULL; // Optional
 
-    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+//     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0, VK_ACCESS_SHADER_READ_BIT
-    );
-    // transition_Image_Layout_Cmdb(commandBuffer, gBuffer.images[currentFrame], VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    //     0, VK_ACCESS_SHADER_READ_BIT
-    // );
-    // VkCopyImageToImageInfoEXT info = {};
-    // info.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_IMAGE_INFO_EXT;
-    // info.
-    // vkCopyImageToImageEXT(device, info)
+//     transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+//         0, VK_ACCESS_SHADER_READ_BIT
+//     );
+//     // transition_Image_Layout_Cmdb(commandBuffer, gBuffer.images[currentFrame], VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+//     //     0, VK_ACCESS_SHADER_READ_BIT
+//     // );
+//     // VkCopyImageToImageInfoEXT info = {};
+//     // info.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_IMAGE_INFO_EXT;
+//     // info.
+//     // vkCopyImageToImageEXT(device, info)
 
-    VkClearValue clearColor = {{{0.111f, 0.444f, 0.666f, 1.0f}}};
-    VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = graphicalRenderPass;
-        renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = swapChainExtent;
-        renderPassInfo.clearValueCount = 1;
-        renderPassInfo.pClearValues = &clearColor;
+//     VkClearValue clearColor = {{{0.111f, 0.444f, 0.666f, 1.0f}}};
+//     VkRenderPassBeginInfo renderPassInfo = {};
+//         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+//         renderPassInfo.renderPass = graphicalRenderPass;
+//         renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+//         renderPassInfo.renderArea.offset = {0, 0};
+//         renderPassInfo.renderArea.extent = swapChainExtent;
+//         renderPassInfo.clearValueCount = 1;
+//         renderPassInfo.pClearValues = &clearColor;
     
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsLayout, 0, 1, &graphicalDescriptorSets[currentFrame], 0, NULL);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+//     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+//     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsLayout, 0, 1, &graphicalDescriptorSets[currentFrame], 0, NULL);
+//     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-    VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width  = (float)(swapChainExtent.width );
-        viewport.height = (float)(swapChainExtent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+//     VkViewport viewport = {};
+//         viewport.x = 0.0f;
+//         viewport.y = 0.0f;
+//         viewport.width  = (float)(swapChainExtent.width );
+//         viewport.height = (float)(swapChainExtent.height);
+//         viewport.minDepth = 0.0f;
+//         viewport.maxDepth = 1.0f;
+//     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    VkRect2D scissor = {};
-        scissor.offset = {0, 0};
-        scissor.extent = swapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+//     VkRect2D scissor = {};
+//         scissor.offset = {0, 0};
+//         scissor.extent = swapChainExtent;
+//     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-    // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+//     vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+//     // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
-    vkCmdEndRenderPass(commandBuffer);
+//     vkCmdEndRenderPass(commandBuffer);
 
-    VK_CHECK(vkEndCommandBuffer(commandBuffer));
-}
+//     VK_CHECK(vkEndCommandBuffer(commandBuffer));
+// }
 
-void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer){
-    VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0; // Optional
-        beginInfo.pInheritanceInfo = NULL; // Optional
+// void Renderer::record_Command_Buffer_Compute(VkCommandBuffer commandBuffer){
+//     VkCommandBufferBeginInfo beginInfo = {};
+//         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//         beginInfo.flags = 0; // Optional
+//         beginInfo.pInheritanceInfo = NULL; // Optional
 
-    VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+//     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    // raygen;
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
+//     // raygen;
+//     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
 
 
-    transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        0, VK_ACCESS_SHADER_WRITE_BIT
-    );
+//     transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+//         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+//         0, VK_ACCESS_SHADER_WRITE_BIT
+//     );
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
+//     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
 
-    //move to argument  
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
+//     //move to argument  
+//     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 
-    // vkCmdDispatch(commandBuffer, 1920/8, 1080/4, 1);
-    // float data[32] = {111, 222};
-    // for(i32 i=0; i<100; i++){
-    //     vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)*2 , &data);
-    //     vkCmdDispatch(commandBuffer, 5, 5, 45);
-    //     data[0]++;
-    //     data[1]++;
-    // }
-    vkCmdDispatch(commandBuffer, window.width/8, window.height/4, 1);
+//     // vkCmdDispatch(commandBuffer, 1920/8, 1080/4, 1);
+//     // float data[32] = {111, 222};
+//     // for(i32 i=0; i<100; i++){
+//     //     vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(float)*2 , &data);
+//     //     vkCmdDispatch(commandBuffer, 5, 5, 45);
+//     //     data[0]++;
+//     //     data[1]++;
+//     // }
+//     vkCmdDispatch(commandBuffer, raytraceExtent.width/8, raytraceExtent.height/4, 1);
 
-    VK_CHECK(vkEndCommandBuffer(commandBuffer));
-}
+//     VK_CHECK(vkEndCommandBuffer(commandBuffer));
+// }
 
 void Renderer::create_Sync_Objects(){
     imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1532,10 +1509,8 @@ void Renderer::startRaygen(){
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
     vector<VkClearValue> clearColors = {
-        // {{0.111f, 0.666f, 0.111f, 1.0f}}, 
-        // {{0.111f, 0.666f, 0.111f, 1.0f}}, 
-        {{0.0f, 0.0f, 0.0f, 0.0f}}, 
-        {{0.0, 0}}
+        {}, 
+        {}
     };
     VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1582,8 +1557,34 @@ void Renderer::RaygenMesh(Mesh &mesh){
 void Renderer::endRaygen(){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
     vkCmdEndRenderPass(commandBuffer);
-    VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
+    VkOffset3D srcOffsets[2] = {};
+    VkOffset3D dstOffsets[2] = {};
+
+    VkImageBlit blit_gBuffer = {};
+        blit_gBuffer.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit_gBuffer.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit_gBuffer.srcSubresource.layerCount = 1;
+        blit_gBuffer.dstSubresource.layerCount = 1;
+        blit_gBuffer.srcOffsets[0].x = 0;
+        blit_gBuffer.srcOffsets[0].y = 0;
+        blit_gBuffer.srcOffsets[0].z = 0;
+        blit_gBuffer.srcOffsets[1].x = swapChainExtent.width;
+        blit_gBuffer.srcOffsets[1].y = swapChainExtent.height;
+        blit_gBuffer.srcOffsets[1].z = 1;
+
+        blit_gBuffer.dstOffsets[0].x = 0;
+        blit_gBuffer.dstOffsets[0].y = 0;
+        blit_gBuffer.dstOffsets[0].z = 0;
+        blit_gBuffer.dstOffsets[1].x = raytraceExtent.width;
+        blit_gBuffer.dstOffsets[1].y = raytraceExtent.height;
+        blit_gBuffer.dstOffsets[1].z = 1;
+    VkFilter blit_filter = VK_FILTER_NEAREST;
+        // blit_filter.
+    if (is_scaled) {
+        vkCmdBlitImage(commandBuffer, gBuffer.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, gBuffer_downscaled.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, 1, &blit_gBuffer, blit_filter);
+    }
+    VK_CHECK(vkEndCommandBuffer(commandBuffer));
     VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
@@ -1692,8 +1693,13 @@ void Renderer::blockifyMesh(Mesh& mesh){
     for(int xx = border.min.x; xx <= border.max.x; xx++){
     for(int yy = border.min.y; yy <= border.max.y; yy++){
     for(int zz = border.min.z; zz <= border.max.z; zz++){
-        current_world(xx,yy,zz) = palette_counter;
-        palette_counter++;
+        //if inside model TODO
+        //static blocks TODO
+        int current_block = current_world(xx,yy,zz); 
+        if (current_block == 0){ //if not allocated
+            current_world(xx,yy,zz) = palette_counter;
+            palette_counter++;
+        }
         // block_image[xx + yy*8 + zz*8*8] = palette_counter++;
     }}}
     // for(int xx = 0; xx < world_size.x; xx++){
@@ -1808,6 +1814,11 @@ void Renderer::endBlockify(){
     // );
     copy_Buffer(staging_world.buffers[currentFrame], world.images[currentFrame], world_size, VK_IMAGE_LAYOUT_GENERAL);
 }
+void Renderer::blockifyCustom(void* ptr){
+    size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
+    memcpy(staging_world_mapped[currentFrame], ptr, size_to_copy);
+    vmaFlushAllocation(VMAllocator, staging_world.allocs[currentFrame], 0, size_to_copy);
+}
 
 void Renderer::execCopies(){
     // VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -1844,28 +1855,28 @@ void Renderer::startMap(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipeline);
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = world.images[currentFrame];
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.srcAccessMask = VK_ACCESS_HOST_READ_BIT| VK_ACCESS_HOST_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-vkCmdPipelineBarrier(
-    commandBuffer,
-    VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    0,
-    0, NULL,
-    0, NULL,
-    1, &barrier
-);
+//     VkImageMemoryBarrier barrier{};
+//     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+//     barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+//     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+//     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+//     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+//     barrier.image = world.images[currentFrame];
+//     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+//     barrier.subresourceRange.baseMipLevel = 0;
+//     barrier.subresourceRange.levelCount = 1;
+//     barrier.subresourceRange.baseArrayLayer = 0;
+//     barrier.subresourceRange.layerCount = 1;
+//     barrier.srcAccessMask = VK_ACCESS_HOST_READ_BIT| VK_ACCESS_HOST_WRITE_BIT;
+//     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+// vkCmdPipelineBarrier(
+//     commandBuffer,
+//     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+//     0,
+//     0, NULL,
+//     0, NULL,
+//     1, &barrier
+// );
 }
 
 void Renderer::mapMesh(Mesh& mesh){
@@ -1929,9 +1940,7 @@ void Renderer::mapMesh(Mesh& mesh){
     // trans = glm::scale(trans, vec3(0.95));
     vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(trans_size), &trans_size);
     ivec3 adjusted_size = ivec3(vec3(mesh.size) * vec3(2.0));
-    vkCmdDispatch(commandBuffer, (adjusted_size.x) / 4, (adjusted_size.y) / 4, (adjusted_size.z) / 4);
-
-    
+    vkCmdDispatch(commandBuffer, (adjusted_size.x) / 4, (adjusted_size.y) / 4, (adjusted_size.z) / 4);   
 }
 
 void Renderer::endMap(){
@@ -2025,16 +2034,117 @@ void Renderer::raytrace(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
-        transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, VK_ACCESS_SHADER_WRITE_BIT);
+        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        //     0, VK_ACCESS_SHADER_WRITE_BIT);
 
         // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 
         itime++;
         vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
-        vkCmdDispatch(commandBuffer, window.width/8, window.height/8, 1);
+        vkCmdDispatch(commandBuffer, raytraceExtent.width/8, raytraceExtent.height/8, 1);
+
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = raytraced_frame.images[currentFrame];
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );    
+}
+void Renderer::denoise(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoisePipeline);
+        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        //     0, VK_ACCESS_SHADER_WRITE_BIT);
+
+        // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiseLayout, 0, 1, &denoiseDescriptorSets[currentFrame], 0, 0);
+
+        // itime++;
+        // vkCmdPushConstants(commandBuffer, denoiseLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
+        vkCmdDispatch(commandBuffer, raytraceExtent.width/8, raytraceExtent.height/8, 1);
+
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = denoised_frame.images[currentFrame];
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        ); 
+}
+void Renderer::upscale(){
+    if(!is_scaled) crash(upscale with ratio 1? Are you stupid?);
+    
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, upscalePipeline);
+        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        //     0, VK_ACCESS_SHADER_WRITE_BIT);
+
+        // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, upscaleLayout, 0, 1, &upscaleDescriptorSets[currentFrame], 0, 0);
+
+        // itime++;
+        // vkCmdPushConstants(commandBuffer, denoiseLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
+        vkCmdDispatch(commandBuffer, swapChainExtent.width/8, swapChainExtent.height/8, 1);
+
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = upscaled_frame.images[currentFrame];
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        ); 
 }
 void Renderer::endCompute(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
@@ -2075,10 +2185,10 @@ void Renderer::present(){
 
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0, VK_ACCESS_SHADER_READ_BIT
-    );
+    // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    //     0, VK_ACCESS_SHADER_READ_BIT
+    // );
 
     VkClearValue clearColor = {{{0.111f, 0.444f, 0.666f, 1.0f}}};
     VkRenderPassBeginInfo renderPassInfo = {};
@@ -2157,13 +2267,13 @@ void Renderer::end_Frame(){
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocation> &allocs, vector<VkImageView> &views, 
+void Renderer::create_Image_Storages(Images& image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size){
     println
-    images.resize(MAX_FRAMES_IN_FLIGHT);
-    allocs.resize(MAX_FRAMES_IN_FLIGHT);
-     views.resize(MAX_FRAMES_IN_FLIGHT);
+    image.images.resize(MAX_FRAMES_IN_FLIGHT);
+    image.allocs.resize(MAX_FRAMES_IN_FLIGHT);
+    image. views.resize(MAX_FRAMES_IN_FLIGHT);
     
     for (i32 i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
         VkImageCreateInfo imageInfo = {};
@@ -2193,11 +2303,11 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocati
             // allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
             // allocInfo.requiredFlags = 
-        VK_CHECK(vmaCreateImage(VMAllocator, &imageInfo, &allocInfo, &images[i], &allocs[i], NULL));
+        VK_CHECK(vmaCreateImage(VMAllocator, &imageInfo, &allocInfo, &image.images[i], &image.allocs[i], NULL));
 
         VkImageViewCreateInfo viewInfo = {};
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            viewInfo.image = images[i];
+            viewInfo.image = image.images[i];
             if(type == VK_IMAGE_TYPE_2D){
                 viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
             } else if(type == VK_IMAGE_TYPE_3D) {
@@ -2209,9 +2319,9 @@ void Renderer::create_Image_Storages(vector<VkImage> &images, vector<VmaAllocati
             viewInfo.subresourceRange.baseArrayLayer = 0;
             viewInfo.subresourceRange.levelCount = 1;
             viewInfo.subresourceRange.layerCount = 1;
-        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &views[i]));
+        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &image.views[i]));
 
-        transition_Image_Layout_Singletime(images[i], format, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout,
+        transition_Image_Layout_Singletime(image.images[i], format, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pipeStage,
             0, access);
         // if(!(vma_usage & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT)){
@@ -2328,11 +2438,13 @@ assert (&data);
 Images Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
     VkDeviceSize bufferSize = (sizeof(u8)*2)*size.x*size.y*size.z;
 
-    vector<VkImage>   images(MAX_FRAMES_IN_FLIGHT);
-    vector<VkImageView>  views(MAX_FRAMES_IN_FLIGHT);
-    vector<VmaAllocation>  allocations(MAX_FRAMES_IN_FLIGHT);
+    Images voxelImages = {};
 
-    create_Image_Storages(images, allocations, views,
+    // vector<VkImage>   images(MAX_FRAMES_IN_FLIGHT);
+    // vector<VkImageView>  views(MAX_FRAMES_IN_FLIGHT);
+    // vector<VmaAllocation>  allocations(MAX_FRAMES_IN_FLIGHT);
+
+    create_Image_Storages(voxelImages,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -2343,6 +2455,7 @@ Images Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT,
         size);
+
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSize;
@@ -2360,10 +2473,10 @@ Images Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, images[i], size, VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, voxelImages.images[i], size, VK_IMAGE_LAYOUT_GENERAL);
     }
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
-    return {images, views, allocations};
+    return voxelImages;
 }
 
 static u32 STORAGE_BUFFER_DESCRIPTOR_COUNT = 0;
@@ -2438,17 +2551,31 @@ void Renderer::create_Descriptor_Set_Layouts(){
 
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //g buffer
-        // VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //norm
-        // VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //clip pos Difference
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //g buffer
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //blocks
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //block palette
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //voxel palette
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //out frame (raytraced)
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //mat palette
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //step counts
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //frame sampled
-        // VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //block palette sampled
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //out frame (raytraced)
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //in previous frame (raytraced) to temporaly denoise
+        // VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //in previous frame (raytraced) to temporaly denoise
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, raytraceDescriptorSetLayout, device);
+
+    create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //gbuff
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //temp_denoised raytraced
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //svgf denoised (final output)
+        }, 
+        VK_SHADER_STAGE_COMPUTE_BIT, denoiseDescriptorSetLayout, device);
+
+    create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //gbuff lowres
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //gbuff highres
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //denoised in
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //upscaled out
+        }, 
+        VK_SHADER_STAGE_COMPUTE_BIT, upscaleDescriptorSetLayout, device);
 
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, //frame-constant world_to_screen mat4
@@ -2468,16 +2595,16 @@ void Renderer::create_Descriptor_Pool(){
 
     VkDescriptorPoolSize STORAGE_IMAGE_PoolSize = {};
         STORAGE_IMAGE_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        STORAGE_IMAGE_PoolSize.descriptorCount = STORAGE_IMAGE_DESCRIPTOR_COUNT*7;
+        STORAGE_IMAGE_PoolSize.descriptorCount = STORAGE_IMAGE_DESCRIPTOR_COUNT*8;
     VkDescriptorPoolSize COMBINED_IMAGE_SAMPLER_PoolSize = {};
         COMBINED_IMAGE_SAMPLER_PoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        COMBINED_IMAGE_SAMPLER_PoolSize.descriptorCount = COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT*7;
+        COMBINED_IMAGE_SAMPLER_PoolSize.descriptorCount = COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT*8;
     VkDescriptorPoolSize STORAGE_BUFFER_PoolSize = {};
         STORAGE_BUFFER_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        STORAGE_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*7;
+        STORAGE_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*8;
     VkDescriptorPoolSize UNIFORM_BUFFER_PoolSize = {};
         UNIFORM_BUFFER_PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        UNIFORM_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*7;
+        UNIFORM_BUFFER_PoolSize.descriptorCount = STORAGE_BUFFER_DESCRIPTOR_COUNT*8;
 
     vector<VkDescriptorPoolSize> poolSizes = {
         STORAGE_IMAGE_PoolSize, 
@@ -2489,7 +2616,7 @@ void Renderer::create_Descriptor_Pool(){
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = poolSizes.size();
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*7; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
+        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*8; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, NULL, &descriptorPool));
 }
@@ -2506,6 +2633,8 @@ static void allocate_Descriptors_helper(vector<VkDescriptorSet>& sets, VkDescrip
 }
 void Renderer::allocate_Descriptors(){
     allocate_Descriptors_helper( raytraceDescriptorSets,  raytraceDescriptorSetLayout, descriptorPool, device); 
+    allocate_Descriptors_helper(  denoiseDescriptorSets,   denoiseDescriptorSetLayout, descriptorPool, device); 
+    allocate_Descriptors_helper(  upscaleDescriptorSets,   upscaleDescriptorSetLayout, descriptorPool, device); 
     allocate_Descriptors_helper( blockifyDescriptorSets,  blockifyDescriptorSetLayout, descriptorPool, device); 
     allocate_Descriptors_helper(     copyDescriptorSets,      copyDescriptorSetLayout, descriptorPool, device); 
     //we do not allocate this because it's descriptors are managed trough push_descriptor mechanism
@@ -2514,7 +2643,43 @@ void Renderer::allocate_Descriptors(){
     allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
     allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
 }
+// void Renderer::setup_descriptors_helper(vector<VkDescriptorSet>& descriptor_sets, vector<Buffers> buffers, vector<Images> images){
+//     vector<VkDescriptorBufferInfo> buffer_infos (buffers.size());
+//     vector<VkDescriptorImageInfo> image_infos (images.size());
+//     vector<VkWriteDescriptorSet> writes (buffers.size() + images.size());
 
+//     //reusing same vectors for every frame in flight but its fine cause vk copies it anyways
+//     for (u32 frame = 0; frame < MAX_FRAMES_IN_FLIGHT; frame++) {
+//         //filling buffer infos
+//         for(int b=0; b<buffers.size(); b++){
+//             buffer_infos[b].buffer = buffers[b].buffers[frame];
+//             buffer_infos[b].offset = 0;
+//             buffer_infos[b].range = VK_WHOLE_SIZE;
+
+//             writes[b+0] = {};
+//             writes[b+0].dstSet = descriptor_sets[frame];
+//             writes[b+0].dstBinding = b+0;
+//             writes[b+0].dstArrayElement = 0;
+//             writes[b+0].descriptorCount = 1;
+//             writes[b+0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+//             writes[b+0].pBufferInfo = &buffer_infos[b];
+//         }
+//         for(int i=0; i<images.size(); i++){
+//             image_infos[i].imageView = images[i].views[frame];
+//             image_infos[i].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+//             writes[i+buffers.size()] = {};
+//             writes[i+buffers.size()].dstSet = descriptor_sets[frame];
+//             writes[i+buffers.size()].dstBinding = i+buffers.size();
+//             writes[i+buffers.size()].dstArrayElement = 0;
+//             writes[i+buffers.size()].descriptorCount = 1;
+//             writes[i+buffers.size()].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+//             writes[i+buffers.size()].pImageInfo = &image_infos[i];
+//         }
+        
+//         vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, NULL);
+//     }
+// }
 // static void setup_descriptors_helper(vector<vector<VkImageView>> views
 void Renderer::setup_Blockify_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -2621,9 +2786,15 @@ void Renderer::setup_Df_Descriptors(){
 }
 void Renderer::setup_Raytrace_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        int previous_frame = i - 1;
+        if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
+
         VkDescriptorImageInfo gBufferInfo = {};
-            gBufferInfo.imageView = gBuffer.views[i];
+            gBufferInfo.imageView = is_scaled? gBuffer_downscaled.views[i] : gBuffer.views[i];
             gBufferInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo old_gBufferInfo = {};
+            old_gBufferInfo.imageView = is_scaled? gBuffer_downscaled.views[previous_frame] : gBuffer.views[previous_frame];
+            old_gBufferInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         // VkDescriptorImageInfo inputNormInfo = {};
         //     inputNormInfo.imageView = rayGenNormImageViews[i];
         //     inputNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -2648,11 +2819,9 @@ void Renderer::setup_Raytrace_Descriptors(){
             stepCountInfo.imageView = step_count.views[i];
             stepCountInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo readFrameInfo = {};
-            readFrameInfo.imageView = raytraced_frame.views[i];
+            readFrameInfo.imageView = denoised_frame.views[previous_frame];
             readFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            int previous_frame = i - 1;
-            if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
-            readFrameInfo.sampler = raytracedImageSamplers[i];
+            // readFrameInfo.sampler = raytracedImageSamplers[previous_frame];
             
         VkWriteDescriptorSet gBufferWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             gBufferWrite.dstSet = raytraceDescriptorSets[i];
@@ -2661,6 +2830,13 @@ void Renderer::setup_Raytrace_Descriptors(){
             gBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             gBufferWrite.descriptorCount = 1;
             gBufferWrite.pImageInfo = &gBufferInfo;
+        VkWriteDescriptorSet old_gBufferWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            old_gBufferWrite.dstSet = raytraceDescriptorSets[i];
+            old_gBufferWrite.dstBinding = 7;
+            old_gBufferWrite.dstArrayElement = 0;
+            old_gBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            old_gBufferWrite.descriptorCount = 1;
+            old_gBufferWrite.pImageInfo = &old_gBufferInfo;
         // VkWriteDescriptorSet NormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         //     NormWrite.dstSet = raytraceDescriptorSets[i];
         //     NormWrite.dstBinding = 1;
@@ -2696,37 +2872,122 @@ void Renderer::setup_Raytrace_Descriptors(){
             voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             voxelPaletteWrite.descriptorCount = 1;
             voxelPaletteWrite.pImageInfo = &inputVoxelPaletteInfo;
-        VkWriteDescriptorSet outWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            outWrite.dstSet = raytraceDescriptorSets[i];
-            outWrite.dstBinding = 4;
-            outWrite.dstArrayElement = 0;
-            outWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            outWrite.descriptorCount = 1;
-            outWrite.pImageInfo = &outputFrameInfo;
         VkWriteDescriptorSet stepCount = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             stepCount.dstSet = raytraceDescriptorSets[i];
-            stepCount.dstBinding = 5;
+            stepCount.dstBinding = 4;
             stepCount.dstArrayElement = 0;
             stepCount.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             stepCount.descriptorCount = 1;
             stepCount.pImageInfo = &stepCountInfo;
-        VkWriteDescriptorSet outReadSampler = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            outReadSampler.dstSet = raytraceDescriptorSets[i];
-            outReadSampler.dstBinding = 6;
-            outReadSampler.dstArrayElement = 0;
-            outReadSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            outReadSampler.descriptorCount = 1;
-            outReadSampler.pImageInfo = &readFrameInfo; // to prevent reading what you write
-        // VkWriteDescriptorSet blockPaletteSampler = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-        //     blockPaletteSampler.dstSet = raytraceDescriptorSets[i];
-        //     blockPaletteSampler.dstBinding = 6;
-        //     blockPaletteSampler.dstArrayElement = 0;
-        //     blockPaletteSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        //     blockPaletteSampler.descriptorCount = 1;
-        //     blockPaletteSampler.pImageInfo = &inputBlockInfo;
-        vector<VkWriteDescriptorSet> descriptorWrites = {gBufferWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, outWrite, stepCount, outReadSampler, /*blockPaletteSampler*/};
+        VkWriteDescriptorSet outNewRaytracedWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            outNewRaytracedWrite.dstSet = raytraceDescriptorSets[i];
+            outNewRaytracedWrite.dstBinding = 5;
+            outNewRaytracedWrite.dstArrayElement = 0;
+            outNewRaytracedWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            outNewRaytracedWrite.descriptorCount = 1;
+            outNewRaytracedWrite.pImageInfo = &outputFrameInfo;
+        //binds to previous frame as intended
+        VkWriteDescriptorSet oldDenoisedWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            oldDenoisedWrite.dstSet = raytraceDescriptorSets[i];
+            oldDenoisedWrite.dstBinding = 6;
+            oldDenoisedWrite.dstArrayElement = 0;
+            // outReadSampler.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            oldDenoisedWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            oldDenoisedWrite.descriptorCount = 1;
+            oldDenoisedWrite.pImageInfo = &readFrameInfo; // to prevent reading what you write
+        vector<VkWriteDescriptorSet> descriptorWrites = {gBufferWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, stepCount, outNewRaytracedWrite, oldDenoisedWrite, old_gBufferWrite/*blockPaletteSampler*/};
 
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
+}
+void Renderer::setup_Denoise_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkDescriptorImageInfo gBufferInfo = {};
+            gBufferInfo.imageView = is_scaled? gBuffer_downscaled.views[i] : gBuffer.views[i];
+            gBufferInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo readFrameInfo = {};
+            readFrameInfo.imageView = raytraced_frame.views[i];
+            readFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            // readFrameInfo.sampler = raytracedImageSamplers[previous_frame];
+        VkDescriptorImageInfo outputFrameInfo = {};
+            outputFrameInfo.imageView = denoised_frame.views[i];
+            outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            
+        VkWriteDescriptorSet gBufferWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            gBufferWrite.dstSet = denoiseDescriptorSets[i];
+            gBufferWrite.dstBinding = 0;
+            gBufferWrite.dstArrayElement = 0;
+            gBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            gBufferWrite.descriptorCount = 1;
+            gBufferWrite.pImageInfo = &gBufferInfo;
+        VkWriteDescriptorSet raytracedFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+           raytracedFrameWrite.dstSet = denoiseDescriptorSets[i];
+           raytracedFrameWrite.dstBinding = 1;
+           raytracedFrameWrite.dstArrayElement = 0;
+           raytracedFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+           raytracedFrameWrite.descriptorCount = 1;
+           raytracedFrameWrite.pImageInfo = &readFrameInfo;
+        //binds to previous frame as intended
+        VkWriteDescriptorSet denoisedFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            denoisedFrameWrite.dstSet = denoiseDescriptorSets[i];
+            denoisedFrameWrite.dstBinding = 2;
+            denoisedFrameWrite.dstArrayElement = 0;
+            denoisedFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            denoisedFrameWrite.descriptorCount = 1;
+            denoisedFrameWrite.pImageInfo = &outputFrameInfo; // to prevent reading what you write
+        vector<VkWriteDescriptorSet> descriptorWrites = {gBufferWrite, raytracedFrameWrite, denoisedFrameWrite/*blockPaletteSampler*/};
+
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
+}
+void Renderer::setup_Upscale_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkDescriptorImageInfo lowres_gBufferInfo = {};
+            lowres_gBufferInfo.imageView = gBuffer_downscaled.views[i];
+            lowres_gBufferInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo highres_gBufferInfo = {};
+            highres_gBufferInfo.imageView = gBuffer.views[i];
+            highres_gBufferInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo denoisedFrameInfo = {};
+            denoisedFrameInfo.imageView = denoised_frame.views[i];
+            denoisedFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo upscaledFrameInfo = {};
+            upscaledFrameInfo.imageView = upscaled_frame.views[i];
+            upscaledFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            
+        VkWriteDescriptorSet lowres_gBufferWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            lowres_gBufferWrite.dstSet = upscaleDescriptorSets[i];
+            lowres_gBufferWrite.dstBinding = 0;
+            lowres_gBufferWrite.dstArrayElement = 0;
+            lowres_gBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            lowres_gBufferWrite.descriptorCount = 1;
+            lowres_gBufferWrite.pImageInfo = &lowres_gBufferInfo;
+        VkWriteDescriptorSet highres_gBufferWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+           highres_gBufferWrite.dstSet = upscaleDescriptorSets[i];
+           highres_gBufferWrite.dstBinding = 1;
+           highres_gBufferWrite.dstArrayElement = 0;
+           highres_gBufferWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+           highres_gBufferWrite.descriptorCount = 1;
+           highres_gBufferWrite.pImageInfo = &highres_gBufferInfo;
+        VkWriteDescriptorSet denoisedFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+           denoisedFrameWrite.dstSet = upscaleDescriptorSets[i];
+           denoisedFrameWrite.dstBinding = 2;
+           denoisedFrameWrite.dstArrayElement = 0;
+           denoisedFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+           denoisedFrameWrite.descriptorCount = 1;
+           denoisedFrameWrite.pImageInfo = &denoisedFrameInfo;
+        VkWriteDescriptorSet upscaledFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+           upscaledFrameWrite.dstSet = upscaleDescriptorSets[i];
+           upscaledFrameWrite.dstBinding = 3;
+           upscaledFrameWrite.dstArrayElement = 0;
+           upscaledFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+           upscaledFrameWrite.descriptorCount = 1;
+           upscaledFrameWrite.pImageInfo = &upscaledFrameInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {lowres_gBufferWrite, highres_gBufferWrite, denoisedFrameWrite, upscaledFrameWrite/*blockPaletteSampler*/};
+println
+
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+println
     }
 }
 
@@ -2750,7 +3011,11 @@ void Renderer::create_samplers(){
         samplerInfo.maxLod = 0.0f;
     
     raytracedImageSamplers.resize(MAX_FRAMES_IN_FLIGHT);
+     denoisedImageSamplers.resize(MAX_FRAMES_IN_FLIGHT);
     for (auto& sampler : raytracedImageSamplers) {
+        VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
+    }
+    for (auto& sampler : denoisedImageSamplers) {
         VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
     }
 
@@ -2767,9 +3032,13 @@ void Renderer::create_samplers(){
 void Renderer::setup_Graphical_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo storageImageInfo = {};
-            storageImageInfo.imageView = raytraced_frame.views[i];
-            storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            storageImageInfo.sampler = raytracedImageSamplers[i];
+            if(is_scaled) {
+                storageImageInfo.imageView = upscaled_frame.views[i];
+            } else {
+                storageImageInfo.imageView = denoised_frame.views[i];
+            }
+            storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            storageImageInfo.sampler = denoisedImageSamplers[i];
         VkWriteDescriptorSet descriptorWrite = {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrite.dstSet = graphicalDescriptorSets[i];
@@ -2845,6 +3114,8 @@ void Renderer::create_compute_pipelines(){
     create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
     create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
     create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(i32)*1);
+    create_compute_pipelines_helper("shaders/compiled/denoise.spv"    ,  denoiseDescriptorSetLayout,  &denoiseLayout,  &denoisePipeline, 0);
+    create_compute_pipelines_helper("shaders/compiled/upscale.spv"    ,  upscaleDescriptorSetLayout,  &upscaleLayout,  &upscalePipeline, 0);
     // create_Blockify_Pipeline();
     // create_Copy_Pipeline();
     // create_Map_Pipeline();
@@ -3400,8 +3671,8 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
 
     load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
     
-    if(extrude_palette and not _has_palette){
-        _has_palette = true;
+    if(extrude_palette and not has_palette){
+        has_palette = true;
         for(int i=0; i<MATERIAL_PALETTE_SIZE; i++){   
             mat_palette[i].color = vec4(
                 scene->palette.color[i].r / 256.0,

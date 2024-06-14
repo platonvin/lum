@@ -7,6 +7,7 @@ layout(location = 2) flat in uint mat; //uint8 thing. But in float
 layout(location = 3)      in float depth; //uint8 thing. But in float
 
 layout(location = 0) out uvec4 outGbuffer;
+layout(location = 2) out uvec4 outGbuffer_downscaled;
 // layout(location = 1) out vec3 outNorm;
 // layout(location = 2) out vec3 outPosDiff;
 
@@ -16,6 +17,8 @@ void main() {
     outGbuffer.y = norm_encoded;
     outGbuffer.z = mat;
     outGbuffer.w = floatBitsToUint(depth);
+
+    outGbuffer_downscaled = outGbuffer;
     // outPosMat.xyz = pos;
     // outPosMat.xyz = pos;
     // outPosMat.w = MatID;

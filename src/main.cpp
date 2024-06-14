@@ -10,8 +10,8 @@ Renderer render = {};
 int itimish = 0;
 int main() {
     // Renderer::init(
-    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024);
-println
+    // render.raytraceExtent.
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2(sqrt(4)));
     vkDeviceWaitIdle(render.device);
     // world.init();
 
@@ -26,7 +26,6 @@ println
     // for(int y=0; y<16; y++){
     //     single_chunk(x,y,0) = 1;
     // }}
-println
     // render.update_SingleChunk(single_chunk.data());
     render.origin_world.set(0);
 
@@ -36,12 +35,11 @@ println
     Mesh robot = {};
         // render.load_mesh(&robot, "assets/scene.vox");
         // render.load_mesh(&robot, "assets/robot.vox");
-println
         render.load_mesh(&robot, "assets/Room_1.vox");
         // robot.size = ivec3(16);
         robot.transform = translate(robot.transform, vec3(14.1,10.1,10.1));
         // robot.transform = rotate(robot.transform, pi<float>()/2, vec3(0,0,1));
-        robot.transform = rotate(robot.transform, 0.001f, vec3(0,0,1));
+        robot.transform = rotate(robot.transform, 0.0001f, vec3(0,0,1));
     printl(robot.size.x);
     printl(robot.size.y);
     printl(robot.size.z);
@@ -59,7 +57,6 @@ println
     //     dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
 
     //TEMP: emtpy palette just to make things run. No static block atm
-println
     Block* block_palette = (Block*)calloc(BLOCK_PALETTE_SIZE, sizeof(Block));
     for(int x=0; x<16; x++){
     for(int y=0; y<16; y++){
@@ -69,7 +66,6 @@ println
     // Mesh block154 = {};
         // render.make_vertices(&block154, &block_palette[1].voxels[0][0][0], 16, 16, 16);
 
-println
     render.update_Block_Palette(block_palette);
     render.update_Material_Palette(render.mat_palette);
     // dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
@@ -102,47 +98,32 @@ println
     // vmaBuildStatsString(render.VMAllocator, &dump, 1);
     // cout << dump;
     // vmaFreeStatsString(render.VMAllocator, dump);
-println
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
         glfwPollEvents();
+        // robot.transform = glm::translate(robot.transform, vec3(0.01));
+        // robot.transform = glm::rotate(robot.transform, 0.0003f, vec3(0,0,1));
         render.start_Frame();
             render.startRaygen();
+                
                 render.RaygenMesh(robot);
-
-                // for(int x=0; x<16; x++){
-                // for(int y=0; y<16; y++){
-                //     block154.transform = translate(identity<mat4>(), vec3(x*16,y*16,0));
-                //     // render.RaygenMesh(block154);
-                // }}
-                // render.RaygenMesh(dyn_mesh2);
             render.endRaygen();
-                // robot.transform = translate(robot.transform, -vec3(60,60,16));
-                // robot.transform = translate(robot.transform, -vec3(robot.size)/2.0f);
-                // robot.transform = rotate(robot.transform, -0.0001f, vec3(0,0,1));
-                // robot.transform = translate(robot.transform, +vec3(0.01));
-                // robot.transform = translate(robot.transform, vec3(60,60,16));
-                // dyn_mesh1.transform = rotate(dyn_mesh1.transform, -0.0027f, vec3(1,0,0));
-                // dyn_mesh1.transform = rotate(dyn_mesh1.transform, +0.0017f, vec3(0,0,1));
-                // dyn_mesh2.transform = rotate(dyn_mesh2.transform, -0.0024f, vec3(0,0,1));
-                // dyn_mesh2.transform = rotate(dyn_mesh2.transform, +0.0017f, vec3(0,0,1));
-                // robot.transform = translate(robot.transform, vec3(.0,.1,0));
-            // dyn_mesh.transform = translate(dyn_mesh.transform, (vec3(0.01, 0.002, 0)));
-            // itimish
-            // cout << glm::to_string(dyn_mesh.transform) << "\n\n";
+
             render.startCompute();
-                render.startBlockify();  //dont need it
+                render.startBlockify();
                     render.blockifyMesh(robot);
-                    // render.blockifyMesh(dyn_mesh1);
-                    // render.blockifyMesh(dyn_mesh2);
-                render.endBlockify();  //dont need it
-                // render.execCopies(); //dont need it
+                render.endBlockify();
+
                 render.startMap();
                     render.mapMesh(robot);
-                    // render.mapMesh(dyn_mesh1);
-                    // render.mapMesh(dyn_mesh2);
                 render.endMap();
-                render.recalculate_df();
+                
+                // render.recalculate_df();
+
                 render.raytrace();
+                render.denoise();
+                if(render.is_scaled){
+                    render.upscale();
+                }
             render.endCompute();
 
             render.present();
@@ -153,17 +134,14 @@ println
     vkDeviceWaitIdle(render.device);
 
     //TODO: temp
-println
 
     render.free_mesh(&robot);
     // render.free_mesh(&block154);
     // render.free_mesh(&dyn_mesh1);
-println
     // render.free_mesh(&dyn_mesh2);
     vkDeviceWaitIdle(render.device);
 
     render.cleanup();
-println
     // vmaBuildStatsString(render.VMAllocator, &dump, 1);
     // cout << dump;
     // vmaFreeStatsString(render.VMAllocator, dump);
@@ -173,13 +151,19 @@ println
 /*
 start_frame
 
-start_raygen
-raygen_mesh
-end__raygen
+    start_raygen
+        raygen_mesh
+    end__raygen
 
-start_blockify
-blockify_mesh
-end_blockify
+    start_blockify
+        blockify_mesh
+    end_blockify
+
+    start_map
+        map_mesh
+    end_map
 
 end_frame
 */
+
+

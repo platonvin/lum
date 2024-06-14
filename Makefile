@@ -43,6 +43,8 @@ _shaders:= \
 	shaders/compiled/dfy.spv\
 	shaders/compiled/dfz.spv\
 	shaders/compiled/comp.spv\
+	shaders/compiled/denoise.spv\
+	shaders/compiled/upscale.spv\
 
 # flags = 
 all: client
@@ -50,9 +52,9 @@ all: client
 measure: client
 
 obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
-	g++ common/ogt_vox.cpp -c -o obj/ogt_vox.o $(F) $(I) $(args)
+	g++ common/ogt_vox.cpp -O2 -c -o obj/ogt_vox.o $(F) $(I) $(args)
 obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp
-	g++ common/ogt_voxel_meshify.cpp -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
+	g++ common/ogt_voxel_meshify.cpp -O2 -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
 obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/primitives.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
 # obj/visible_world.o: src/renderer/visible_world.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
@@ -95,6 +97,10 @@ shaders/compiled/dfz.spv: shaders/dfz.comp
 # 	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
 shaders/compiled/comp.spv: shaders/compopt.comp
 	glslc shaders/compopt.comp -o shaders/compiled/comp.spv $(SA)
+shaders/compiled/denoise.spv: shaders/denoise.comp
+	glslc shaders/denoise.comp -o shaders/compiled/denoise.spv $(SA)
+shaders/compiled/upscale.spv: shaders/upscale.comp
+	glslc shaders/upscale.comp -o shaders/compiled/upscale.spv $(SA)
 
 init:
 	mkdir obj
@@ -103,7 +109,7 @@ run: client
 fun:
 	@echo fun was never an option
 opt: client_opt
-	client.exe
+# client.exe
 clean:
 	-del "obj\*.o" 
 test: test.cpp

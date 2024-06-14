@@ -11,14 +11,16 @@ layout(push_constant) uniform constants{
 } PushConstants;
 //descriptor bindings for the pipeline
 layout(set = 0, binding = 0, rgba32ui) readonly uniform uimage2D Gbuffer;
+layout(set = 0, binding = 7, rgba32ui) readonly uniform uimage2D old_Gbuffer;
 // layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norms;
 // layout(set = 0, binding = 2, rgba32f) readonly uniform image2D diffs;
 layout(set = 0, binding = 1, r32i) uniform iimage3D blocks;
 layout(set = 0, binding = 2, rg8ui) uniform uimage3D blockPalette;
 layout(set = 0, binding = 3, r32f) readonly uniform image2D voxelPalette;
-layout(set = 0, binding = 4, rgba8) uniform   image2D frame;
-layout(set = 0, binding = 5, rgba8ui) uniform uimage2D step_count;
-layout(set = 0, binding = 6       ) uniform sampler2D frame_sampler;
+layout(set = 0, binding = 4, rgba8ui) uniform uimage2D step_count;
+layout(set = 0, binding = 5, rgba8) uniform   image2D frame;
+layout(set = 0, binding = 6, rgba8) uniform   image2D old_frame_denoised;
+// layout(set = 0, binding = 6       ) uniform sampler2D frame_sampler;
 // layout(set = 0, binding = 6       ) uniform sampler3D blockPalette_sampler;
 
 const vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
@@ -416,7 +418,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
     if(subgroupElect()){
         int difference = max_steps - average_counter;
         float ratio = float(average_counter) / float(max_steps); 
-        int proportional_steps = int(float(max_steps) * 0.20);
+        int proportional_steps = int(float(max_steps) * 0.17);
         // ratio *= 0.95;
         //almost every invocation used counter completely / ratio too close to 1
         // if(ratio > 0.5) {
@@ -431,7 +433,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
         //     ((difference < high) && max_steps >= border) ||
         //     ((difference <  low) && max_steps <  border)
         //     ){
-            max_steps += 2; // so we need more steps
+            max_steps += 3; // so we need more steps
         }
         //too much left
         if(difference > difference_to_cmp+1){
@@ -439,7 +441,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
         //     ((difference > high) && max_steps >= border) ||
         //     ((difference >  low) && max_steps <  border)
         //     ){
-            max_steps -= 2; //so we remove extra
+            max_steps -= 3; //so we remove extra
         }
 
         //write new max_steps back
@@ -531,9 +533,9 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
 }
 
 //TODO: fix normals
-bool CastRay_fast(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, out Material material, float ignored_voxel, in int current_reflection, out int iterations_left){
+bool CastRay_fast(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, out Material material, float ignored_voxel, in int current_reflection){
     bool block_hit = false; 
-    const float fract_diff = .42;
+    const float fract_diff = .1;
     vec3 out_of_bounds_check = vec3(imageSize(blocks)*16 - 1);
 
     
@@ -590,20 +592,30 @@ bool CastRay_fast(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, o
     int average_counter = subgroupAdd(used_counter) / int(gl_SubgroupSize);
     if(subgroupElect()){
         int difference = max_steps - average_counter;
+        float ratio = float(average_counter) / float(max_steps); 
+        int proportional_steps = int(float(max_steps) * 0.2);
+        // ratio *= 0.95;
+        //almost every invocation used counter completely / ratio too close to 1
+        // if(ratio > 0.5) {
 
-        //almost every invocation used counter completely
-        if(
-            ((difference <= 20) && max_steps >= 35) ||
-            ((difference <= 10) && max_steps <= 35)
-            ){
+        // int high = 28;
+        // int low = 17;
+        // int border = 65;
+        int difference_to_cmp = proportional_steps + 15;
+        
+        if(difference < difference_to_cmp-1){
+        // if(
+        //     ((difference < high) && max_steps >= border) ||
+        //     ((difference <  low) && max_steps <  border)
+        //     ){
             max_steps += 2; // so we need more steps
         }
         //too much left
-        // if(ratio < 0.5){
-        if(
-            ((difference > 20) && max_steps >= 35) ||
-            ((difference > 10) && max_steps <= 35)
-            ){
+        if(difference > difference_to_cmp+1){
+        // if(
+        //     ((difference > high) && max_steps >= border) ||
+        //     ((difference >  low) && max_steps <  border)
+        //     ){
             max_steps -= 2; //so we remove extra
         }
 
@@ -865,83 +877,74 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out floa
         if (fraction > 1.5) return false;
     }
 }
-//how bright pixel is
-float luminance(vec3 color){
-    vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
-    return dot(color, luminance_const);
-}
-float calculate_weight(
-    vec3 color, vec3 color_center,
-    vec3 normal, vec3 normal_center,
-    int mat, int mat_center,
-    float depth, float depth_center,
-    float _phiDepth
-){
-    float weight;
 
-    float phiNormal, phiDepth, phiIllum;
-    phiNormal = 128.0;
-    // phiDepth = _phiDepth;
-    phiDepth = 10.0;
-    phiIllum = 500.0;
+
+// float weight_mix_with_old(vec2 fraction, ivec2 floored, ivec2 pos, int mat){
+//     float weight = 0;
+//     int old_mat = int(imageLoad(old_Gbuffer, floored+pos).z);
+
+//     if(old_mat != mat) return 0;
+
+//     weight
+// }
+vec4 custom_sampler(vec2 uv, vec2 size, in int mat, out bool should_mix){
+    // vec4 color = vec4(0);
     
-    const float weightNormal = pow(clamp(dot(normal_center, normal), 0, 1), phiNormal);
-    const float weightZ = (phiDepth == 0) ? 0.0f : abs(depth_center - depth) / phiDepth;
-    const float weightLillum = abs(luminance(color_center) - luminance(color)) / phiIllum;
-    const float weigth_mat = (mat == mat_center) ? 1 : 0;
+    // vec2 fraction = fract(uv*size);
+    // vec2 pix = floor(uv*size);
+    
+    // vec2 ll_center = vec2(0.5);
+    // vec2 lh_center = vec2(0.5, 1.5);
+    // vec2 hl_center = vec2(1.5, 0.5);
+    // vec2 hh_center = vec2(1.5);
 
-    weight = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0)) * weightNormal * weigth_mat;
+    
+    // float ll_dist = distance(fraction, ll_center);
+    // float lh_dist = distance(fraction, lh_center);
+    // float hl_dist = distance(fraction, hl_center);
+    // float hh_dist = distance(fraction, hh_center);
 
-    return weight;
+    // vec4 ll_color = imageLoad(old_frame_denoised, ivec2(pix) + ivec2(0,0));
+    // vec4 lh_color = imageLoad(old_frame_denoised, ivec2(pix) + ivec2(0,1));
+    // vec4 hl_color = imageLoad(old_frame_denoised, ivec2(pix) + ivec2(1,0));
+    // vec4 hh_color = imageLoad(old_frame_denoised, ivec2(pix) + ivec2(1,1));
+
+    // int ll_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(0,0)).z);
+    // int lh_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(0,1)).z);
+    // int hl_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(1,0)).z);
+    // int hh_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(1,1)).z);
+
+    // float ll_weight = (1.0 / (ll_dist + 1e-8));//*float(ll_mat == mat);
+    // float lh_weight = (1.0 / (lh_dist + 1e-8));//*float(lh_mat == mat);
+    // float hl_weight = (1.0 / (hl_dist + 1e-8));//*float(hl_mat == mat);
+    // float hh_weight = (1.0 / (hh_dist + 1e-8));//*float(hh_mat == mat);
+    
+    // float weight = (
+    //     ll_weight+
+    //     lh_weight+
+    //     hl_weight+
+    //     hh_weight
+    // );
+
+    // color = (
+    //     ll_color*ll_weight+
+    //     lh_color*lh_weight+
+    //     hl_color*hl_weight+
+    //     hh_color*hh_weight
+    // );
+
+    // should_mix = weight != 0;
+    // return color / weight;
+    should_mix = int(imageLoad(old_Gbuffer, ivec2(uv*size)).z) == mat;
+    return imageLoad(old_frame_denoised, ivec2(uv*size));
 }
-//well, its time to implement denoiser. Spatial after temporal seems fine
-vec3 denoise(ivec2 center_pix){
-    ivec2 screenSize = size;
-
-    float sum_weight = 0.0;
-    vec3 sum_color = vec3(0);
-
-     vec3 color_center = imageLoad(frame, center_pix).rgb;
-    float depth_center = load_depth(center_pix);
-      int   mat_center = load_mat(center_pix);
-     vec3  norm_center = load_norm(center_pix);
-
-    const int radius = 3;
-    for(int xx = -radius; xx <= radius; xx++){
-    for(int yy = -radius; yy <= radius; yy++){
-        ivec2 pix = center_pix + ivec2(xx,yy);
-        const bool inside = all(greaterThanEqual(pix, ivec2(0))) && all(lessThan(pix, screenSize));
-        const bool samePixel = (xx == 0 && yy == 0);
-        if (inside){
-             vec3 color = imageLoad(frame, pix).rgb;
-            float depth = load_depth(pix);
-              int mat   = load_mat(pix);
-             vec3 norm  = load_norm(pix);
-            
-            float phiDepth = max(depth, 1e-8) * 3.0;
-
-            float weight = calculate_weight(
-                color, color_center,
-                norm, norm_center,
-                mat, mat_center,
-                depth, depth_center,
-                phiDepth
-            );
-
-            sum_color += weight*color;
-            sum_weight+= weight;
-        }
-    }}
-
-    return sum_color / sum_weight;
-}
-
 
 //TODO: balance
 layout(local_size_x = 8, local_size_y = 8) in;
 
 void main(void){
-    size = imageSize(Gbuffer);
+    // size = imageSize(Gbuffer);
+    size = imageSize(frame);
     
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
       warp_id = ivec2(gl_WorkGroupID.xy);
@@ -1017,7 +1020,7 @@ void main(void){
 
     warp_id = pix / 8;
     if(subgroupElect()){
-        if(PushConstants.timeSeed < 10) {imageStore(step_count, warp_id, uvec4(200));}
+        if(PushConstants.timeSeed < 10) {imageStore(step_count, warp_id, uvec4(128));}
     }
     // else {imageStore(step_count, warp_id, uvec4(80));}
     // imageStore(step_count, warp_id, uvec4(80));
@@ -1026,13 +1029,13 @@ void main(void){
 
     fraction = 0;
     bool hit = true;
-    int iterations_left;
+    // int iterations_left;
 
     //actually its has to be <= 4 cause that is how i store extra steps. TODO for highly reflective
     for (int i = 0; (i < 4); i++)
     {
         hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0, i);
-        // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i, iterations_left);
+        // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
 
         if(!hit) break;
         ProcessHit(origin, direction, 
@@ -1046,20 +1049,23 @@ void main(void){
     if (global_light_participance > 0.0) {
         accumulated_light += (vec3(.9,.9,.6)/2) * accumulated_reflection * global_light_participance;
     }
-
-
     vec3 color = accumulated_light;   
-    vec3 old_color = texture(frame_sampler, load_old_uv(pix)).xyz;
-    color = mix(color, old_color, 0.97);
+
+
+
+    int mat = load_mat(pix);
+    bool should_mix;
+    vec3 old_color = custom_sampler(load_old_uv(pix), size, mat, should_mix).xyz;
+
+    // int old_mat = int(imageLoad(old_Gbuffer, ivec2(vec2(old_pix)*ratio)).z);
+
+    // if(mat == old_mat){
+    if(should_mix){
+        color = mix(color, old_color, 0.97);
+    }
     imageStore(frame, pix, vec4(color, 1));
         
     //lol works even in the same pass 
-    color = denoise(pix);
-
-    // const float color_quantization = 7.0;
-    // color *= color_quantization;
-    // color = ceil(color+ .5);
-    // color /= color_quantization;
-
-    imageStore(frame, pix, vec4(color, 1));
+    // color = denoise(pix);
+    // imageStore(frame, pix, vec4(color, 1));
 }
