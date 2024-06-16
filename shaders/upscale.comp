@@ -3,6 +3,9 @@
 precision highp float;
 precision highp int;
 
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_KHR_shader_subgroup_shuffle : enable
+
 layout(set = 0, binding = 0, rgba8_snorm) uniform image2D   lowres_matNorm;
 layout(set = 0, binding = 1, rgba8_snorm) uniform image2D  highres_matNorm;
 layout(set = 0, binding = 2, rgba16) uniform image2D  denoised_frame; //in
@@ -77,7 +80,7 @@ int decode_mat(in float fmat) {
 
 layout(local_size_x=8, local_size_y=8) in;
 void main(){
-    ivec2 highres_pix = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 highres_pix = ivec2(gl_GlobalInvocationID.xy) - ivec2(gl_WorkGroupID.xy);
     ivec2  lowres_size = imageSize( lowres_matNorm);
     ivec2 highres_size = imageSize(highres_matNorm);
 
@@ -89,85 +92,111 @@ void main(){
     vec3 color = vec3(0);
     float weight = 0;
 
-    for(int xx=0; xx<UPSCALE_RATE; xx++){
-    for(int yy=0; yy<UPSCALE_RATE; yy++){
-        ivec2 lowres_pix = ((highres_pix + ivec2(xx,yy))*lowres_size) / highres_size;
-        int lowres_mat = decode_mat(imageLoad(lowres_matNorm, lowres_pix).x);
-        vec3 lowres_color = imageLoad(denoised_frame, lowres_pix).rgb;
-        float lowres_weight = float(lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
-        lowres_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, lowres_pix).yzw))), 0, 1), 1);
-        lowres_weight += 0.0001;
+    // for(int xx=0; xx<UPSCALE_RATE; xx++){
+    // for(int yy=0; yy<UPSCALE_RATE; yy++){
+    //     ivec2 lowres_pix = ((highres_pix + ivec2(xx,yy))*lowres_size) / highres_size;
+    //     int lowres_mat = decode_mat(imageLoad(lowres_matNorm, lowres_pix).x);
+    //     vec3 lowres_color = imageLoad(denoised_frame, lowres_pix).rgb;
+    //     float lowres_weight = float(lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
+    //     lowres_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, lowres_pix).yzw))), 0, 1), 1);
+    //     lowres_weight += 0.0001;
 
-        color  += lowres_weight * lowres_color;
-        weight += lowres_weight;
-    }}
+    //     color  += lowres_weight * lowres_color;
+    //     weight += lowres_weight;
+    // }}
 
-    // ivec2 ll_lowres_pix = ((highres_pix + ivec2(0,0))*lowres_size) / highres_size;
+    ivec2 ll_lowres_pix = ((highres_pix + ivec2(0,0))*lowres_size) / highres_size;
     // ivec2 lh_lowres_pix = ((highres_pix + ivec2(0,1))*lowres_size) / highres_size;
     // ivec2 hl_lowres_pix = ((highres_pix + ivec2(1,0))*lowres_size) / highres_size;
-    // ivec2 hh_lowres_pix = ((highres_pix + ivec2(1,1))*lowres_size) / highres_size;
+    ivec2 hh_lowres_pix = ((highres_pix + ivec2(1,1))*lowres_size) / highres_size;
 
-    // // float highres_depth =(imageLoad(highres_Gbuffer, pix).w);
-    // // imagelo
+    // float highres_depth =(imageLoad(highres_Gbuffer, pix).w);
+    // imagelo
 
-    // int ll_lowres_mat = decode_mat(imageLoad(lowres_matNorm, ll_lowres_pix).x);
+    int ll_lowres_mat = decode_mat(imageLoad(lowres_matNorm, ll_lowres_pix).x);
     // int lh_lowres_mat = decode_mat(imageLoad(lowres_matNorm, lh_lowres_pix).x);
     // int hl_lowres_mat = decode_mat(imageLoad(lowres_matNorm, hl_lowres_pix).x);
-    // int hh_lowres_mat = decode_mat(imageLoad(lowres_matNorm, hh_lowres_pix).x);
+    int hh_lowres_mat = decode_mat(imageLoad(lowres_matNorm, hh_lowres_pix).x);
 
-    // vec3 ll_lowres_color = imageLoad(denoised_frame, ll_lowres_pix).rgb;
-    // vec3 lh_lowres_color = imageLoad(denoised_frame, lh_lowres_pix).rgb;
-    // vec3 hl_lowres_color = imageLoad(denoised_frame, hl_lowres_pix).rgb;
-    // vec3 hh_lowres_color = imageLoad(denoised_frame, hh_lowres_pix).rgb;
 
     
-    // // float ll_dist = distance((vec2(pix)+.5), (vec2(ll_lowres_pix)+.5));
-    // // float lh_dist = distance((vec2(pix)+.5), (vec2(lh_lowres_pix)+.5));
-    // // float hl_dist = distance((vec2(pix)+.5), (vec2(hl_lowres_pix)+.5));
-    // // float hh_dist = distance((vec2(pix)+.5), (vec2(hh_lowres_pix)+.5));
+    // float ll_dist = distance((vec2(pix)+.5), (vec2(ll_lowres_pix)+.5));
+    // float lh_dist = distance((vec2(pix)+.5), (vec2(lh_lowres_pix)+.5));
+    // float hl_dist = distance((vec2(pix)+.5), (vec2(hl_lowres_pix)+.5));
+    // float hh_dist = distance((vec2(pix)+.5), (vec2(hh_lowres_pix)+.5));
 
-    // // float coverage = 
-    // // float lh_dist = 
-    // // float hl_dist = 
-    // // float hh_dist = 
+    // float coverage = 
+    // float lh_dist = 
+    // float hl_dist = 
+    // float hh_dist = 
 
-    // float ll_weight = float(ll_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
+    float ll_weight = float(ll_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
     // float lh_weight = float(lh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, lh_lowres_pix).w - highres_depth)/2000); //);
     // float hl_weight = float(hl_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hl_lowres_pix).w - highres_depth)/2000); //);
-    // float hh_weight = float(hh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hh_lowres_pix).w - highres_depth)/2000); //);
+    float hh_weight = float(hh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hh_lowres_pix).w - highres_depth)/2000); //);
 
-    // ll_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, ll_lowres_pix).yzw))), 0, 1), 1);
+    ll_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, ll_lowres_pix).yzw))), 0, 1), 1);
     // lh_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, lh_lowres_pix).yzw))), 0, 1), 1);
     // hl_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, hl_lowres_pix).yzw))), 0, 1), 1);
-    // hh_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, hh_lowres_pix).yzw))), 0, 1), 1);
+    hh_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, hh_lowres_pix).yzw))), 0, 1), 1);
 
-    // // ll_weight *= (1 / (ll_dist+1e-8));
-    // // lh_weight *= (1 / (lh_dist+1e-8));
-    // // hl_weight *= (1 / (hl_dist+1e-8));
-    // // hh_weight *= (1 / (hh_dist+1e-8));
-    // ll_weight += 0.0001; //to prevent weird rounding errors
+    ivec2 local_pix = ivec2(gl_LocalInvocationID.xy);
+    ivec2 pixel_to_load_from = local_pix+1;
+    
+    uint this_id = local_pix.y*8 + local_pix.x;
+    uint   hh_id = pixel_to_load_from.y*8 + pixel_to_load_from.x;
+    // hh_id gl_SubgroupInvocationID+9;
 
-    // color = (
-    //     ll_lowres_color * ll_weight+
-    //     lh_lowres_color * lh_weight+
-    //     hl_lowres_color * hl_weight+
-    //     hh_lowres_color * hh_weight        
-    // );
-    //  weight = (
-    //     ll_weight+
-    //     lh_weight+
-    //     hl_weight+
-    //     hh_weight   
-    // );
+    vec3 ll_lowres_color = imageLoad(denoised_frame, ll_lowres_pix).rgb;
+    // vec3 lh_lowres_color = imageLoad(denoised_frame, lh_lowres_pix).rgb;
+    // vec3 hl_lowres_color = imageLoad(denoised_frame, hl_lowres_pix).rgb;
+    vec3 hh_lowres_color = imageLoad(denoised_frame, hh_lowres_pix).rgb;
 
-    // final_color = ll_lowres_color;
+    // vec3 hh_lowres_color = subgroupShuffle(ll_lowres_color, hh_id);
+
+    // ll_weight *= (1 / (ll_dist+1e-8));
+    // lh_weight *= (1 / (lh_dist+1e-8));
+    // hl_weight *= (1 / (hl_dist+1e-8));
+    // hh_weight *= (1 / (hh_dist+1e-8));
+    ll_weight += 0.0001; //to prevent weird rounding errors
+
+    color = (
+        ll_lowres_color * ll_weight+
+        // lh_lowres_color * lh_weight+
+        // hl_lowres_color * hl_weight+
+        hh_lowres_color * hh_weight        
+    );
+     weight = (
+        ll_weight+
+        // lh_weight+
+        // hl_weight+
+        hh_weight   
+    );
+
 
     vec3 final_color = color / weight;
+    // final_color = ll_lowres_color;
+    // bool is_trade_legit = any(greaterThanEqual(ivec2(pixel_to_load_from.xy), ivec2(8,4))) || (gl_SubgroupInvocationID >= gl_SubgroupSize-1);
+
+    // bool is_trade_legit = false;
+    //     // is_trade_legit = 
+
+    // if(local_pix.y < 4) { //first half
+    //      is_trade_legit = local_pix.x < 7;
+    //     // is_trade_legit = all(lessThanEqual(ivec2(pixel_to_load_from.xy), ivec2(7,3)));
+    // } 
+    // //(local_pix.y > 4) && 
+    // if((local_pix.y > 4) && (local_pix.y < 7)) {
+    //      is_trade_legit = local_pix.x < 7;
+    //     // is_trade_legit = all(lessThanEqual(ivec2(pixel_to_load_from.xy), ivec2(7,7)));
+    //     // is_trade_legit = any(greaterThanEqual(ivec2(pixel_to_load_from.xy), ivec2(8,8)));
+    // }
+    
     imageStore(upscaled_frame, highres_pix, vec4(final_color,1));
+    // if (is_trade_legit){
+    // }
 
     // ivec2 lowres_pix = ivec2((vec2(pix) / vec2(highres_size)) * vec2(lowres_size));
     //  int highres_mat = decode_mat(imageLoad(highres_matNorm, pix).x);
     // vec3 highres_normal = ((imageLoad(highres_matNorm, pix).yzw));
-    
-
 }

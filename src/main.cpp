@@ -9,7 +9,7 @@
 Renderer render = {};
 int itimish = 0;
 int main() {
-    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2((3)), true, false);
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2((2)), false, false);
     vkDeviceWaitIdle(render.device);
 
 
@@ -63,7 +63,7 @@ int main() {
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
         glfwPollEvents();
         // robot.transform = glm::translate(robot.transform, vec3(0.001));
-        robot.transform = glm::rotate(robot.transform, 0.0001f, vec3(0,0,1));
+        // robot.transform = glm::rotate(robot.transform, 0.0001f, vec3(0,0,1));
         render.start_Frame();
             render.startRaygen();
             // vec3 d = -vec3(.0001);
