@@ -9,7 +9,7 @@
 Renderer render = {};
 int itimish = 0;
 int main() {
-    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2((2)), false, false);
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2((3)), false, false);
     vkDeviceWaitIdle(render.device);
 
 

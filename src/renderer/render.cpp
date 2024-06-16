@@ -2435,7 +2435,7 @@ void Renderer::upscale(){
 
         // itime++;
         // vkCmdPushConstants(commandBuffer, denoiseLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
-        vkCmdDispatch(commandBuffer, (swapChainExtent.width+6)/7, (swapChainExtent.height+6)/7, 1);
+        vkCmdDispatch(commandBuffer, (swapChainExtent.width)/8, (swapChainExtent.height)/8, 1);
 
     VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
