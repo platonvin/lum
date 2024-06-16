@@ -6,9 +6,9 @@ layout(location = 2) in uint MatIDIn;
 
 // layout(location = 0)      out float depth;
 layout(location = 0)      out vec2 old_uv;
-layout(location = 1) flat out uint norm_encoded;
-layout(location = 2) flat out uint mat; //uint8 thing. But in float
-layout(location = 3)      out float depth;
+layout(location = 1) flat out vec3 norm;
+layout(location = 2) flat out uint mat;
+// layout(location = 3)      out float depth;
 
 const vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
 const vec3 cameraPos = vec3(60, 0, 50);
@@ -64,11 +64,11 @@ void main() {
     vec3 clip_coords;
         clip_coords    .x =  dot(relative_pos    , horizline) / view_width ;
         clip_coords    .y =  dot(relative_pos    , vertiline) / view_height;
-        clip_coords    .z = -dot(relative_pos    , cameraRayDir) / 1000.0+0.5; //TODO:
+        clip_coords    .z = -dot(relative_pos    , cameraRayDir) / 200.0+0.5; //TODO:
     vec3 clip_coords_old;
         clip_coords_old.x =  dot(relative_pos_old, horizline) / view_width ;
         clip_coords_old.y =  dot(relative_pos_old, vertiline) / view_height;
-        clip_coords_old.z = dot(relative_pos_old, cameraRayDir) / 1000.0+0.5; //TODO:
+        clip_coords_old.z = dot(relative_pos_old, cameraRayDir) / 200.0+0.5; //TODO:
 
     gl_Position  = vec4(clip_coords, 1);
 
@@ -79,6 +79,7 @@ void main() {
     //     depth*cameraRayDir;
     // vec2 pos = world_pos.xyz;
     // pos.x = depth;
+    // depth = clip_coords.z;
     
     
     mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
@@ -90,16 +91,17 @@ void main() {
     // packFloat2x16(pos_old.x, pos_old.y);
     // packHalf2x16(pos_old);
     // pack
-    vec3 norm = normalize(m2w_normals*normIn);
+    norm = normalize(m2w_normals*normIn);
+    // norm = -vec3(.5,.6,.7);
     // vec2 norm_encoded = encode(norm);
     // float
 
 
     //   uv_encoded = packUnorm2x16(old_uv);
-    norm_encoded = packSnorm2x16(encode(norm));
-             mat = uint(MatIDIn);
+    // norm_encoded = packSnorm2x16(encode(norm));
+    mat = uint(MatIDIn);
             //  mat = floatBitsToUint(encode(norm).y);
-           depth = dot(relative_pos, cameraRayDir);
+        //    depth = dot(relative_pos, cameraRayDir);
     // MatID = float(66);
 }
 /*

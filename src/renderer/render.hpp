@@ -235,7 +235,7 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 class Renderer {
 
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024, vec2 ratio = vec2(1.0), bool vsync=true);
+    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024, vec2 ratio = vec2(1.0), bool vsync=true, bool fullscreen = false);
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -256,6 +256,7 @@ private:
 public:
     bool is_scaled = false;
     bool is_vsync = false;
+    bool is_fullscreen = false;
     void start_Frame();
         void startRaygen();
         void RaygenMesh(Mesh &mesh);
@@ -429,9 +430,18 @@ public:
     //g buffer of prev_pixel pos, matid and normal
     // vector<VkImage>           rayGenNormImages;
     // vector<VkImage>           rayGenPosDiffImages;
-    Images depth;
-    Images gBuffer;
-    Images gBuffer_downscaled;
+    //TODO: no copy if supported
+    Images depthForChecks; //used for depth testing
+    Images depth ; //copy to this
+    Images depth_downscaled;
+    Images matNorm;
+    Images matNorm_downscaled;
+    Images oldUv;
+    Images oldUv_downscaled;
+    // vector<VkSampler> oldUvSampler;
+
+    // Images gBuffer;
+    // Images gBuffer_downscaled;
     Images step_count;
     Images raytraced_frame;
     Images  denoised_frame;
@@ -449,8 +459,8 @@ public:
     Images swapchain_images;
     
     // Buffers 
-    vector<VkBuffer>       paletteCounterBuffers; //atomic
-    vector<VmaAllocation>        paletteCounterBufferAllocations;
+    Buffers       depthStaging; //atomic
+    // vector<VmaAllocation>        paletteCounterBufferAllocations;
 
     Buffers copy_queue;
     vector<VkBuffer>          copyCounterBuffers; //atomic

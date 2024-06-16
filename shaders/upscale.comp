@@ -1,43 +1,39 @@
 #version 450
 
-layout(set = 0, binding = 0, rgba32ui) uniform uimage2D   lowres_Gbuffer;
-layout(set = 0, binding = 1, rgba32ui) uniform uimage2D  highres_Gbuffer;
-layout(set = 0, binding = 2, rgba8) uniform image2D  denoised_frame; //in
-layout(set = 0, binding = 3, rgba8) uniform image2D  upscaled_frame; //out
+precision highp float;
+precision highp int;
+
+layout(set = 0, binding = 0, rgba8_snorm) uniform image2D   lowres_matNorm;
+layout(set = 0, binding = 1, rgba8_snorm) uniform image2D  highres_matNorm;
+layout(set = 0, binding = 2, rgba16) uniform image2D  denoised_frame; //in
+layout(set = 0, binding = 3, rgba16) uniform image2D  upscaled_frame; //out
 
 ivec2 size;
 vec2 ratio;
 
-vec2 load_old_uv(uimage2D image, ivec2 pixel){
-    vec2 old_uv = unpackUnorm2x16(imageLoad(image, ivec2(pixel*ratio)).x);
-    return old_uv;
+vec3 load_lowres_norm(ivec2 pixel){
+    vec3 norm = (imageLoad(lowres_matNorm, pixel).gba);
+    return norm;
 }
-vec3 decode(vec2 f){
-    f = f * 2.0 - 1.0;
- 
-    vec3 n = vec3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
-    float t = clamp(-n.z, 0, 1);
-    n.x += n.x > 0.0 ? -t : t;
-    n.y += n.y > 0.0 ? -t : t;
-    return normalize(n); //todo:
+vec3 load_highres_norm(ivec2 pixel){
+    vec3 norm = (imageLoad(highres_matNorm, pixel).gba);
+    return norm;
 }
-vec3 load_norm(readonly uimage2D image, ivec2 pixel){
-    vec2 norm_encoded = unpackSnorm2x16(imageLoad(image, ivec2(pixel*ratio)).y);
-    return decode(norm_encoded);
+int load_lowres_mat(ivec2 pixel){
+    int mat = int(round(imageLoad(lowres_matNorm, pixel).x*127.0))+127;
+    return mat;
 }
-int load_mat_lowres(uimage2D image, ivec2 pixel){
-    uint mat_encoded = imageLoad(image, ivec2(pixel*ratio)).z;
-    return int(mat_encoded);
+int load_highres_mat(ivec2 pixel){
+    int mat = int(round(imageLoad(highres_matNorm, pixel).x*127.0))+127;
+    return mat;
 }
-float load_depth(uimage2D image, ivec2 pixel){
-    // ivec2 size = imageSize(Gbuffer);
-    // if(any(greaterThanEqual(pixel, size)) || any(lessThan(pixel, ivec2(0)))) return 100000000000000.0;
+// float load_depth(ivec2 pixel){
+//     // ivec2 size = imageSize(Gbuffer);
+//     // if(any(greaterThanEqual(pixel, size)) || any(lessThan(pixel, ivec2(0)))) return 100000000000000.0;
     
-    uint depth_encoded = imageLoad(image, ivec2(pixel*ratio)).w;
-    return uintBitsToFloat(depth_encoded);
-}
-
-layout(local_size_x=8, local_size_y=8) in;
+//     float depth_encoded = imageLoad(depth, pixel).x;
+//     return -(depth_encoded-0.5)*200.0;
+// }
 
 /*
 so we have lowres denoised frame and highres gBuffer with material and normal info
@@ -73,74 +69,105 @@ algorithm:
 
 //     return weight;
 // }
+int decode_mat(in float fmat) {
+    return int(round(fmat*127.0))+127;
+}
+#define UPSCALE_RATE 2
+//TODO Specialization constants
 
+layout(local_size_x=8, local_size_y=8) in;
 void main(){
-    ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
-    ivec2  lowres_size = imageSize( lowres_Gbuffer);
-    ivec2 highres_size = imageSize(highres_Gbuffer);
+    ivec2 highres_pix = ivec2(gl_GlobalInvocationID.xy);
+    ivec2  lowres_size = imageSize( lowres_matNorm);
+    ivec2 highres_size = imageSize(highres_matNorm);
 
-    // vec2 
-    ivec2 lowres_ll_pix = ivec2((vec2(pix) / vec2(highres_size)) * vec2(lowres_size));
+    // ivec2 lowres_ll_pix = ivec2((vec2(pix) / vec2(highres_size)) * vec2(lowres_size));
+    // ivec2 lowres_ll_pix = ((pix)*lowres_size) / highres_size;
+    // lowres_ll_pix = pix;
+    int highres_mat = decode_mat(imageLoad(highres_matNorm, highres_pix).x);
+    vec3 highres_normal = ((imageLoad(highres_matNorm, highres_pix).yzw));
+    vec3 color = vec3(0);
+    float weight = 0;
 
-    ivec2 ll_lowres_pix = lowres_ll_pix + ivec2(0,0);
-    ivec2 lh_lowres_pix = lowres_ll_pix + ivec2(0,1);
-    ivec2 hl_lowres_pix = lowres_ll_pix + ivec2(1,0);
-    ivec2 hh_lowres_pix = lowres_ll_pix + ivec2(1,1);
+    for(int xx=0; xx<UPSCALE_RATE; xx++){
+    for(int yy=0; yy<UPSCALE_RATE; yy++){
+        ivec2 lowres_pix = ((highres_pix + ivec2(xx,yy))*lowres_size) / highres_size;
+        int lowres_mat = decode_mat(imageLoad(lowres_matNorm, lowres_pix).x);
+        vec3 lowres_color = imageLoad(denoised_frame, lowres_pix).rgb;
+        float lowres_weight = float(lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
+        lowres_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, lowres_pix).yzw))), 0, 1), 1);
+        lowres_weight += 0.0001;
 
-    int highres_mat = int(imageLoad(highres_Gbuffer, pix).z);
-    float highres_depth =(imageLoad(highres_Gbuffer, pix).w);
+        color  += lowres_weight * lowres_color;
+        weight += lowres_weight;
+    }}
 
-    int ll_lowres_mat = int(imageLoad(lowres_Gbuffer, ll_lowres_pix).z);
-    int lh_lowres_mat = int(imageLoad(lowres_Gbuffer, lh_lowres_pix).z);
-    int hl_lowres_mat = int(imageLoad(lowres_Gbuffer, hl_lowres_pix).z);
-    int hh_lowres_mat = int(imageLoad(lowres_Gbuffer, hh_lowres_pix).z);
+    // ivec2 ll_lowres_pix = ((highres_pix + ivec2(0,0))*lowres_size) / highres_size;
+    // ivec2 lh_lowres_pix = ((highres_pix + ivec2(0,1))*lowres_size) / highres_size;
+    // ivec2 hl_lowres_pix = ((highres_pix + ivec2(1,0))*lowres_size) / highres_size;
+    // ivec2 hh_lowres_pix = ((highres_pix + ivec2(1,1))*lowres_size) / highres_size;
 
-    vec3 ll_lowres_color = imageLoad(denoised_frame, ll_lowres_pix).rgb;
-    vec3 lh_lowres_color = imageLoad(denoised_frame, lh_lowres_pix).rgb;
-    vec3 hl_lowres_color = imageLoad(denoised_frame, hl_lowres_pix).rgb;
-    vec3 hh_lowres_color = imageLoad(denoised_frame, hh_lowres_pix).rgb;
+    // // float highres_depth =(imageLoad(highres_Gbuffer, pix).w);
+    // // imagelo
+
+    // int ll_lowres_mat = decode_mat(imageLoad(lowres_matNorm, ll_lowres_pix).x);
+    // int lh_lowres_mat = decode_mat(imageLoad(lowres_matNorm, lh_lowres_pix).x);
+    // int hl_lowres_mat = decode_mat(imageLoad(lowres_matNorm, hl_lowres_pix).x);
+    // int hh_lowres_mat = decode_mat(imageLoad(lowres_matNorm, hh_lowres_pix).x);
+
+    // vec3 ll_lowres_color = imageLoad(denoised_frame, ll_lowres_pix).rgb;
+    // vec3 lh_lowres_color = imageLoad(denoised_frame, lh_lowres_pix).rgb;
+    // vec3 hl_lowres_color = imageLoad(denoised_frame, hl_lowres_pix).rgb;
+    // vec3 hh_lowres_color = imageLoad(denoised_frame, hh_lowres_pix).rgb;
 
     
-    float ll_dist = distance((vec2(pix)+.5), (vec2(ll_lowres_pix)+.5));
-    float lh_dist = distance((vec2(pix)+.5), (vec2(lh_lowres_pix)+.5));
-    float hl_dist = distance((vec2(pix)+.5), (vec2(hl_lowres_pix)+.5));
-    float hh_dist = distance((vec2(pix)+.5), (vec2(hh_lowres_pix)+.5));
+    // // float ll_dist = distance((vec2(pix)+.5), (vec2(ll_lowres_pix)+.5));
+    // // float lh_dist = distance((vec2(pix)+.5), (vec2(lh_lowres_pix)+.5));
+    // // float hl_dist = distance((vec2(pix)+.5), (vec2(hl_lowres_pix)+.5));
+    // // float hh_dist = distance((vec2(pix)+.5), (vec2(hh_lowres_pix)+.5));
 
-    // float coverage = 
-    // float lh_dist = 
-    // float hl_dist = 
-    // float hh_dist = 
-    vec3 normal_center = decode(unpackSnorm2x16(imageLoad(highres_Gbuffer, pix).y));
+    // // float coverage = 
+    // // float lh_dist = 
+    // // float hl_dist = 
+    // // float hh_dist = 
 
-    float ll_weight = float(ll_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
-    float lh_weight = float(lh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, lh_lowres_pix).w - highres_depth)/2000); //);
-    float hl_weight = float(hl_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hl_lowres_pix).w - highres_depth)/2000); //);
-    float hh_weight = float(hh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hh_lowres_pix).w - highres_depth)/2000); //);
+    // float ll_weight = float(ll_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, ll_lowres_pix).w - highres_depth)/2000); //);
+    // float lh_weight = float(lh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, lh_lowres_pix).w - highres_depth)/2000); //);
+    // float hl_weight = float(hl_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hl_lowres_pix).w - highres_depth)/2000); //);
+    // float hh_weight = float(hh_lowres_mat == highres_mat); // * exp(- abs((imageLoad(lowres_Gbuffer, hh_lowres_pix).w - highres_depth)/2000); //);
 
-    ll_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, ll_lowres_pix).y))), 0, 1), 1);
-    lh_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, lh_lowres_pix).y))), 0, 1), 1);
-    hl_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, hl_lowres_pix).y))), 0, 1), 1);
-    hh_weight *= pow(clamp(dot(normal_center, decode(unpackSnorm2x16(imageLoad(lowres_Gbuffer, hh_lowres_pix).y))), 0, 1), 1);
+    // ll_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, ll_lowres_pix).yzw))), 0, 1), 1);
+    // lh_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, lh_lowres_pix).yzw))), 0, 1), 1);
+    // hl_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, hl_lowres_pix).yzw))), 0, 1), 1);
+    // hh_weight *= pow(clamp(dot(highres_normal, ((imageLoad(lowres_matNorm, hh_lowres_pix).yzw))), 0, 1), 1);
 
-    // ll_weight *= (1 / (ll_dist+1e-8));
-    // lh_weight *= (1 / (lh_dist+1e-8));
-    // hl_weight *= (1 / (hl_dist+1e-8));
-    // hh_weight *= (1 / (hh_dist+1e-8));
+    // // ll_weight *= (1 / (ll_dist+1e-8));
+    // // lh_weight *= (1 / (lh_dist+1e-8));
+    // // hl_weight *= (1 / (hl_dist+1e-8));
+    // // hh_weight *= (1 / (hh_dist+1e-8));
+    // ll_weight += 0.0001; //to prevent weird rounding errors
 
-    vec3 color = (
-        ll_lowres_color * ll_weight+
-        lh_lowres_color * lh_weight+
-        hl_lowres_color * hl_weight+
-        hh_lowres_color * hh_weight        
-    );
-    float weight = (
-        ll_weight+
-        lh_weight+
-        hl_weight+
-        hh_weight   
-    );
+    // color = (
+    //     ll_lowres_color * ll_weight+
+    //     lh_lowres_color * lh_weight+
+    //     hl_lowres_color * hl_weight+
+    //     hh_lowres_color * hh_weight        
+    // );
+    //  weight = (
+    //     ll_weight+
+    //     lh_weight+
+    //     hl_weight+
+    //     hh_weight   
+    // );
+
+    // final_color = ll_lowres_color;
 
     vec3 final_color = color / weight;
+    imageStore(upscaled_frame, highres_pix, vec4(final_color,1));
 
-    imageStore(upscaled_frame, pix, vec4(final_color,1));
+    // ivec2 lowres_pix = ivec2((vec2(pix) / vec2(highres_size)) * vec2(lowres_size));
+    //  int highres_mat = decode_mat(imageLoad(highres_matNorm, pix).x);
+    // vec3 highres_normal = ((imageLoad(highres_matNorm, pix).yzw));
+    
+
 }

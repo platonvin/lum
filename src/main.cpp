@@ -9,14 +9,9 @@
 Renderer render = {};
 int itimish = 0;
 int main() {
-    // Renderer::init(
-    // render.raytraceExtent.
-    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2(sqrt(4)), false);
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2((3)), true, false);
     vkDeviceWaitIdle(render.device);
-    // world.init();
 
-    // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
-    // std::cout << "\n" <<(int) world.blocksPalette[0].voxels[1][1][1].matID;
 
     table3d<BlockID_t> single_chunk = {};
     //user responsible for managing chunks somehow and also in future translating them to main chunk
@@ -47,15 +42,6 @@ int main() {
     printl(render.swapChainExtent.width);
     printl(render.swapChainExtent.height);
 
-    // Mesh dyn_mesh1 = {};
-    //     render.load_mesh(&dyn_mesh1, "assets/scene.vox");
-    //     dyn_mesh1.transform = identity<mat4>();,
-    //     dyn_mesh1.transform = translate(dyn_mesh1.transform vec3(20));
-    // Mesh dyn_mesh2 = {};
-    //     render.load_mesh(&dyn_mesh2, "assets/mirror.vox");
-    //     dyn_mesh2.transform = identity<mat4>();
-    //     dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(20));
-
     //TEMP: emtpy palette just to make things run. No static block atm
     Block* block_palette = (Block*)calloc(BLOCK_PALETTE_SIZE, sizeof(Block));
     for(int x=0; x<16; x++){
@@ -68,31 +54,7 @@ int main() {
 
     render.update_Block_Palette(block_palette);
     render.update_Material_Palette(render.mat_palette);
-    // dyn_mesh2 = world.loadedChunks(0,0,1).mesh;
-    // dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[2].voxels, {16,16,16});
-    // dyn_mesh2.size = ivec3(16);
-    // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(16,16,0));
-    // dyn_mesh2.voxels = render.create_RayTrace_VoxelImages((MatID_t*)world.blocksPalette[1].voxels, {16,16,16});
-    // dyn_mesh.transform = translate(dyn_mesh.transform, vec3(16,16,16));
-    
-    // rotate(dyn_mesh.transform, pi<float>()/5, vec3(0,1,2));
-    //TODO: move to API
 
-    // mat4 isometricRotation = identity<mat4>(); 
-    //      isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(0, 1, 0));
-    //      isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(1, 0, 0));
-    // cout << glm::to_string(isometricRotation);
-    
-    // dyn_mesh2 = dyn_mesh1;
-
-                // dyn_mesh1.transform = rotate(dyn_mesh1.transform, (+0.0037f*75.0f*3.0f), vec3(0,1,0));
-                // dyn_mesh1.transform = rotate(dyn_mesh1.transform, (-0.0027f*75.0f*3.0f), vec3(1,0,0));
-                // dyn_mesh1.transform = rotate(dyn_mesh1.transform, (+0.0017f*75.0f*3.0f), vec3(0,0,1));
-                // dyn_mesh2.transform = rotate(dyn_mesh2.transform, (-(pi<float>())/2.f), vec3(0,0,1));
-
-    //TEMP crutch
-
-    // dyn_mesh2.transform = translate(dyn_mesh2.transform, vec3(30,0,0));
     // void* ptr = malloc((size_t)(void *)malloc); 
     // char* dump;
     // vmaBuildStatsString(render.VMAllocator, &dump, 1);
@@ -100,11 +62,12 @@ int main() {
     // vmaFreeStatsString(render.VMAllocator, dump);
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
         glfwPollEvents();
-        // robot.transform = glm::translate(robot.transform, vec3(0.01));
-        // robot.transform = glm::rotate(robot.transform, 0.0003f, vec3(0,0,1));
+        // robot.transform = glm::translate(robot.transform, vec3(0.001));
+        robot.transform = glm::rotate(robot.transform, 0.0001f, vec3(0,0,1));
         render.start_Frame();
             render.startRaygen();
-                
+            // vec3 d = -vec3(.0001);
+            // robot.old_transform = robot.transform;
                 render.RaygenMesh(robot);
             render.endRaygen();
 
@@ -116,6 +79,7 @@ int main() {
                 render.startMap();
                     render.mapMesh(robot);
                 render.endMap();
+                // robot.transform = glm::translate(robot.transform, -d*10.f);
                 
                 // render.recalculate_df();
 

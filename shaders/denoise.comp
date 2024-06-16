@@ -1,41 +1,43 @@
 #version 450 core
 
-layout(set = 0, binding = 0, rgba32ui) uniform uimage2D  Gbuffer;
-layout(set = 0, binding = 1, rgba8) uniform image2D raytraced_frame;
-layout(set = 0, binding = 2, rgba8) uniform image2D  denoised_frame;
+layout(set = 0, binding = 0, rgba8) uniform image2D  matNorm;
+layout(set = 0, binding = 1       )  uniform sampler2D  depth;
+layout(set = 0, binding = 2, rgba16) uniform image2D raytraced_frame;
+layout(set = 0, binding = 3, rgba16) uniform image2D  denoised_frame;
 
 ivec2 size;
 vec2 ratio;
 
-vec2 load_old_uv(ivec2 pixel){
-    vec2 old_uv = unpackUnorm2x16(imageLoad(Gbuffer, ivec2(pixel*ratio)).x);
-    return old_uv;
-}
-vec3 decode(vec2 f){
-    f = f * 2.0 - 1.0;
+// vec2 load_old_uv(ivec2 pixel){
+//     vec2 old_uv = imageLoad(oldUv, pixel).xy;
+//     return old_uv;
+// }
+// vec3 decode(vec2 f){
+//     f = f * 2.0 - 1.0;
  
-    vec3 n = vec3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
-    float t = clamp(-n.z, 0, 1);
-    n.x += n.x > 0.0 ? -t : t;
-    n.y += n.y > 0.0 ? -t : t;
-    return normalize(n); //todo:
-}
+//     vec3 n = vec3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
+//     float t = clamp(-n.z, 0, 1);
+//     n.x += n.x > 0.0 ? -t : t;
+//     n.y += n.y > 0.0 ? -t : t;
+//     return normalize(n); //todo:
+// }
 vec3 load_norm(ivec2 pixel){
-    vec2 norm_encoded = unpackSnorm2x16(imageLoad(Gbuffer, ivec2(pixel*ratio)).y);
-    return decode(norm_encoded);
+    vec3 norm = (imageLoad(matNorm, pixel).gba);
+    return norm;
 }
 int load_mat(ivec2 pixel){
-    uint mat_encoded = imageLoad(Gbuffer, ivec2(pixel*ratio)).z;
-    return int(mat_encoded);
+    int mat = int(round(imageLoad(matNorm, pixel).x*127.0))+127;
+    return mat;
 }
 float load_depth(ivec2 pixel){
     // ivec2 size = imageSize(Gbuffer);
     // if(any(greaterThanEqual(pixel, size)) || any(lessThan(pixel, ivec2(0)))) return 100000000000000.0;
     
-    uint depth_encoded = imageLoad(Gbuffer, ivec2(pixel*ratio)).w;
-    return uintBitsToFloat(depth_encoded);
+    vec2 uv = (vec2(pixel)+0.5)/vec2(size);
+    float depth_encoded = texture(depth, uv).x;
+    // float depth_encoded = imageLoad(depth, pixel).x;
+    return -(depth_encoded-0.5)*200.0;
 }
-
 
 //how bright pixel is
 float luminance(vec3 color){
@@ -56,7 +58,7 @@ float calculate_weight(
     phiNormal = 128.0;
     // phiDepth = _phiDepth;
     phiDepth = 0.0;
-    phiIllum = 1;
+    phiIllum = .2;
     
           float weightPos = distance(vec2(pix), vec2(center_pix))*.5;
         // weightPos=0;
@@ -81,7 +83,7 @@ vec3 denoise(ivec2 center_pix){
       int   mat_center = load_mat(center_pix);
      vec3  norm_center = load_norm(center_pix);
 
-    const int radius = 4;
+    const int radius = 3;
     for(int xx = -radius; xx <= radius; xx++){
     for(int yy = -radius; yy <= radius; yy++){
         ivec2 pix = center_pix + ivec2(xx,yy);
@@ -117,9 +119,12 @@ layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
     size = imageSize(raytraced_frame);
-    ratio = vec2(imageSize(Gbuffer))/vec2(size);
+    // ratio = vec2(imageSize(matNorm))/vec2(size);
     
     vec3 color = denoise(pix);
+    // color.r =0;
     // vec3 color = imageLoad(raytraced_frame, pix).xyz;
+    // vec3 old_color = imageLoad(denoised_frame, pix).xyz;
+    // color = mix(color, old_color, 0.99);
     imageStore(denoised_frame, pix, vec4(color,1));
 }
