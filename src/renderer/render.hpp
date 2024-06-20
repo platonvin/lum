@@ -1,8 +1,12 @@
 #pragma once
 
-// #include "pch/render_pch.hpp"
-#pragma once
-
+#include <Volk/volk.h>
+#include <vulkan/vulkan.h>
+#include <climits>
+#include <cmath>
+// #include <cstddef>
+#include <string.h>
+#include <glm/fwd.hpp>
 #include <vector>
 #include <tuple>
 
@@ -10,17 +14,13 @@
 #include <optional>
 #include <stdio.h>
 
-#include <Volk/volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vma/vk_mem_alloc.h>
 // #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
-#include <cassert>
-#include <cmath>
-#include <cstddef>
-#include <cstring>
+// #include <cassert>
 #include <glm/detail/qualifier.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_projection.hpp>
@@ -28,25 +28,17 @@
 #include <glm/ext/vector_int3.hpp>
 #include <glm/ext/vector_uint4.hpp>
 #include <glm/trigonometric.hpp>
+#include <stdio.h>
 #include <io.h>
-#include <vulkan/vulkan_core.h>
-#include <set>
-#include <iostream>
+// #include <vulkan/vulkan_core.h>
+#include <set> 
 #include <limits>
 #include <fstream>
 
 
-#include <vulkan/vulkan_core.h>
-#include <cstring>
-#include <vector>
-
-#include <vulkan/vulkan.h>
-#include <VMA/vk_mem_alloc.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-// #include <vulkan/vulkan_core.h>
-// #include "primitives.hpp"
 #include <defines.hpp>
 
 using namespace glm;
@@ -57,9 +49,11 @@ using namespace std;
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
 
 // on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
-#define    BLOCK_PALETTE_SIZE_X 16
-#define    BLOCK_PALETTE_SIZE_Y 16
+#define    BLOCK_PALETTE_SIZE_X 32
+#define    BLOCK_PALETTE_SIZE_Y 32
 #define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
+
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 typedef   u8 MatID_t;
 typedef  i16 BlockID_t;
@@ -90,23 +84,23 @@ typedef struct Vertex {
 //     vector<VmaAllocation>  indicesAllocation;
 //     u32 icount;
 // } MeshData;
-typedef struct Buffers_t {
-    vector<VkBuffer> buffers;
-    vector<VmaAllocation> allocs;
-} Buffers;
-typedef struct Images_t {
-    vector<VkImage> images;
-    vector<VkImageView> views;
-    vector<VmaAllocation> allocs;
-} Images;
+typedef struct Buffer {
+    VkBuffer buffer;
+    VmaAllocation alloc;
+} Buffer;
+typedef struct Image {
+    VkImage image;
+    VkImageView view;
+    VmaAllocation alloc;
+} Image;
 
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
     //VkBuffers for ray generation
-    Buffers vertexes;
-    Buffers indexes;
+    vector<Buffer> vertexes;
+    vector<Buffer> indexes;
     u32 icount;
-    Images voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
+    vector<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
 
     mat4 transform; //used to transform from self coordinate system to world coordinate system
     mat4 old_transform; //for denoising
@@ -118,7 +112,8 @@ typedef struct Mesh {
 
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
-} Block;
+    Mesh mesh;
+} Block; //in palette
 
 //just 3d array. Content invalid after allocate()
 template <typename Type> class table3d {
@@ -129,7 +124,7 @@ public:
     //makes content invalid 
     void allocate(int x, int y, int z) {
         _size = ivec3(x,y,z);
-        this->memory = (Type*)malloc(sizeof(Type)*x*y*z);
+        this->memory = (Type*)calloc(x*y*z, sizeof(Type));
     }
     void set(Type val) {
         for(int x=0; x<_size.x; x++){
@@ -191,12 +186,12 @@ using namespace glm;
 #ifdef SET_ALLOC_NAMES
 #define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
     VkResult res = (vmaCreateImage)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(allocator, *pAllocation, #pAllocation __LINE_STRING__);\
+    vmaSetAllocationName(allocator,* pAllocation, #pAllocation __LINE_STRING__);\
     res;\
     }
 #define vmaCreateBuffer(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
     VkResult res = (vmaCreateBuffer)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(allocator, *pAllocation, #pAllocation __LINE_STRING__);\
+    vmaSetAllocationName(allocator,* pAllocation, #pAllocation __LINE_STRING__);\
     res;\
     }
 #endif
@@ -230,7 +225,6 @@ public:
 } SwapChainSupportDetails;
 
 //TODO:
-const int MAX_FRAMES_IN_FLIGHT = 2;
 
 class Renderer {
 
@@ -246,6 +240,8 @@ public:
     void make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size);
     void load_vertices(Mesh* mesh, Vertex* vertices);
     // void extrude_palette(Material* material_palette);
+    void load_block(Block** block, const char* vox_file);
+    
     Material mat_palette[MATERIAL_PALETTE_SIZE];
     table3d<BlockID_t>  origin_world = {};
     table3d<BlockID_t> current_world = {};
@@ -253,27 +249,35 @@ private:
     ivec3 world_size;
     bool has_palette = false;
     vec2 _ratio;
+    vector<VkImageCopy> copy_queue = {};
 public:
     bool is_scaled = false;
     bool is_vsync = false;
     bool is_fullscreen = false;
+
+    vec3 camera_pos = vec3(60, 0, 50);
+    vec3 camera_dir = normalize(vec3(0.1, 1.0, -0.5));
+    mat4 old_trans = identity<mat4>();
+    // vec3 old_camera_pos = vec3(60, 0, 50);
+    // vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
+
     void start_Frame();
         void startRaygen();
-        void RaygenMesh(Mesh &mesh);
+        void RaygenMesh(Mesh* mesh);
         void   endRaygen();
         // Start of computeCommandBuffer
         void startCompute();
                 void startBlockify();
-                void blockifyMesh(Mesh &mesh);
+                void blockifyMesh(Mesh* mesh);
                 void   endBlockify();
                  void blockifyCustom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
             void execCopies();
                 void startMap();
-                void mapMesh(Mesh &mesh);
+                void mapMesh(Mesh* mesh);
                 void   endMap();
             void recalculate_df();
             void raytrace();
-            void denoise();
+            void denoise(int iterations);
             void upscale();
         void   endCompute();
         // End of computeCommandBuffer
@@ -281,10 +285,10 @@ public:
         void   end_Present();
     void end_Frame();
 
-    tuple<Buffers, Buffers> create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount); 
-    tuple<Buffers, Buffers> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices); 
-    Images  create_RayTrace_VoxelImages(u16* voxels, ivec3 size);
-    void update_Block_Palette(Block* blockPalette);
+    tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount); 
+    tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices); 
+    vector<Image>  create_RayTrace_VoxelImages(u16* voxels, ivec3 size);
+    void update_Block_Palette(Block** blockPalette);
     void update_Material_Palette(Material* materialPalette);
     void update_SingleChunk(BlockID_t* blocks);
 private:
@@ -319,7 +323,7 @@ private:
     void allocate_Descriptors();
 
     //not possible without loosing perfomance
-    // void setup_descriptors_helper(vector<VkDescriptorSet>& descriptor_sets, vector<Buffers> buffers, vector<Images> images);
+    // void setup_descriptors_helper(vector<VkDescriptorSet>* descriptor_sets, vector<Buffers> buffers, vector<Images> images);
 
     void setup_Blockify_Descriptors();
     void setup_Copy_Descriptors();
@@ -333,12 +337,12 @@ private:
     void create_samplers();
     // void update_Descriptors();
 
-    void delete_Images(Images* images);
-    void create_Image_Storages(Images& image, 
+    void delete_Images(vector<Image>* images);
+    void create_Image_Storages(vector<Image>* image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size);
     // void destroy_images
-    void create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, bool host = false);
+    void create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
     void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size);
     void create_compute_pipelines();
     // void create_Blockify_Pipeline();
@@ -346,17 +350,17 @@ private:
     // void create_Map_Pipeline();
     // void create_Df_Pipeline();
     // void create_Raytrace_Pipeline(); 
-    VkShaderModule create_Shader_Module(vector<char>& code);
+    VkShaderModule create_Shader_Module(vector<char>* code);
     //creates framebuffers that point to attachments view specified views
-    void create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector<vector<VkImageView>> &views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height);
+    void create_N_Framebuffers(vector<VkFramebuffer>* framebuffers, vector<vector<VkImageView>>* views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height);
     void create_Command_Pool();
-    void create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, u32 size);
+    void create_Command_Buffers(vector<VkCommandBuffer>* commandBuffers, u32 size);
     void record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u32 imageIndex);
     void record_Command_Buffer_RayGen(VkCommandBuffer commandBuffer);
     void record_Command_Buffer_Compute  (VkCommandBuffer commandBuffer);
     void create_Sync_Objects();
 
-    void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
     void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size); 
     void copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkImageLayout layout);
     u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
@@ -431,44 +435,44 @@ public:
     // vector<VkImage>           rayGenNormImages;
     // vector<VkImage>           rayGenPosDiffImages;
     //TODO: no copy if supported
-    Images depthForChecks; //used for depth testing
-    Images depth ; //copy to this
-    Images depth_downscaled;
-    Images matNorm;
-    Images matNorm_downscaled;
-    Images oldUv;
-    Images oldUv_downscaled;
+    vector<Image> depthForChecks; //used for depth testing
+    vector<Image> depth ; //copy to this
+    vector<Image> depth_downscaled;
+    vector<Image> matNorm;
+    vector<Image> matNorm_downscaled;
+    vector<Image> oldUv;
+    vector<Image> oldUv_downscaled;
     // vector<VkSampler> oldUvSampler;
 
-    // Images gBuffer;
-    // Images gBuffer_downscaled;
-    Images step_count;
-    Images raytraced_frame;
-    Images  denoised_frame;
-    Images  upscaled_frame;
+    // vector<Image> gBuffer;
+    // vector<Image> gBuffer_downscaled;
+    vector<Image> step_count;
+    vector<Image> raytraced_frame;
+    vector<Image>  denoised_frame;
+    vector<Image>  upscaled_frame;
     vector<VkSampler>  raytracedImageSamplers;
     vector<VkSampler>  denoisedImageSamplers;
 
-    Buffers       staging_world;
+    vector<Buffer>       staging_world;
     vector<void*> staging_world_mapped;
-    Images                world;
-    Images origin_block_palette;
-    Images        block_palette;
-    Images material_palette;
+    vector<Image>                world;
+    vector<Image> origin_block_palette;
+    vector<Image>        block_palette;
+    vector<Image> material_palette;
     
-    Images swapchain_images;
+    vector<Image> swapchain_images;
     
-    // Buffers 
-    Buffers       depthStaging; //atomic
+    // vector<Buffer> 
+    vector<Buffer>       depthStaging; //atomic
     // vector<VmaAllocation>        paletteCounterBufferAllocations;
 
-    Buffers copy_queue;
+    // vector<Buffer> copy_queue;
     vector<VkBuffer>          copyCounterBuffers; //atomic
     vector<VmaAllocation>           copyCounterBufferAllocations;
 
-    Buffers uniform;
-    vector<VkBuffer> RayGenUniformBuffers;
-    vector<VmaAllocation>           RayGenUniformBufferAllocations;
+    vector<Buffer> uniform;
+    vector<Buffer> RayGenUniformBuffers;
+    // vector<VmaAllocation>           RayGenUniformBufferAllocations;
     vector<void*> RayGenUniformMapped;
 
     //g buffer of prev_pixel pos, matid and normal
@@ -541,7 +545,7 @@ private:
     u32 currentFrame = 0;
     u32 previousFrame = 0;
     int palette_counter = 0;
-    // VisualWorld &_world = world;
+    // VisualWorld* _world = world;
     VkDebugUtilsMessengerEXT debugMessenger;
 };
 

@@ -1,7 +1,7 @@
 .ONESHELL:
 
 #libs are -lglfw3 -lglew32s -lopengl32 -lgdi32 -lccd -lenet64 -lws2_32 -lwinmm
-# G++ = C:\msys64\mingw64\bin\g++.exe
+# G++ = C:\msys64\mingw64\bin\g++ exe
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common
 L = -L${VULKAN_SDK}/Lib

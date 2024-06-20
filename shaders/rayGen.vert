@@ -25,6 +25,7 @@ const vec3 vertiline = normalize(cross(cameraRayDir, horizline));
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
+    mat4 trans_w2s_old;
 } ubo;
 layout(push_constant) uniform constants{
     mat4 trans_m2w; //model to world and than to screen
@@ -59,50 +60,22 @@ void main() {
 
     vec4 world_pos     = pco.trans_m2w     * vec4(posIn,1);
     vec4 world_pos_old = pco.trans_m2w_old * vec4(posIn,1);
-    vec3 relative_pos     = world_pos    .xyz - cameraPos;
-    vec3 relative_pos_old = world_pos_old.xyz - cameraPos;
-    vec3 clip_coords;
-        clip_coords    .x =  dot(relative_pos    , horizline) / view_width ;
-        clip_coords    .y =  dot(relative_pos    , vertiline) / view_height;
-        clip_coords    .z = -dot(relative_pos    , cameraRayDir) / 200.0+0.5; //TODO:
-    vec3 clip_coords_old;
-        clip_coords_old.x =  dot(relative_pos_old, horizline) / view_width ;
-        clip_coords_old.y =  dot(relative_pos_old, vertiline) / view_height;
-        clip_coords_old.z = dot(relative_pos_old, cameraRayDir) / 200.0+0.5; //TODO:
-
-    gl_Position  = vec4(clip_coords, 1);
-
-    //TODO: MERGE UNITS
-    // pos = cameraPos + 
-    //     horizline*clip_coords.x*view_width  + 
-    //     vertiline*clip_coords.y*view_height + 
-    //     depth*cameraRayDir;
-    // vec2 pos = world_pos.xyz;
-    // pos.x = depth;
-    // depth = clip_coords.z;
+    // vec3 relative_pos     = world_pos    .xyz - cameraPos;
+    // vec3 relative_pos_old = world_pos_old.xyz - cameraPos;
     
+    vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
+         clip_coords.z = -clip_coords.z;
+
+    vec3 clip_coords_old = (ubo.trans_w2s_old*world_pos_old).xyz;
+
+    gl_Position  = vec4(clip_coords, 1);    
     
     mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
 
-    //old uv = old_clip/2 + 0.5 - do in this shader
-    // vec2 pos_old = clip_coords_old.xy; //-1 .. +1
-    old_uv = clip_coords_old.xy/2 + 0.5; //0..1
+    old_uv = clip_coords_old.xy/2.0 + 0.5; //0..1
 
-    // packFloat2x16(pos_old.x, pos_old.y);
-    // packHalf2x16(pos_old);
-    // pack
     norm = normalize(m2w_normals*normIn);
-    // norm = -vec3(.5,.6,.7);
-    // vec2 norm_encoded = encode(norm);
-    // float
-
-
-    //   uv_encoded = packUnorm2x16(old_uv);
-    // norm_encoded = packSnorm2x16(encode(norm));
     mat = uint(MatIDIn);
-            //  mat = floatBitsToUint(encode(norm).y);
-        //    depth = dot(relative_pos, cameraRayDir);
-    // MatID = float(66);
 }
 /*
 #version 450

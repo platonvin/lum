@@ -1,13 +1,10 @@
-#include <climits>
-#include <cmath>
-#include <cstddef>
-#include <cstring>
-#include <glm/fwd.hpp>
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
-
 #include "render.hpp" 
-#include "defines.hpp"
+
+// #include <vma/vk_mem_alloc.h>
+
+// #include "defines.hpp"
 
 using namespace std;
 using namespace glm;
@@ -38,6 +35,8 @@ static vector<const char*>   deviceExtensions = {
     // "VK_KHR_shader_non_semantic_info"
 };
 
+static tuple<int, int> get_block_xy(int N);
+
 void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size, vec2 ratio, bool vsync, bool fullscreen){
     world_size = ivec3(x_size, y_size, z_size);
      origin_world.allocate(world_size);
@@ -58,7 +57,6 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
 #ifndef VKNDEBUG
     setup_Debug_Messenger();
 #endif
-
     create_Surface();
     pick_Physical_Device();
     create_Logical_Device();
@@ -73,14 +71,14 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     create_RenderPass_RayGen();
 
     create_Command_Pool();
-    create_Command_Buffers(graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-    create_Command_Buffers(   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-    create_Command_Buffers(  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
     create_samplers();
 
 #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
-    create_Image_Storages(raytraced_frame,
+    create_Image_Storages(&raytraced_frame,
         VK_IMAGE_TYPE_2D,
         RAYTRACED_IMAGE_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -91,7 +89,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT,
         {raytraceExtent.width, raytraceExtent.height, 1});
-    create_Image_Storages(denoised_frame,
+    create_Image_Storages(&denoised_frame,
         VK_IMAGE_TYPE_2D,
         RAYTRACED_IMAGE_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -117,8 +115,8 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     //     VK_IMAGE_LAYOUT_GENERAL,
     //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
     //     VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, 
-    //     {swapChainExtent.width, swapChainExtent.height, 1}); //copy to this
-    create_Image_Storages(matNorm,
+    //     {swapChainExtent.width, swapChainExtent.height, 1}); //copy to this 
+    create_Image_Storages(&matNorm,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R8G8B8A8_SNORM,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -129,9 +127,10 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, 
         {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(oldUv,
+    #define OLD_UV_FORMAT VK_FORMAT_R32G32_SFLOAT
+    create_Image_Storages(&oldUv,
         VK_IMAGE_TYPE_2D,
-        VK_FORMAT_R32G32_SFLOAT,
+        OLD_UV_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -164,9 +163,9 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         //     VK_ACCESS_SHADER_WRITE_BIT, 
         //     {raytraceExtent.width, raytraceExtent.height, 1});
-        create_Image_Storages(oldUv_downscaled,
+        create_Image_Storages(&oldUv_downscaled,
             VK_IMAGE_TYPE_2D,
-            VK_FORMAT_R32G32_SFLOAT,
+            OLD_UV_FORMAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -175,7 +174,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT, 
             {raytraceExtent.width, raytraceExtent.height, 1});
-        create_Image_Storages(matNorm_downscaled,
+        create_Image_Storages(&matNorm_downscaled,
             VK_IMAGE_TYPE_2D,
             VK_FORMAT_R8G8B8A8_SNORM,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -187,7 +186,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
             VK_ACCESS_SHADER_WRITE_BIT, 
             {raytraceExtent.width, raytraceExtent.height, 1});
 
-        create_Image_Storages(upscaled_frame,
+        create_Image_Storages(&upscaled_frame,
             VK_IMAGE_TYPE_2D,
             RAYTRACED_IMAGE_FORMAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -211,7 +210,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         //     {raytraceExtent.width, raytraceExtent.height, 1});
     } //if is scaled
     #define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
-    create_Image_Storages(depthForChecks,
+    create_Image_Storages(&depthForChecks,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_D32_SFLOAT,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -223,7 +222,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         // {swapChainExtent.height, swapChainExtent.width, 1});
         {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(step_count,
+    create_Image_Storages(&step_count,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R8G8B8A8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT,
@@ -235,11 +234,10 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT ,
         {(raytraceExtent.width+7) / 8, (raytraceExtent.height+7) / 8, 1}); // local_size / warp_size of raytracer
 
-    create_Buffer_Storages(staging_world.buffers, staging_world.allocs,
+    create_Buffer_Storages(&staging_world,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         world_size.x*world_size.y*world_size.z*sizeof(BlockID_t), true);
-println
-    create_Image_Storages(world,
+    create_Image_Storages(&world,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R16_SINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -250,7 +248,7 @@ println
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
         world_size); //TODO: dynamic
-    create_Image_Storages(origin_block_palette,
+    create_Image_Storages(&origin_block_palette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
@@ -261,7 +259,7 @@ println
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
-    create_Image_Storages(block_palette,
+    create_Image_Storages(&block_palette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -272,7 +270,7 @@ println
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
-    create_Image_Storages(material_palette,
+    create_Image_Storages(&material_palette,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -284,49 +282,55 @@ println
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT ,
         {6, 256, 1}); //TODO: dynamic, text formats, pack Material into smth other than 6 floats :)
 
-    // create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size)
+    // create_Buffer_Storages(vector<VkBuffer>* buffers, vector<VmaAllocation>* allocs, VkBufferUsageFlags usage, u32 size)
     // create_Buffer_Storages(depthStaginBuffers, paletteCounterBufferAllocations,
     //     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     //     sizeof(int));
-    create_Buffer_Storages(copyCounterBuffers, copyCounterBufferAllocations,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        sizeof(int)*(copy_queue_size));
-    create_Buffer_Storages(RayGenUniformBuffers, RayGenUniformBufferAllocations,
+    // create_Buffer_Storages(copyCounterBuffers, copyCounterBufferAllocations,
+    //     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    //     sizeof(int)*(copy_queue_size));
+    create_Buffer_Storages(&RayGenUniformBuffers,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        sizeof(mat4), true);
-println
+        sizeof(mat4)*2, true);
     RayGenUniformMapped.resize(MAX_FRAMES_IN_FLIGHT);
     staging_world_mapped.resize(MAX_FRAMES_IN_FLIGHT);
-    for (i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        vmaMapMemory(VMAllocator, RayGenUniformBufferAllocations[i], &RayGenUniformMapped[i]);
-        vmaMapMemory(VMAllocator,  staging_world.allocs[i], &staging_world_mapped[i]);
+    for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+        vmaMapMemory(VMAllocator, RayGenUniformBuffers[i].alloc, &RayGenUniformMapped[i]);
+        vmaMapMemory(VMAllocator,  staging_world[i].alloc, &staging_world_mapped[i]);
     }
     
-    vector<vector<VkImageView>> swapViews = {swapchain_images.views};
-    create_N_Framebuffers(swapChainFramebuffers, swapViews, graphicalRenderPass, swapchain_images.images.size(), swapChainExtent.width, swapChainExtent.height);
+    vector<vector<VkImageView>> swapViews = {};
+    swapViews.resize(1);
+    // for()
+    for(int i=0; i<swapchain_images.size(); i++) {
+        swapViews[0].push_back(swapchain_images[i].view);
+    }
+    create_N_Framebuffers(&swapChainFramebuffers, &swapViews, graphicalRenderPass, swapchain_images.size(), swapChainExtent.width, swapChainExtent.height);
 // printl(swapchain_images.images.size());
     // vector<vector<VkImageView>> rayGenVeiws = {gBuffer.views, rayGenNormImageViews, rayGenPosDiffImageViews, depth.view};
-    vector<vector<VkImageView>> rayGenVeiws = {matNorm.views, oldUv.views, /*depth.views,*/ depthForChecks.views};
 
-    create_N_Framebuffers(rayGenFramebuffers, rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
-println
+    vector<vector<VkImageView>> rayGenVeiws = {};
+    rayGenVeiws.resize(3);
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
+        rayGenVeiws[0].push_back(       matNorm[i].view);
+        rayGenVeiws[1].push_back(         oldUv[i].view);
+        rayGenVeiws[2].push_back(depthForChecks[i].view);
+    }
+    create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
     
     create_Descriptor_Set_Layouts();
     create_Descriptor_Pool();
     allocate_Descriptors();
 
     // setup_Blockify_Descriptors();
-    setup_Copy_Descriptors();
-println
+    // setup_Copy_Descriptors();
     //setup for map?
-    setup_Df_Descriptors();
+    // setup_Df_Descriptors();
     setup_Raytrace_Descriptors();
     setup_Denoise_Descriptors();
-println
     if(is_scaled) {
         setup_Upscale_Descriptors();
     }
-println
     setup_Graphical_Descriptors();
     setup_RayGen_Descriptors();
 
@@ -335,14 +339,13 @@ println
 
     create_compute_pipelines();
 
-println
     
     create_Sync_Objects();
 }
-void Renderer::delete_Images(Images* images){
+void Renderer::delete_Images(vector<Image>* images){
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        vkDestroyImageView(device, images->views[i], NULL);
-        vmaDestroyImage(VMAllocator, images->images[i], images->allocs[i]);
+         vkDestroyImageView(device,  (*images)[i].view, NULL);
+        vmaDestroyImage(VMAllocator, (*images)[i].image, (*images)[i].alloc);
     }
 }
 void Renderer::cleanup(){
@@ -376,10 +379,10 @@ void Renderer::cleanup(){
         // vmaDestroyBuffer(VMAllocator, depthStaginBuffers[i], paletteCounterBufferAllocations[i]);
         vmaDestroyBuffer(VMAllocator, copyCounterBuffers[i], copyCounterBufferAllocations[i]);
 
-            vmaUnmapMemory(VMAllocator,                           staging_world.allocs[i]);
-            vmaUnmapMemory(VMAllocator,                          RayGenUniformBufferAllocations[i]);
-        vmaDestroyBuffer(VMAllocator,  staging_world.buffers[i], staging_world.allocs[i]);
-        vmaDestroyBuffer(VMAllocator, RayGenUniformBuffers[i], RayGenUniformBufferAllocations[i]);
+            vmaUnmapMemory(VMAllocator,                           staging_world[i].alloc);
+            vmaUnmapMemory(VMAllocator,                          RayGenUniformBuffers[i].alloc);
+        vmaDestroyBuffer(VMAllocator,  staging_world[i].buffer, staging_world[i].alloc);
+        vmaDestroyBuffer(VMAllocator, RayGenUniformBuffers[i].buffer, RayGenUniformBuffers[i].alloc);
 
         vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
     }
@@ -452,8 +455,8 @@ void Renderer::cleanup(){
     // vkDestroyShaderModule(device, raytraceShaderModule, NULL); 
     vkDestroyShaderModule(device, graphicsVertShaderModule, NULL);
     vkDestroyShaderModule(device, graphicsFragShaderModule, NULL); 
-    for (auto imageView : swapchain_images.views) {
-        vkDestroyImageView(device, imageView, NULL);
+    for (auto img : swapchain_images) {
+        vkDestroyImageView(device, img.view, NULL);
     }
     vkDestroySwapchainKHR(device, swapchain, NULL);
     //do before destroyDevice
@@ -569,7 +572,7 @@ void Renderer::create_Instance(){
     VkInstanceCreateInfo createInfo = {};
     #ifndef VKNDEBUG 
         // createInfo.
-        // createInfo.pNext = &features; // according to spec
+        createInfo.pNext = &features; // according to spec
 
     #endif 
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -873,9 +876,15 @@ void Renderer::create_Swapchain(){
     VK_CHECK(vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain));
 
     vkGetSwapchainImagesKHR(device, swapchain, &imageCount, NULL);
-    swapchain_images.images.resize(imageCount);
+    swapchain_images.resize(imageCount);
+    vector<VkImage> imgs (imageCount);
+
     // cout << imageCount << "\n";
-    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchain_images.images.data());
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, imgs.data());
+    for(int i=0; i<imageCount; i++){
+        swapchain_images[i].image = imgs[i];
+    }
+
 
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
@@ -893,15 +902,15 @@ void Renderer::recreate_Swapchain(){
     // vkDestroySwapchainKHR(device, swapchain, NULL);
 
     // for (i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-    //     vkDestroyImageView(device,      raytraced_frame.views[i], NULL);
-    //     vkDestroyImageView(device, gBuffer.views[i], NULL);
+    //     vkDestroyImageView(device,      raytraced_frame[i].view, NULL);
+    //     vkDestroyImageView(device, gBuffer[i].view, NULL);
     //     vkDestroyImageView(device,   rayGenNormImageViews[i], NULL);
-    //     vkFreeMemory(device,      raytracedImagesMemory[i], NULL);
-    //     vkFreeMemory(device, gBufferImagesMemory[i], NULL);
-    //     vkFreeMemory(device,   rayGenNormImagesMemory[i], NULL);
-    //     vkDestroyImage(device,      raytraced_frame.images[i], NULL);
-    //     vkDestroyImage(device, gBuffer.images[i], NULL);
-    //     vkDestroyImage(device,   rayGenNormImages[i], NULL);
+    //     vkFreeMemory(device,      raytracedvector<ImagesMemor>[i], NULL);
+    //     vkFreeMemory(device, gBuffervector<ImagesMemor>[i], NULL);
+    //     vkFreeMemory(device,   rayGenNormvector<ImagesMemor>[i], NULL);
+    //     vkDestroyImage(device,      raytraced_frame[i].image, NULL);
+    //     vkDestroyImage(device, gBuffer[i].image, NULL);
+    //     vkDestroyImage(device,   rayGenNormvector<Image>[i], NULL);
 
     //     vkDestroyFramebuffer(device, rayGenFramebuffers[i], NULL);
     // }
@@ -909,21 +918,21 @@ void Renderer::recreate_Swapchain(){
     // create_Swapchain();
     // create_Image_Views();
 
-    // create_Image_Storages(raytraced_frame.images, raytracedImagesMemory, raytraced_frame.views,
+    // create_Image_Storages(raytraced_frame.images, raytracedvector<ImagesMemor>, raytraced_frame.views,
     //     VK_IMAGE_TYPE_2D,
     //     VK_FORMAT_R8G8B8A8_UNORM,
     //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     //     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
     //     VK_ACCESS_SHADER_WRITE_BIT);
-    // create_Image_Storages(gBuffer.images, gBufferImagesMemory, gBuffer.views,
+    // create_Image_Storages(gBuffer.images, gBuffervector<ImagesMemor>, gBuffer.views,
     //     VK_IMAGE_TYPE_2D,
     //     VK_FORMAT_R32G32B32A32_SFLOAT,
     //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     //     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
     //     VK_ACCESS_SHADER_WRITE_BIT);
-    // create_Image_Storages(rayGenNormImages, rayGenNormImagesMemory, rayGenNormImageViews,
+    // create_Image_Storages(rayGenNormvector<Image>, rayGenNormvector<ImagesMemor>, rayGenNormImageViews,
     //     VK_IMAGE_TYPE_2D,
     //     VK_FORMAT_R32G32B32A32_SFLOAT,
     //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -940,12 +949,12 @@ void Renderer::recreate_Swapchain(){
 }
 
 void Renderer::create_Swapchain_Image_Views(){
-    swapchain_images.views.resize(swapchain_images.images.size());
+    // swapchain_images.views.resize(swapchain_images.images.size());
 
-    for(i32 i=0; i<swapchain_images.images.size(); i++){
+    for(i32 i=0; i<swapchain_images.size(); i++){
         VkImageViewCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = swapchain_images.images[i];
+        createInfo.image = swapchain_images[i].image;
         createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         createInfo.format = swapChainImageFormat;
         createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -958,7 +967,7 @@ void Renderer::create_Swapchain_Image_Views(){
         createInfo.subresourceRange.baseArrayLayer = 0;
         createInfo.subresourceRange.layerCount = 1;
 
-        VK_CHECK(vkCreateImageView(device, &createInfo, NULL, &swapchain_images.views[i]));
+        VK_CHECK(vkCreateImageView(device, &createInfo, NULL, &swapchain_images[i].view));
     }
 }
 
@@ -976,13 +985,13 @@ vector<char> read_Shader(const char* filename) {
     return buffer;
 }
 
-VkShaderModule Renderer::create_Shader_Module(vector<char>& code) {
+VkShaderModule Renderer::create_Shader_Module(vector<char>* code) {
     VkShaderModule shaderModule;
     VkShaderModuleCreateInfo createInfo = {};
 
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.codeSize = code.size();
-    createInfo.pCode = reinterpret_cast<const u32*>(code.data());
+    createInfo.codeSize = (*code).size();
+    createInfo.pCode = reinterpret_cast<const u32*>((*code).data());
 
     VK_CHECK(vkCreateShaderModule(device, &createInfo, NULL, &shaderModule));
 
@@ -1041,7 +1050,7 @@ void Renderer::create_RenderPass_RayGen(){
         caMatNorm.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         caMatNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription caOldUv = {};
-        caOldUv.format = VK_FORMAT_R32G32_SFLOAT;
+        caOldUv.format = OLD_UV_FORMAT;
         caOldUv.samples = VK_SAMPLE_COUNT_1_BIT;
         caOldUv.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         caOldUv.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
@@ -1117,8 +1126,8 @@ void Renderer::create_Graphics_Pipeline(){
     auto vertShaderCode = read_Shader("shaders/compiled/vert.spv");
     auto fragShaderCode = read_Shader("shaders/compiled/frag.spv");
 
-    graphicsVertShaderModule = create_Shader_Module(vertShaderCode);
-    graphicsFragShaderModule = create_Shader_Module(fragShaderCode);
+    graphicsVertShaderModule = create_Shader_Module(&vertShaderCode);
+    graphicsFragShaderModule = create_Shader_Module(&fragShaderCode);
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1250,8 +1259,8 @@ void Renderer::create_RayGen_Pipeline(){
     auto vertShaderCode = read_Shader("shaders/compiled/rayGenVert.spv");
     auto fragShaderCode = read_Shader("shaders/compiled/rayGenFrag.spv");
 
-    rayGenVertShaderModule = create_Shader_Module(vertShaderCode);
-    rayGenFragShaderModule = create_Shader_Module(fragShaderCode);
+    rayGenVertShaderModule = create_Shader_Module(&vertShaderCode);
+    rayGenFragShaderModule = create_Shader_Module(&fragShaderCode);
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1435,12 +1444,12 @@ void Renderer::create_RayGen_Pipeline(){
         VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &rayGenPipeline));
 }
 
-void Renderer::create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector<vector<VkImageView>> &views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height){
-    framebuffers.resize(N);
+void Renderer::create_N_Framebuffers(vector<VkFramebuffer>* framebuffers, vector<vector<VkImageView>>* views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height){
+    (*framebuffers).resize(N);
 
     for (u32 i = 0; i < N; i++) {
         vector<VkImageView> attachments = {};
-        for (auto viewVec : views) {
+        for (auto viewVec : *views) {
             attachments.push_back(viewVec[i]);
         }
 
@@ -1453,7 +1462,7 @@ void Renderer::create_N_Framebuffers(vector<VkFramebuffer> &framebuffers, vector
             framebufferInfo.height = Height;
             framebufferInfo.layers = 1;
 
-        VK_CHECK(vkCreateFramebuffer(device, &framebufferInfo, NULL, &framebuffers[i]));
+        VK_CHECK(vkCreateFramebuffer(device, &framebufferInfo, NULL, &(*framebuffers)[i]));
     }
 }
 
@@ -1470,16 +1479,16 @@ void Renderer::create_Command_Pool(){
     VK_CHECK(vkCreateCommandPool(device, &poolInfo, NULL, &commandPool));
 }
 
-void Renderer::create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, u32 size){
-    commandBuffers.resize(size);
+void Renderer::create_Command_Buffers(vector<VkCommandBuffer>* commandBuffers, u32 size){
+    (*commandBuffers).resize(size);
 
     VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = commandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = commandBuffers.size();
+        allocInfo.commandBufferCount = (*commandBuffers).size();
     
-    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data())); 
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, (*commandBuffers).data())); 
 }
 
 // void Renderer::record_Command_Buffer_Graphical(VkCommandBuffer commandBuffer, u32 imageIndex){
@@ -1490,11 +1499,11 @@ void Renderer::create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, u
 
 //     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-//     transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//     transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame[currentFrame].image, RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 //         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 //         0, VK_ACCESS_SHADER_READ_BIT
 //     );
-//     // transition_Image_Layout_Cmdb(commandBuffer, gBuffer.images[currentFrame], VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//     // transition_Image_Layout_Cmdb(commandBuffer, gBuffer[currentFrame].image, VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 //     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 //     //     0, VK_ACCESS_SHADER_READ_BIT
 //     // );
@@ -1551,7 +1560,7 @@ void Renderer::create_Command_Buffers(vector<VkCommandBuffer>& commandBuffers, u
 //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
 
 
-//     transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+//     transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame[currentFrame].image, RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
 //         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 //         0, VK_ACCESS_SHADER_WRITE_BIT
 //     );
@@ -1615,15 +1624,32 @@ void Renderer::create_Sync_Objects(){
 
 void Renderer::start_Frame(){
     // update transformation matrix for raygen:
-    mat4 isometricRotation = identity<mat4>(); 
-         isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(0, 1, 0));
-         isometricRotation = rotate(isometricRotation, radians(+45.0f), vec3(1, 0, 0));
+    // const vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
+    // const vec3 cameraPos = vec3(60, 0, 50);
 
-    mat4 trans = scale(isometricRotation, vec3(.03));
-    trans = scale(trans, vec3((1080.0/1920.0), 1.0, 1.0));
-//1920.0/1080.0
-//(1080.0/1920.0)
-    memcpy(RayGenUniformMapped[currentFrame], &trans, sizeof(trans));
+    // camera_pos = cameraPos;
+    // camera_dir = cameraRayDir;
+
+// vec3 cameraRayDirPlane = normalize(vec3(cameraRayDir.x, cameraRayDir.y, 0));
+// vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
+// vec3 vertiline = normalize(cross(cameraRayDir, horizline));
+
+    vec3 up = glm::vec3(0.0f, 0.0f, 1.0f); // Up vector
+    // vec3 up1 = up.xyz;
+    // vec3 up1 = up.xxx();
+
+    mat4 view = glm::lookAt(camera_pos, camera_pos+camera_dir, up);
+    mat4 projection = glm::ortho(-1920.f/42.f, 1920.f/42.f, 1080.f/42.f, -1080.f/42.f, -0.f, 200.f); // => *100.0 decoding
+    mat4     worldToScreen = projection * view;
+    mat4 old_worldToScreen = projection * view;
+
+    struct unicopy {mat4 trans; mat4 old_trans;} unicopy = {};
+    unicopy.trans = worldToScreen;
+    unicopy.old_trans = old_trans;
+    
+    memcpy(RayGenUniformMapped[currentFrame], &unicopy, sizeof(unicopy));
+
+    old_trans = old_worldToScreen;
 }
 
 void Renderer::startRaygen(){
@@ -1637,6 +1663,14 @@ void Renderer::startRaygen(){
         beginInfo.flags = 0; // Optional
         beginInfo.pInheritanceInfo = NULL; // Optional
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        );
 
     vector<VkClearValue> clearColors = {
         {}, 
@@ -1671,27 +1705,28 @@ void Renderer::startRaygen(){
         scissor.extent = swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
-void Renderer::RaygenMesh(Mesh &mesh){
+void Renderer::RaygenMesh(Mesh *mesh){
     
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
-        VkBuffer vertexBuffers[] = {mesh.vertexes.buffers[currentFrame]};
+        VkBuffer vertexBuffers[] = {(*mesh).vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
     
+
     //TODO:
-    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &mesh.transform);
-    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(mat4), sizeof(mat4), &mesh.old_transform);
-    mesh.old_transform = mesh.transform;
+    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &(*mesh).transform);
+    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(mat4), sizeof(mat4), &(*mesh).old_transform);
+    // vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(mat4), sizeof(mat4), &worldToScreen);
+    (*mesh).old_transform = (*mesh).transform;
 
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, mesh.indexes.buffers[currentFrame], 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(commandBuffer, mesh.icount, 1, 0, 0, 0);
+    vkCmdBindIndexBuffer(commandBuffer, (*mesh).indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, (*mesh).icount, 1, 0, 0, 0);
 }
 void Renderer::endRaygen(){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
-    vkCmdEndRenderPass(commandBuffer);
 
-    VkOffset3D srcOffsets[2] = {};
-    VkOffset3D dstOffsets[2] = {};
+    // VkOffset3D srcOffsets[2] = {};
+    // VkOffset3D dstOffsets[2] = {};
 
     VkImageBlit blit = {};
         blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1715,8 +1750,8 @@ void Renderer::endRaygen(){
 
     //LOL drawing to depth twice is more efficient than drawing once and copying
         // blit_filter.
-    // vkCmdBlitImage(commandBuffer, depthForChecks.images[currentFrame], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, depth.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, 1, &blit, blit_filter);
-    // transition_Image_Layout_Cmdb(commandBuffer, depthForChecks.images[currentFrame], VK_FORMAT_D32_SFLOAT, DEPTH_LAYOUT, VK_IMAGE_LAYOUT_GENERAL,
+    // vkCmdBlitImage(commandBuffer, depthForChecks[currentFrame].image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, depth[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, blit_filter);
+    // transition_Image_Layout_Cmdb(commandBuffer, depthForChecks[currentFrame].image, VK_FORMAT_D32_SFLOAT, DEPTH_LAYOUT, VK_IMAGE_LAYOUT_GENERAL,
     //     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
     //     VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT);
     
@@ -1735,26 +1770,26 @@ void Renderer::endRaygen(){
 
     //     detpth2bufferCopyRegion.imageOffset = {0,0,0};
     //     detpth2bufferCopyRegion.imageExtent = {swapChainExtent.width, swapChainExtent.height, 1};
-    // vkCmdCopyImageToBuffer(commandBuffer, depthForChecks.images[currentFrame], DEPTH_LAYOUT, depthStaging.buffers[currentFrame], 1, &detpth2bufferCopyRegion);
+    // vkCmdCopyImageToBuffer(commandBuffer, depthForChecks[currentFrame].image, DEPTH_LAYOUT, depthStaging[currentFrame].buffer, 1, &detpth2bufferCopyRegion);
     //todo sync
             // detpth2bufferCopyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    // vkCmdCopyBufferToImage(commandBuffer, depthStaging.buffers[currentFrame], depth.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, 1, &detpth2bufferCopyRegion);
+    // vkCmdCopyBufferToImage(commandBuffer, depthStaging[currentFrame].buffer, depth[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &detpth2bufferCopyRegion);
     if (is_scaled) {
             blit.dstOffsets[1].x = raytraceExtent.width;
             blit.dstOffsets[1].y = raytraceExtent.height;
-        // vkCmdBlitImage(commandBuffer, depth.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, depth_downscaled.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, 1, &blit, blit_filter);
+        // vkCmdBlitImage(commandBuffer, depth[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, depth_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, blit_filter);
             // blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             // blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        vkCmdBlitImage(commandBuffer, matNorm.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, matNorm_downscaled.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, 1, &blit, blit_filter);
-        vkCmdBlitImage(commandBuffer, oldUv.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, oldUv_downscaled.images[currentFrame], VK_IMAGE_LAYOUT_GENERAL, 1, &blit, blit_filter);
+        vkCmdBlitImage(commandBuffer, matNorm[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, matNorm_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
+        vkCmdBlitImage(commandBuffer, oldUv[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, oldUv_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_LINEAR);
     }
-    VkImageMemoryBarrier barrier{};
+    //  barrier{};
     //     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER; 
     //     barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
     //     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     //     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     //     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     barrier.image = depth.images[currentFrame];
+    //     barrier.image = depth[currentFrame].image;
     //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     //     barrier.subresourceRange.baseMipLevel = 0;
     //     barrier.subresourceRange.levelCount = 1;
@@ -1770,13 +1805,14 @@ void Renderer::endRaygen(){
     //         0, NULL,
     //         1, &barrier
     //     ); 
-    barrier = {};
+    VkImageMemoryBarrier barrier = {};
+    if (is_scaled) {
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER; 
         barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = matNorm_downscaled.images[currentFrame];
+        barrier.image = matNorm_downscaled[currentFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -1784,37 +1820,38 @@ void Renderer::endRaygen(){
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
-    vkCmdPipelineBarrier(
+        vkCmdPipelineBarrier(
             commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
             0, NULL,
             0, NULL,
             1, &barrier
-        ); 
-    barrier ={};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER; 
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = matNorm.images[currentFrame];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
-    vkCmdPipelineBarrier(
+        );
+        barrier.image = oldUv_downscaled[currentFrame].image;
+        vkCmdPipelineBarrier(
             commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
             0, NULL,
             0, NULL,
             1, &barrier
-        ); 
-    // barrier.image = depth_downscaled.images[currentFrame];
+        );
+    } 
+    // barrier ={};
+    //     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER; 
+    //     barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    //     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    //     barrier.image = matNorm[currentFrame].image;
+    //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    //     barrier.subresourceRange.baseMipLevel = 0;
+    //     barrier.subresourceRange.levelCount = 1;
+    //     barrier.subresourceRange.baseArrayLayer = 0;
+    //     barrier.subresourceRange.layerCount = 1;
+    //     barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
     // vkCmdPipelineBarrier(
     //         commandBuffer,
     //         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1823,7 +1860,7 @@ void Renderer::endRaygen(){
     //         0, NULL,
     //         1, &barrier
     //     ); 
-    // barrier.image = matNorm_downscaled.images[currentFrame];
+    // barrier.image = depth_downscaled[currentFrame].image;
     // vkCmdPipelineBarrier(
     //         commandBuffer,
     //         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1832,6 +1869,65 @@ void Renderer::endRaygen(){
     //         0, NULL,
     //         1, &barrier
     //     ); 
+    // barrier.image = matNorm_downscaled[currentFrame].image;
+    // vkCmdPipelineBarrier(
+    //         commandBuffer,
+    //         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    //         0,
+    //         0, NULL,
+    //         0, NULL,
+    //         1, &barrier
+    //     ); 
+    vkCmdEndRenderPass(commandBuffer);
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER; 
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = matNorm[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+        barrier.image = oldUv[currentFrame].image;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+        barrier.image = depthForChecks[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
     VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1858,13 +1954,65 @@ void Renderer::startCompute(){
     // vkCmdFillBuffer(commandBuffer,    copyCounterBuffers[currentFrame], sizeof(int)*3, sizeof(int)*1000, 0);
     // vkCmdFillBuffer(commandBuffer, paletteCounterBuffers[currentFrame], sizeof(int)*0, VK_WHOLE_SIZE, 0);
 
-    copy_Whole_Image({16*BLOCK_PALETTE_SIZE_X,16*BLOCK_PALETTE_SIZE_Y,16}, commandBuffer, 
-        origin_block_palette.images[currentFrame], block_palette.images[currentFrame]);
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+        
+    VkImageCopy copy_op = {};
+        copy_op.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy_op.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy_op.srcSubresource.layerCount = 1;
+        copy_op.dstSubresource.layerCount = 1;
+        copy_op.srcSubresource.baseArrayLayer = 0;
+        copy_op.dstSubresource.baseArrayLayer = 0;
+        copy_op.srcSubresource.mipLevel = 0;
+        copy_op.dstSubresource.mipLevel = 0;
+        copy_op.srcOffset = {0,0,0};
+        copy_op.dstOffset = {0,0,0};
+        copy_op.extent = {16*BLOCK_PALETTE_SIZE_X,16*BLOCK_PALETTE_SIZE_Y,16};
+    vkCmdCopyImage(commandBuffer, 
+        origin_block_palette[currentFrame].image,
+        VK_IMAGE_LAYOUT_GENERAL, //TODO:
+        block_palette[currentFrame].image,
+        VK_IMAGE_LAYOUT_GENERAL, //TODO:
+        1,
+        &copy_op
+    );
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = block_palette[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT ;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
+    // copy_Whole_Image(, commandBuffer, 
+    //     , );
     // copy_Whole_Image({8,8,8}, commandBuffer, 
-    //     originWorldImages[currentFrame],       world.images[currentFrame]);
+    //     originWorldvector<Image>[currentFrame],       world[currentFrame].image);
 }
 void Renderer::startBlockify(){
-    // VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
     // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, blockifyPipeline);
     // vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, blockifyLayout, 0, 1, &blockifyDescriptorSets[currentFrame], 0, 0);
@@ -1885,10 +2033,20 @@ void Renderer::startBlockify(){
     //     0, NULL,
     //     1, &copy_barrier,
     //     0, NULL
-    // );
-    palette_counter = 1; //TODO: change to static block count. Currently its size of 1 cause of air
+    copy_queue.clear();
+
+    palette_counter = 6; //TODO: change to static block count. Currently its size of 1 cause of air
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
     memcpy(current_world.data(), origin_world.data(), size_to_copy);
+
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
 }
 struct AABB {
   vec3 min;
@@ -1928,25 +2086,64 @@ static AABB get_shift(mat4 trans, ivec3 size){
 }
 // allocates temp block in palette for every block that intersects with every mesh blockified
 //TODO: MAKE THIS ACTUALLY DYNAMIC
-void Renderer::blockifyMesh(Mesh& mesh){
+void Renderer::blockifyMesh(Mesh* mesh){
     //cpu code that does smth in mapped memory and than "flushes" to gpu
-    // int* block_image = (int*)stagingWorldBuffersMapped[currentFrame];
+    // int* block_image = (int*)stagingWorldvector<BuffersMapped>[currentFrame];
 
-    struct AABB border_in_voxel = get_shift(mesh.transform, mesh.size);
+    struct AABB border_in_voxel = get_shift((*mesh).transform, (*mesh).size);
     
     struct {ivec3 min; ivec3 max;} border; 
-    border.min = ivec3(border_in_voxel.min) / ivec3(16);
-    border.max = ivec3(border_in_voxel.max) / ivec3(16);
+    border.min = ivec3(border_in_voxel.min) / ivec3(16) -ivec3(1);
+    border.max = ivec3(border_in_voxel.max) / ivec3(16) +ivec3(1);
+
+    // border.min = ivec3(0);
+    // border.max = ivec3(7);
+
+    border.min = clamp(border.min, ivec3(0), ivec3(7));
+    border.max = clamp(border.max, ivec3(0), ivec3(7));
     
     for(int xx = border.min.x; xx <= border.max.x; xx++){
     for(int yy = border.min.y; yy <= border.max.y; yy++){
     for(int zz = border.min.z; zz <= border.max.z; zz++){
         //if inside model TODO
+        // if(
+        //     any(greaterThanEqual(ivec3(xx,yy,zz), ivec3(8))) ||
+        //     any(   lessThan     (ivec3(xx,yy,zz), ivec3(0)))) {
+        //         continue;
+        //     }
         //static blocks TODO
         int current_block = current_world(xx,yy,zz); 
         if (current_block == 0){ //if not allocated
             current_world(xx,yy,zz) = palette_counter;
             palette_counter++;
+        } else {
+            if(current_block <= 5) { // static and non-empty
+                //add to copy queue
+                ivec2 src_block = {}; 
+                tie(src_block.x, src_block.y) = get_block_xy(current_block);
+                ivec2 dst_block = {}; 
+                tie(dst_block.x, dst_block.y) = get_block_xy(palette_counter);
+                VkImageCopy 
+                    static_block_copy = {};
+                    static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    static_block_copy.srcSubresource.baseArrayLayer = 0;
+                    static_block_copy.srcSubresource.layerCount = 1;
+                    static_block_copy.srcSubresource.mipLevel = 0;
+                    static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    static_block_copy.dstSubresource.baseArrayLayer = 0;
+                    static_block_copy.dstSubresource.layerCount = 1;
+                    static_block_copy.dstSubresource.mipLevel = 0;
+                    static_block_copy.extent = {16,16,16};
+                    static_block_copy.srcOffset = {src_block.x*16, src_block.y*16, 0};
+                    static_block_copy.dstOffset = {dst_block.x*16, dst_block.y*16, 0};
+                    // static_block_copy.
+                    copy_queue.push_back(static_block_copy);
+
+                    current_world(xx,yy,zz) = palette_counter;
+                    palette_counter++; // yeah i dont trust myself in this  
+            } else {
+                //already new block, just leave it
+            }
         }
         // block_image[xx + yy*8 + zz*8*8] = palette_counter++;
     }}}
@@ -1955,7 +2152,7 @@ void Renderer::blockifyMesh(Mesh& mesh){
     // for(int zz = 0; zz < world_size.z; zz++){
     //     block_image[xx + yy*8 + zz*8*8] = xx + yy*8 + zz*8*8 + 2;
     // }}}
-    // vkFlushMappedMemoryRanges(device, 1, blockImagesMapped[currentFrame]);
+    // vkFlushMappedMemoryRanges(device, 1, blockvector<ImagesMappe>[currentFrame]);
     // VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
     // vkCmdPushConstants(commandBuffer, blockifyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(mat4), &mesh.transform);
@@ -1966,7 +2163,7 @@ void Renderer::blockifyMesh(Mesh& mesh){
     //     block_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     //     block_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     //     block_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     block_barrier.image = world.images[currentFrame];
+    //     block_barrier.image = world[currentFrame].image;
     //     block_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     //     block_barrier.subresourceRange.baseMipLevel = 0;
     //     block_barrier.subresourceRange.levelCount = 1;
@@ -1977,7 +2174,7 @@ void Renderer::blockifyMesh(Mesh& mesh){
     // vkCmdPipelineBarrier( 
     //     commandBuffer,
     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //     VK_DEPENDENCY_BY_REGION_BIT,
+    //     0,
     //     0, NULL,
     //     0, NULL,
     //     1, &block_barrier
@@ -1992,7 +2189,7 @@ void Renderer::blockifyMesh(Mesh& mesh){
     //     block_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     //     block_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     //     block_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     block_barrier.image = world.images[currentFrame];
+    //     block_barrier.image = world[currentFrame].image;
     //     block_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     //     block_barrier.subresourceRange.baseMipLevel = 0;
     //     block_barrier.subresourceRange.levelCount = 1;
@@ -2003,7 +2200,7 @@ void Renderer::blockifyMesh(Mesh& mesh){
     // vkCmdPipelineBarrier( 
     //     commandBuffer,
     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //     VK_DEPENDENCY_BY_REGION_BIT,
+    //     0,
     //     0, NULL,
     //     0, NULL,
     //     1, &block_barrier
@@ -2013,20 +2210,38 @@ void Renderer::blockifyMesh(Mesh& mesh){
 //                                  8); //adds 1 block to size for each axis
 }
 void Renderer::endBlockify(){
-    // int* block_image = (int*)stagingWorldBuffersMapped[currentFrame];
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    // int* block_image = (int*)stagingWorldvector<BuffersMapped>[currentFrame];
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
-    
+    assert(size_to_copy != 0);
     memcpy(staging_world_mapped[currentFrame], current_world.data(), size_to_copy);
-    
-    vmaFlushAllocation(VMAllocator, staging_world.allocs[currentFrame], 0, size_to_copy);
-    // VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+    vmaFlushAllocation(VMAllocator, staging_world[currentFrame].alloc, 0, size_to_copy);
 
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+
+    if(copy_queue.size() != 0){
+        vkCmdCopyImage(commandBuffer, origin_block_palette[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, block_palette[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, copy_queue.size(), copy_queue.data());
     // VkBufferMemoryBarrier copy_barrier{};
     //     copy_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     //     copy_barrier.size = VK_WHOLE_SIZE;
     //     copy_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     //     copy_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     copy_barrier.buffer = copyCounterBuffers[currentFrame];
+    //     copy_barrier.buffer = copyCounterBuffers[currentFrame];  
     //     copy_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
     //     copy_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     // // vkcmdbarrer
@@ -2038,34 +2253,89 @@ void Renderer::endBlockify(){
     //     1, &copy_barrier,
     //     0, NULL
     // );
-    // VkImageMemoryBarrier block_barrier{};
-    //     block_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    //     block_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     block_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     block_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     block_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     block_barrier.image = world.images[currentFrame];
-    //     block_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    //     block_barrier.subresourceRange.baseMipLevel = 0;
-    //     block_barrier.subresourceRange.levelCount = 1;
-    //     block_barrier.subresourceRange.baseArrayLayer = 0;
-    //     block_barrier.subresourceRange.layerCount = 1;
-    //     block_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
-    //     block_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    // vkCmdPipelineBarrier( 
-    //     commandBuffer,
-    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //     VK_DEPENDENCY_BY_REGION_BIT,
-    //     0, NULL,
-    //     0, NULL,
-    //     1, &block_barrier
-    // );
-    copy_Buffer(staging_world.buffers[currentFrame], world.images[currentFrame], world_size, VK_IMAGE_LAYOUT_GENERAL);
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+        VkImageMemoryBarrier block_palette_barrier{};
+            block_palette_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            block_palette_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            block_palette_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            block_palette_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            block_palette_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            block_palette_barrier.image = block_palette[currentFrame].image;
+            block_palette_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            block_palette_barrier.subresourceRange.baseMipLevel = 0;
+            block_palette_barrier.subresourceRange.levelCount = 1;
+            block_palette_barrier.subresourceRange.baseArrayLayer = 0;
+            block_palette_barrier.subresourceRange.layerCount = 1;
+            block_palette_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
+            block_palette_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        vkCmdPipelineBarrier( 
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &block_palette_barrier
+        );
+    }
+    VkBufferImageCopy copyRegion = {};
+    // copyRegion.size = size;
+        copyRegion.imageExtent.width  = world_size.x;
+        copyRegion.imageExtent.height = world_size.y;
+        copyRegion.imageExtent.depth  = world_size.z;
+        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.imageSubresource.layerCount = 1;
+    vkCmdCopyBufferToImage(commandBuffer, staging_world[currentFrame].buffer, world[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion);
+vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+    VkImageMemoryBarrier staging_world_barrier{};
+        staging_world_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        staging_world_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        staging_world_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        staging_world_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        staging_world_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        staging_world_barrier.image = world[currentFrame].image;
+        staging_world_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        staging_world_barrier.subresourceRange.baseMipLevel = 0;
+        staging_world_barrier.subresourceRange.levelCount = 1;
+        staging_world_barrier.subresourceRange.baseArrayLayer = 0;
+        staging_world_barrier.subresourceRange.layerCount = 1;
+        staging_world_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
+        staging_world_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+    vkCmdPipelineBarrier( 
+        commandBuffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        // 0, NULL
+        1, &staging_world_barrier
+    );
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
 }
 void Renderer::blockifyCustom(void* ptr){
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
     memcpy(staging_world_mapped[currentFrame], ptr, size_to_copy);
-    vmaFlushAllocation(VMAllocator, staging_world.allocs[currentFrame], 0, size_to_copy);
+    vmaFlushAllocation(VMAllocator, staging_world[currentFrame].alloc, 0, size_to_copy);
 }
 
 void Renderer::execCopies(){
@@ -2081,7 +2351,7 @@ void Renderer::execCopies(){
     //         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     //         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     //         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //         barrier.image = block_palette.images[currentFrame];
+    //         barrier.image = block_palette[currentFrame].image;
     //         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     //         barrier.subresourceRange.baseMipLevel = 0;
     //         barrier.subresourceRange.levelCount = 1;
@@ -2109,7 +2379,7 @@ void Renderer::startMap(){
 //     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 //     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 //     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-//     barrier.image = world.images[currentFrame];
+//     barrier.image = world[currentFrame].image;
 //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 //     barrier.subresourceRange.baseMipLevel = 0;
 //     barrier.subresourceRange.levelCount = 1;
@@ -2127,21 +2397,21 @@ void Renderer::startMap(){
 // );
 }
 
-void Renderer::mapMesh(Mesh& mesh){
+void Renderer::mapMesh(Mesh* mesh){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     
     //setting dynamic descriptors
         VkDescriptorImageInfo
             modelVoxelsInfo = {};
-            modelVoxelsInfo.imageView = mesh.voxels.views[currentFrame]; //CHANGE ME
+            modelVoxelsInfo.imageView = (*mesh).voxels[currentFrame].view; //CHANGE ME
             modelVoxelsInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo 
             blocksInfo = {};
-            blocksInfo.imageView = world.views[currentFrame];
+            blocksInfo.imageView = world[currentFrame].view;
             blocksInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo 
             blockPaletteInfo = {};
-            blockPaletteInfo.imageView = block_palette.views[currentFrame];
+            blockPaletteInfo.imageView = block_palette[currentFrame].view;
             blockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         VkWriteDescriptorSet 
@@ -2184,15 +2454,33 @@ void Renderer::mapMesh(Mesh& mesh){
     // vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(trans_size), &trans_size);
     // // ivec3 adjusted_size = ivec3(round(vec3(mesh.size) * vec3(5.0)));
     // vkCmdDispatch(commandBuffer, dispatch_size.x*2 / 4, dispatch_size.y*2 / 4, dispatch_size.z*2 / 4);
-    struct {mat4 trans; ivec3 size;} trans_size = {mesh.transform, mesh.size};
+    struct AABB border_in_voxel = get_shift((*mesh).transform, (*mesh).size);
+    
+    struct {ivec3 min; ivec3 max;} border; 
+    border.min = ivec3(border_in_voxel.min) -ivec3(1);
+    border.max = ivec3(border_in_voxel.max) +ivec3(1);
+    //todo: clamp here not in shader
+    ivec3 map_area = border.max - border.min;
+
+    // struct {mat4 trans; ivec3 size;} trans_size = {mesh.transform, mesh.size};
+    struct {mat4 trans; ivec4 size;} itrans_shift = {inverse((*mesh).transform), ivec4(border.min, 0)};
     // trans = glm::scale(trans, vec3(0.95));
-    vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(trans_size), &trans_size);
-    ivec3 adjusted_size = ivec3(vec3(mesh.size) * vec3(2.0));
-    vkCmdDispatch(commandBuffer, (adjusted_size.x) / 4, (adjusted_size.y) / 4, (adjusted_size.z) / 4);   
+    vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(itrans_shift), &itrans_shift);
+    // ivec3 adjusted_size = ivec3(vec3(mesh.size) * vec3(2.0));
+    vkCmdDispatch(commandBuffer, (map_area.x+3) / 4, (map_area.y+3) / 4, (map_area.z+3) / 4);   
 }
 
 void Renderer::endMap(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
 
     VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2200,7 +2488,7 @@ void Renderer::endMap(){
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = block_palette.images[currentFrame];
+        barrier.image = block_palette[currentFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -2210,12 +2498,20 @@ void Renderer::endMap(){
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;
     vkCmdPipelineBarrier(
         commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
         0, NULL,
         0, NULL,
         1, &barrier
     );
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
 }
 
 void Renderer::recalculate_df(){
@@ -2227,7 +2523,7 @@ void Renderer::recalculate_df(){
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = block_palette.images[currentFrame];
+        barrier.image = block_palette[currentFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -2280,9 +2576,17 @@ void Renderer::recalculate_df(){
 }
 void Renderer::raytrace(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
-        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame[currentFrame].image, RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
         //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         //     0, VK_ACCESS_SHADER_WRITE_BIT);
 
@@ -2290,7 +2594,13 @@ void Renderer::raytrace(){
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 
         itime++;
-        vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
+        // vec3(60, 0, 50);
+        // normalize(vec3(0.1, 1.0, -0.5));
+        struct tmp {ivec4 i; vec4 v1; vec4 v2;} tmp = {ivec4(itime,0,0,0), vec4(camera_pos,0), vec4(camera_dir,0)};
+        vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(tmp), &tmp);
+        // vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(int),              sizeof(vec3), &camera_pos);
+        // vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(vec3)+sizeof(int), sizeof(vec3), &camera_dir);
+        
         vkCmdDispatch(commandBuffer, raytraceExtent.width/8, raytraceExtent.height/8, 1);
 
     VkImageMemoryBarrier barrier{};
@@ -2299,7 +2609,7 @@ void Renderer::raytrace(){
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = raytraced_frame.images[currentFrame];
+        barrier.image = raytraced_frame[currentFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -2309,93 +2619,19 @@ void Renderer::raytrace(){
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
     vkCmdPipelineBarrier(
             commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
             0, NULL,
             0, NULL,
             1, &barrier
         );    
-    barrier = {};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = raytraced_frame.images[previousFrame];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
-    vkCmdPipelineBarrier(
+        vkCmdPipelineBarrier(
             commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
             0, NULL,
             0, NULL,
-            1, &barrier
-        );    
-    barrier = {};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = denoised_frame.images[currentFrame];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
-    vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0,
-            0, NULL,
-            0, NULL,
-            1, &barrier
-        );   
-}
-void Renderer::denoise(){
-    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
-
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoisePipeline);
-        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-        //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        //     0, VK_ACCESS_SHADER_WRITE_BIT);
-
-        // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiseLayout, 0, 1, &denoiseDescriptorSets[currentFrame], 0, 0);
-
-        // itime++;
-        // vkCmdPushConstants(commandBuffer, denoiseLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
-        vkCmdDispatch(commandBuffer, raytraceExtent.width/8, raytraceExtent.height/8, 1);
-
-    VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = denoised_frame.images[currentFrame];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
-    vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0,
-            0, NULL,
-            0, NULL,
-            1, &barrier
+            0, NULL
         ); 
     barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2403,7 +2639,7 @@ void Renderer::denoise(){
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = raytraced_frame.images[currentFrame];
+        barrier.image = denoised_frame[previousFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -2413,11 +2649,120 @@ void Renderer::denoise(){
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
     vkCmdPipelineBarrier(
             commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
             0, NULL,
             0, NULL,
             1, &barrier
+        );    
+    barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = denoised_frame[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );   
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+}
+void Renderer::denoise(int iterations){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = denoised_frame[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT |VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoisePipeline);
+        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame[currentFrame].image, RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        //     0, VK_ACCESS_SHADER_WRITE_BIT);
+
+        // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, denoiseLayout, 0, 1, &denoiseDescriptorSets[currentFrame], 0, 0);
+
+        for(int atrous_iter = 0; atrous_iter<iterations; atrous_iter++){
+        // for(int atrous_iter = 5; atrous_iter>0; atrous_iter--){
+            vkCmdPushConstants(commandBuffer, denoiseLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int), &atrous_iter);
+            // vkCmdPushConstants()
+            vkCmdDispatch(commandBuffer, raytraceExtent.width/8, raytraceExtent.height/8, 1);
+            vkCmdPipelineBarrier(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, NULL,
+                    0, NULL,
+                    1, &barrier
+                ); 
+        } 
+
+    barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = raytraced_frame[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        ); 
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
         ); 
 }
 void Renderer::upscale(){
@@ -2426,15 +2771,13 @@ void Renderer::upscale(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, upscalePipeline);
-        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame[currentFrame].image, RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
         //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         //     0, VK_ACCESS_SHADER_WRITE_BIT);
 
         // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytracePipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, upscaleLayout, 0, 1, &upscaleDescriptorSets[currentFrame], 0, 0);
 
-        // itime++;
-        // vkCmdPushConstants(commandBuffer, denoiseLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(i32)*1 , &itime);
         vkCmdDispatch(commandBuffer, (swapChainExtent.width)/8, (swapChainExtent.height)/8, 1);
 
     VkImageMemoryBarrier barrier{};
@@ -2443,7 +2786,7 @@ void Renderer::upscale(){
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = upscaled_frame.images[currentFrame];
+        barrier.image = upscaled_frame[currentFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
@@ -2453,7 +2796,7 @@ void Renderer::upscale(){
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
     vkCmdPipelineBarrier(
             commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
             0, NULL,
             0, NULL,
@@ -2462,6 +2805,14 @@ void Renderer::upscale(){
 }
 void Renderer::endCompute(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
         vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
         VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -2499,7 +2850,7 @@ void Renderer::present(){
 
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame.images[currentFrame], RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    // transition_Image_Layout_Cmdb(commandBuffer, raytraced_frame[currentFrame].image, RAYTRACED_IMAGE_FORMAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
     //     0, VK_ACCESS_SHADER_READ_BIT
     // );
@@ -2514,6 +2865,14 @@ void Renderer::present(){
         renderPassInfo.clearValueCount = 1;
         renderPassInfo.pClearValues = &clearColor;
     
+    vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsLayout, 0, 1, &graphicalDescriptorSets[currentFrame], 0, NULL);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -2536,6 +2895,15 @@ void Renderer::present(){
     // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
+
+vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            0, NULL
+        ); 
 
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
@@ -2582,13 +2950,12 @@ void Renderer::end_Frame(){
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void Renderer::create_Image_Storages(Images& image, 
+void Renderer::create_Image_Storages(vector<Image>* images, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size){
-    println
-    image.images.resize(MAX_FRAMES_IN_FLIGHT);
-    image.allocs.resize(MAX_FRAMES_IN_FLIGHT);
-    image. views.resize(MAX_FRAMES_IN_FLIGHT);
+    (*images).resize(MAX_FRAMES_IN_FLIGHT);
+    // (*image).allocs.resize(MAX_FRAMES_IN_FLIGHT);
+    // (*image). views.resize(MAX_FRAMES_IN_FLIGHT);
     
     for (i32 i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
         VkImageCreateInfo imageInfo = {};
@@ -2618,11 +2985,11 @@ void Renderer::create_Image_Storages(Images& image,
             // allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
             // allocInfo.requiredFlags = 
-        VK_CHECK(vmaCreateImage(VMAllocator, &imageInfo, &allocInfo, &image.images[i], &image.allocs[i], NULL));
+        VK_CHECK(vmaCreateImage(VMAllocator, &imageInfo, &allocInfo, &(*images)[i].image, &(*images)[i].alloc, NULL));
 
         VkImageViewCreateInfo viewInfo = {};
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            viewInfo.image = image.images[i];
+            viewInfo.image = (*images)[i].image;
             if(type == VK_IMAGE_TYPE_2D){
                 viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
             } else if(type == VK_IMAGE_TYPE_3D) {
@@ -2634,9 +3001,9 @@ void Renderer::create_Image_Storages(Images& image,
             viewInfo.subresourceRange.baseArrayLayer = 0;
             viewInfo.subresourceRange.levelCount = 1;
             viewInfo.subresourceRange.layerCount = 1;
-        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &image.views[i]));
+        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &(*images)[i].view));
 
-        transition_Image_Layout_Singletime(image.images[i], format, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout,
+        transition_Image_Layout_Singletime((*images)[i].image, format, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pipeStage,
             0, access);
         // if(!(vma_usage & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT)){
@@ -2644,9 +3011,9 @@ void Renderer::create_Image_Storages(Images& image,
     }
 }
 //fill manually with cmd or copy
-void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAllocation> &allocs, VkBufferUsageFlags usage, u32 size, bool host){
-    buffers.resize(MAX_FRAMES_IN_FLIGHT);
-    allocs.resize(MAX_FRAMES_IN_FLIGHT);
+void Renderer::create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host){
+    (*buffers).resize(MAX_FRAMES_IN_FLIGHT);
+    // allocs.resize(MAX_FRAMES_IN_FLIGHT);
     
     for (i32 i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
         VkBufferCreateInfo bufferInfo = {};
@@ -2661,7 +3028,7 @@ void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAlloc
                 allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
             }
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        VK_CHECK(vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &buffers[i], &allocs[i], NULL));
+        VK_CHECK(vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &(*buffers)[i].buffer, &(*buffers)[i].alloc, NULL));
     }
 }
 
@@ -2672,19 +3039,22 @@ void Renderer::create_Buffer_Storages(vector<VkBuffer> &buffers, vector<VmaAlloc
 //TODO: need to find memory, verify flags
 //make so each chunk is stored in staging buffer and then copied to fast memory
 
-tuple<Buffers, Buffers> Renderer::create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices){
+tuple<vector<Buffer>, vector<Buffer>> Renderer::create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices){
     return create_RayGen_VertexBuffers(vertices.data(), vertices.size(), indices.data(), indices.size());
 }
 //exists so i can easelly use ogt allocation without manual moving. BTW i also changed it src code for this
-tuple<Buffers, Buffers> Renderer::create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount){
+tuple<vector<Buffer>, vector<Buffer>> Renderer::create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount){
     VkDeviceSize bufferSizeV = sizeof(Vertex)*vcount;
     // cout << bufferSizeV;
     VkDeviceSize bufferSizeI = sizeof(u32   )*icount;
 
-    vector<VkBuffer> vertexBuffers(MAX_FRAMES_IN_FLIGHT);
-    vector<VkBuffer>  indexBuffers(MAX_FRAMES_IN_FLIGHT);
-    vector<VmaAllocation> vertexAllocations(MAX_FRAMES_IN_FLIGHT);
-    vector<VmaAllocation>  indexAllocations(MAX_FRAMES_IN_FLIGHT);
+    vector<Buffer> vertexes (MAX_FRAMES_IN_FLIGHT);
+    vector<Buffer>  indexes (MAX_FRAMES_IN_FLIGHT);
+
+    // vector<VkBuffer> vertexBuffers(MAX_FRAMES_IN_FLIGHT);
+    // vector<VkBuffer>  indexBuffers(MAX_FRAMES_IN_FLIGHT);
+    // vector<VmaAllocation> vertexAllocations(MAX_FRAMES_IN_FLIGHT);
+    // vector<VmaAllocation>  indexAllocations(MAX_FRAMES_IN_FLIGHT);
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSizeV;
@@ -2718,22 +3088,19 @@ assert (&data);
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         VmaAllocationCreateInfo allocInfo = {};
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &vertexBuffers[i], &vertexAllocations[i], NULL);
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &vertexes[i].buffer, &vertexes[i].alloc, NULL);
             bufferInfo.size = bufferSizeI;
             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &indexBuffers[i], &indexAllocations[i], NULL);
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &indexes[i].buffer, &indexes[i].alloc, NULL);
                
-        copy_Buffer(stagingBufferV, vertexBuffers[i], bufferSizeV);
-        copy_Buffer(stagingBufferI,  indexBuffers[i], bufferSizeI);
+        copy_Buffer(stagingBufferV, vertexes[i].buffer, bufferSizeV);
+        copy_Buffer(stagingBufferI,  indexes[i].buffer, bufferSizeI);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBufferV, stagingAllocationV);
     vmaDestroyBuffer(VMAllocator, stagingBufferI, stagingAllocationI);
 
-    return {
-        {vertexBuffers, vertexAllocations}, 
-        {indexBuffers, indexAllocations}
-    };
+    return {vertexes, indexes};
 }
 // static void blit_buffer_to_(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkImageLayout layout) {
 //     VkCommandBuffer commandBuffer= begin_Single_Time_Commands();
@@ -2750,16 +3117,16 @@ assert (&data);
 //     end_Single_Time_Commands(commandBuffer);
 // }
 
-Images Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
+vector<Image> Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
     VkDeviceSize bufferSize = (sizeof(u8)*2)*size.x*size.y*size.z;
 
-    Images voxelImages = {};
+    vector<Image> voxelImages = {};
 
     // vector<VkImage>   images(MAX_FRAMES_IN_FLIGHT);
     // vector<VkImageView>  views(MAX_FRAMES_IN_FLIGHT);
     // vector<VmaAllocation>  allocations(MAX_FRAMES_IN_FLIGHT);
 
-    create_Image_Storages(voxelImages,
+    create_Image_Storages(&voxelImages,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8G8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -2788,7 +3155,7 @@ Images Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, voxelImages.images[i], size, VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, voxelImages[i].image, size, VK_IMAGE_LAYOUT_GENERAL);
     }
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
     return voxelImages;
@@ -2968,7 +3335,7 @@ void Renderer::allocate_Descriptors(){
     allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
     allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
 }
-// void Renderer::setup_descriptors_helper(vector<VkDescriptorSet>& descriptor_sets, vector<Buffers> buffers, vector<Images> images){
+// void Renderer::setup_descriptors_helper(vector<VkDescriptorSet>& descriptor_sets, vector<vector<Buffers>> buffers, vector<vector<Image>> images){
 //     vector<VkDescriptorBufferInfo> buffer_infos (buffers.size());
 //     vector<VkDescriptorImageInfo> image_infos (images.size());
 //     vector<VkWriteDescriptorSet> writes (buffers.size() + images.size());
@@ -2977,7 +3344,7 @@ void Renderer::allocate_Descriptors(){
 //     for (u32 frame = 0; frame < MAX_FRAMES_IN_FLIGHT; frame++) {
 //         //filling buffer infos
 //         for(int b=0; b<buffers.size(); b++){
-//             buffer_infos[b].buffer = buffers[b].buffers[frame];
+//             buffer_infos[b].buffer = buffers[b][frame].buffer;
 //             buffer_infos[b].offset = 0;
 //             buffer_infos[b].range = VK_WHOLE_SIZE;
 
@@ -2990,7 +3357,7 @@ void Renderer::allocate_Descriptors(){
 //             writes[b+0].pBufferInfo = &buffer_infos[b];
 //         }
 //         for(int i=0; i<images.size(); i++){
-//             image_infos[i].imageView = images[i].views[frame];
+//             image_infos[i].imageView = images[i][frame].view;
 //             image_infos[i].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 //             writes[i+buffers.size()] = {};
@@ -3017,7 +3384,7 @@ void Renderer::allocate_Descriptors(){
 //             copyCounterBufferInfo.offset = 0;
 //             copyCounterBufferInfo.range = VK_WHOLE_SIZE;
 //         VkDescriptorImageInfo inputBlocksInfo = {};
-//             inputBlocksInfo.imageView = world.views[i];
+//             inputBlocksInfo.imageView = world[i].view;
 //             inputBlocksInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 //         VkWriteDescriptorSet paletteCounterWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -3049,7 +3416,7 @@ void Renderer::allocate_Descriptors(){
 void Renderer::setup_Copy_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo inputBlockPaletteInfo = {};
-            inputBlockPaletteInfo.imageView = block_palette.views[i];
+            inputBlockPaletteInfo.imageView = block_palette[i].view;
             inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorBufferInfo copyCounterBufferInfo = {};
             copyCounterBufferInfo.buffer = copyCounterBuffers[i];
@@ -3083,7 +3450,7 @@ void Renderer::setup_Map_Descriptors(){
 void Renderer::setup_Df_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo inputBlockPaletteInfo = {};
-            inputBlockPaletteInfo.imageView = block_palette.views[i];
+            inputBlockPaletteInfo.imageView = block_palette[i].view;
             inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         // VkDescriptorBufferInfo copyCounterBufferInfo = {};
         //     copyCounterBufferInfo.buffer = copyCounterBuffers[i];
@@ -3115,18 +3482,18 @@ void Renderer::setup_Raytrace_Descriptors(){
         if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
 
         VkDescriptorImageInfo matNormInfo = {};
-            matNormInfo.imageView = is_scaled? matNorm_downscaled.views[i] : matNorm.views[i];
+            matNormInfo.imageView = is_scaled? matNorm_downscaled[i].view : matNorm[i].view;
             matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo oldUvInfo = {};
-            oldUvInfo.imageView = is_scaled? oldUv_downscaled.views[i] : oldUv.views[i];
+            oldUvInfo.imageView = is_scaled? oldUv_downscaled[i].view : oldUv[i].view;
             oldUvInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo depthInfo = {};
-            // depthInfo.imageView = is_scaled? depth_downscaled.views[i] : depth.views[i];
-            depthInfo.imageView = depthForChecks.views[currentFrame];
+            // depthInfo.imageView = is_scaled? depth_downscaled[i].view : depth[i].view;
+            depthInfo.imageView = depthForChecks[currentFrame].view;
             depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             depthInfo.sampler = raytracedImageSamplers[currentFrame];
         VkDescriptorImageInfo old_matNormInfo = {};
-            old_matNormInfo.imageView = is_scaled? matNorm_downscaled.views[previous_frame] : matNorm.views[previous_frame];
+            old_matNormInfo.imageView = is_scaled? matNorm_downscaled[previous_frame].view : matNorm[previous_frame].view;
             old_matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             old_matNormInfo.sampler = raytracedImageSamplers[currentFrame];
         // VkDescriptorImageInfo inputNormInfo = {};
@@ -3136,24 +3503,25 @@ void Renderer::setup_Raytrace_Descriptors(){
         //     inputPosDiffInfo.imageView = rayGenPosDiffImageViews[i];
         //     inputPosDiffInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputBlockInfo = {};
-            inputBlockInfo.imageView = world.views[i];
+            inputBlockInfo.imageView = world[i].view;
             inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             // inputBlockInfo.sampler = blockPaletteImageSamplers[i];
         VkDescriptorImageInfo inputBlockPaletteInfo = {};
-            inputBlockPaletteInfo.imageView = block_palette.views[i];
+            inputBlockPaletteInfo.imageView = block_palette[i].view;
             inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputVoxelPaletteInfo = {};
-            inputVoxelPaletteInfo.imageView = material_palette.views[i];
+            inputVoxelPaletteInfo.imageView = material_palette[i].view;
             inputVoxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo outputFrameInfo = {};
-            outputFrameInfo.imageView = raytraced_frame.views[i];
+            outputFrameInfo.imageView = raytraced_frame[i].view;
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             outputFrameInfo.sampler = raytracedImageSamplers[i];
         VkDescriptorImageInfo stepCountInfo = {};
-            stepCountInfo.imageView = step_count.views[i];
+            stepCountInfo.imageView = step_count[i].view;
             stepCountInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo readFrameInfo = {};
-            readFrameInfo.imageView = denoised_frame.views[previous_frame];
+            readFrameInfo.imageView = denoised_frame[previous_frame].view;
+            // readFrameInfo.imageView = raytraced_frame[previous_frame].view;
             readFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             readFrameInfo.sampler = denoisedImageSamplers[previous_frame];
             
@@ -3268,20 +3636,20 @@ void Renderer::setup_Raytrace_Descriptors(){
 void Renderer::setup_Denoise_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo matNormInfo = {};
-            matNormInfo.imageView = is_scaled? matNorm_downscaled.views[i] : matNorm.views[i];
+            matNormInfo.imageView = is_scaled? matNorm_downscaled[i].view : matNorm[i].view;
             matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo depthInfo = {};
-            // depthInfo.imageView = is_scaled? depth_downscaled.views[i] : depth.views[i];
-            depthInfo.imageView = depthForChecks.views[currentFrame];
+            // depthInfo.imageView = is_scaled? depth_downscaled[i].view : depth[i].view;
+            depthInfo.imageView = depthForChecks[currentFrame].view;
             depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             depthInfo.sampler = raytracedImageSamplers[currentFrame];
             
         VkDescriptorImageInfo readFrameInfo = {};
-            readFrameInfo.imageView = raytraced_frame.views[i];
+            readFrameInfo.imageView = raytraced_frame[i].view;
             readFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             // readFrameInfo.sampler = raytracedImageSamplers[previous_frame];
         VkDescriptorImageInfo outputFrameInfo = {};
-            outputFrameInfo.imageView = denoised_frame.views[i];
+            outputFrameInfo.imageView = denoised_frame[i].view;
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             
         VkWriteDescriptorSet matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -3322,16 +3690,16 @@ void Renderer::setup_Denoise_Descriptors(){
 void Renderer::setup_Upscale_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo lowres_matNormInfo = {};
-            lowres_matNormInfo.imageView = matNorm_downscaled.views[i];
+            lowres_matNormInfo.imageView = matNorm_downscaled[i].view;
             lowres_matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo highres_matNormInfo = {};
-            highres_matNormInfo.imageView = matNorm.views[i];
+            highres_matNormInfo.imageView = matNorm[i].view;
             highres_matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo denoisedFrameInfo = {};
-            denoisedFrameInfo.imageView = denoised_frame.views[i];
+            denoisedFrameInfo.imageView = denoised_frame[i].view;
             denoisedFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo upscaledFrameInfo = {};
-            upscaledFrameInfo.imageView = upscaled_frame.views[i];
+            upscaledFrameInfo.imageView = upscaled_frame[i].view;
             upscaledFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             
         VkWriteDescriptorSet lowres_matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -3363,10 +3731,8 @@ void Renderer::setup_Upscale_Descriptors(){
            upscaledFrameWrite.descriptorCount = 1;
            upscaledFrameWrite.pImageInfo = &upscaledFrameInfo;
         vector<VkWriteDescriptorSet> descriptorWrites = {lowres_matNormWrite, highres_matNormWrite, denoisedFrameWrite, upscaledFrameWrite/*blockPaletteSampler*/};
-println
 
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
-println
     }
 }
 
@@ -3394,8 +3760,8 @@ void Renderer::create_samplers(){
     for (auto& sampler : raytracedImageSamplers) {
         VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
     }
-    // samplerInfo.magFilter = VK_FILTER_LINEAR;
-    // samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
     for (auto& sampler : denoisedImageSamplers) {
         VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &sampler));
     }
@@ -3414,9 +3780,9 @@ void Renderer::setup_Graphical_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorImageInfo storageImageInfo = {};
             if(is_scaled) {
-                storageImageInfo.imageView = upscaled_frame.views[i];
+                storageImageInfo.imageView = upscaled_frame[i].view;
             } else {
-                storageImageInfo.imageView = denoised_frame.views[i];
+                storageImageInfo.imageView = denoised_frame[i].view;
             }
             storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             storageImageInfo.sampler = denoisedImageSamplers[i];
@@ -3435,7 +3801,7 @@ void Renderer::setup_RayGen_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkDescriptorBufferInfo transInfo = {};
             transInfo.offset = 0;
-            transInfo.buffer = RayGenUniformBuffers[i];
+            transInfo.buffer = RayGenUniformBuffers[i].buffer;
             transInfo.range = VK_WHOLE_SIZE;
         VkWriteDescriptorSet descriptorWrite = {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3451,7 +3817,7 @@ void Renderer::setup_RayGen_Descriptors(){
 void Renderer::create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size){
     auto compShaderCode = read_Shader(name);
 
-    VkShaderModule module = create_Shader_Module(compShaderCode);
+    VkShaderModule module = create_Shader_Module(&compShaderCode);
     
     //single stage
     VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
@@ -3490,13 +3856,14 @@ void Renderer::create_compute_pipelines_helper(const char* name, VkDescriptorSet
 void Renderer::create_compute_pipelines(){
     create_compute_pipelines_helper("shaders/compiled/blockify.spv", blockifyDescriptorSetLayout, &blockifyLayout, &blockifyPipeline, sizeof(mat4));
     create_compute_pipelines_helper("shaders/compiled/copy.spv"    , copyDescriptorSetLayout    , &copyLayout    , &copyPipeline    , 0);
-    create_compute_pipelines_helper("shaders/compiled/map.spv"     , mapDescriptorSetLayout     , &mapLayout     , &mapPipeline     , sizeof(mat4) + sizeof(ivec3));
+    create_compute_pipelines_helper("shaders/compiled/map.spv"     , mapDescriptorSetLayout     , &mapLayout     , &mapPipeline     , sizeof(mat4) + sizeof(ivec4));
     create_compute_pipelines_helper("shaders/compiled/dfx.spv"      , dfDescriptorSetLayout      , &dfxLayout      , &dfxPipeline      , 0);
     create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
     create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
-    create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(i32)*1);
-    create_compute_pipelines_helper("shaders/compiled/denoise.spv"    ,  denoiseDescriptorSetLayout,  &denoiseLayout,  &denoisePipeline, 0);
-    create_compute_pipelines_helper("shaders/compiled/upscale.spv"    ,  upscaleDescriptorSetLayout,  &upscaleLayout,  &upscalePipeline, 0);
+    create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(i32)*+sizeof(vec3)*2);
+    create_compute_pipelines_helper("shaders/compiled/denoise.spv" ,  denoiseDescriptorSetLayout,  &denoiseLayout,  &denoisePipeline, sizeof(int));
+    // create_compute_pipelines_helper("shaders/compiled/upscale.spv"    ,  upscaleDescriptorSetLayout,  &upscaleLayout,  &upscalePipeline, 0);
+    create_compute_pipelines_helper("shaders/compiled/upscale.spv" ,  upscaleDescriptorSetLayout,  &upscaleLayout,  &upscalePipeline, 0);
     // create_Blockify_Pipeline();
     // create_Copy_Pipeline();
     // create_Map_Pipeline();
@@ -3699,26 +4066,26 @@ u32 Renderer::find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties)
     abort();
 }
 
-void Renderer::create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+void Renderer::create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory) {
     VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
         bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VK_CHECK(vkCreateBuffer(device, &bufferInfo, NULL, &buffer));
+    VK_CHECK(vkCreateBuffer(device, &bufferInfo, NULL, buffer));
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(device, (*buffer), &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
         allocInfo.memoryTypeIndex = find_Memory_Type(memRequirements.memoryTypeBits, properties);
 
-    VK_CHECK(vkAllocateMemory(device, &allocInfo, NULL, &bufferMemory));
+    VK_CHECK(vkAllocateMemory(device, &allocInfo, NULL, bufferMemory));
 
-    VK_CHECK(vkBindBufferMemory(device, buffer, bufferMemory, 0));
+    VK_CHECK(vkBindBufferMemory(device, (*buffer), (*bufferMemory), 0));
 }
 
 #undef copy_Buffer
@@ -3904,19 +4271,29 @@ static tuple<int, int> get_block_xy(int N){
 
 struct bp_tex {u8 r; u8 g;};
 //block palette on cpu side is expected to be array of pointers to blocks
-void Renderer::update_Block_Palette(Block* blockPalette){
+void Renderer::update_Block_Palette(Block** blockPalette){
     //block palette is in u8, but for easy copying we convert it to u16 cause block palette is R16_UNIT
-    VkDeviceSize bufferSize = (sizeof(Block)/sizeof(Voxel)*sizeof(u8)*2)*BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y;
+    VkDeviceSize bufferSize = (sizeof(bp_tex))*16*BLOCK_PALETTE_SIZE_X* 16*BLOCK_PALETTE_SIZE_Y* 16;
     table3d<bp_tex> blockPaletteLinear = {};
         blockPaletteLinear.allocate(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16);
-        blockPaletteLinear.set({});
+        blockPaletteLinear.set({0,0});
+        
+    // bp_tex* mem = (bp_tex*)malloc(((sizeof(Block)/sizeof(Voxel))*sizeof(bp_tex))*BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
     for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
         for(i32 x=0; x<BLOCK_SIZE; x++){
         for(i32 y=0; y<BLOCK_SIZE; y++){
         for(i32 z=0; z<BLOCK_SIZE; z++){
             auto [block_x, block_y] = get_block_xy(N);
             // blockPaletteLinear(x+16*block_x, y+16*block_y, z) = blockPalette[N].voxels[x][y][z];
-            blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = (u16) blockPalette[N].voxels[x][y][z];
+            if(blockPalette[N] == NULL) {
+                blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = 0;
+                // mem[(x+16*block_x) + (y+16*block_y)*256 + z*256*256] = {0,0};
+            }
+            else {
+                //                 blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = (u16) blockPalette[N]->voxels[x][y][z];
+                // blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = 16;
+                // mem[(x+16*block_x) + (y+16*block_y)*256 + z*256*256] = {(u8) blockPalette[N]->voxels[x][y][z],0};
+            }
     }}}}
     // cout << "(i32)blockPaletteLinear(0,0,0)" " "<< (i32)((i32*)blockPaletteLinear.data())[0] << "\n";
     // printl((i32)blockPaletteLinear(0,0,0));
@@ -3929,26 +4306,24 @@ void Renderer::update_Block_Palette(Block* blockPalette){
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     void* data = NULL;
-    // printl((u64) VMAllocator);
+    printl(blockPaletteLinear.size().x);
+    printl(blockPaletteLinear.size().y);
+    printl(blockPaletteLinear.size().z);
     // printl((u64) stagingAllocation);
     // printl((u64) data);
     // fflush(stdout);
-    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
+    VK_CHECK(vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
 
-    vmaMapMemory(VMAllocator, stagingAllocation, &data);
+    VK_CHECK(vmaMapMemory(VMAllocator, stagingAllocation, &data));
+
+        assert(data!=NULL);
+        assert(bufferSize!=0);
+        assert(blockPaletteLinear.data()!=NULL);
         memcpy(data, blockPaletteLinear.data(), bufferSize);
-        // cout << "\n PIZDEC " << *((i32*) data);
-        // cout << "\n PIZDEC " << *((i32*) blockPaletteLinear.data());
-        // cout << "\n PIZDEC " << (i32)*((char*)data);
-        // cout << "\n PIZDEC " << (i32)*((char*)blockPaletteLinear.data());
     vmaUnmapMemory(VMAllocator, stagingAllocation);
-    // vmaMapMemory(VMAllocator, stagingAllocation, &data);
-    // cout << "\n PIZDEC" << *((i32*)data);
-    // cout << "\n PIZDEC" << *((char*)data);
-    // vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, origin_block_palette.images[i], uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, origin_block_palette[i].image, uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
@@ -3974,7 +4349,7 @@ void Renderer::update_Material_Palette(Material* materialPalette){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, material_palette.images[i], uvec3(6,256,1), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, material_palette[i].image, uvec3(6,256,1), VK_IMAGE_LAYOUT_GENERAL);
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
@@ -3985,8 +4360,7 @@ void Renderer::update_Material_Palette(Material* materialPalette){
 //has to match world_size
 //useless btw
 // void Renderer::update_SingleChunk(BlockID_t* blocks){
-// println
-//     VkDeviceSize bufferSize = sizeof(BlockID_t)*world_size.x*world_size.y*world_size.z;
+// //     VkDeviceSize bufferSize = sizeof(BlockID_t)*world_size.x*world_size.y*world_size.z;
 //     printl(bufferSize);
 
 //     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -3997,37 +4371,32 @@ void Renderer::update_Material_Palette(Material* materialPalette){
 //         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 //     VkBuffer stagingBuffer = {};
 //     VmaAllocation stagingAllocation = {};
-// // println
-//     // printl(&stagingBufferInfo);
+// // //     // printl(&stagingBufferInfo);
 //     // printl(&stagingAllocInfo);
 //     // printl(&stagingBuffer);
 //     // printl(&stagingAllocation);
 //     VK_CHECK(vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
 //     void* data;
-// // println
-//     vmaMapMemory(VMAllocator, stagingAllocation, &data);
+// // //     vmaMapMemory(VMAllocator, stagingAllocation, &data);
 //         memcpy(data, blocks, bufferSize);
 //     vmaUnmapMemory(VMAllocator, stagingAllocation);
-// // println
-
+// // 
 //     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
 //         VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
 //             bufferInfo.size = bufferSize;
 //             bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 //         VmaAllocationCreateInfo allocInfo = {};
 
-//         copy_Buffer(stagingBuffer, originWorldImages[i], world_size, VK_IMAGE_LAYOUT_GENERAL);
+//         copy_Buffer(stagingBuffer, originWorldvector<Image>[i], world_size, VK_IMAGE_LAYOUT_GENERAL);
 //     }
-// // println
-
+// // 
 //     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
-// println
-// }
+// // }
 
 char* readFileBuffer(const char* path, size_t* size) {
     FILE* fp = fopen(path, "rb");
     *size = _filelength(_fileno(fp));
-    char* buffer = (char*)malloc(*size);
+    char* buffer = (char*) malloc(*size);
     fread(buffer, *size, 1, fp);
     fclose(fp);
 
@@ -4061,9 +4430,8 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
                 scene->palette.color[i].b / 256.0,
                 scene->palette.color[i].a / 256.0
             );
-            mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux*4.0);
             // mat_palette[i].emmit = scene->materials.matl[i].;
-            // mat_palette[i].emmit = 
+            mat_palette[i].emmit = 0;
             float rough;
             switch (scene->materials.matl[i].type) {
                 case ogt::matl_type_diffuse: {
@@ -4071,11 +4439,12 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
                     break;
                 }
                 case ogt::matl_type_emit: {
+                    mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux*2.0);
                     rough = 0.5;
                     break;
                 }
                 case ogt::matl_type_metal: {
-                    rough = (scene->materials.matl[i].rough + 0.25)/2.0;
+                    rough = (scene->materials.matl[i].rough + (1.0-scene->materials.matl[i].metal))/2.0;
                     break;
                 }
                 default: {
@@ -4110,6 +4479,28 @@ Ldr
     ogt::vox_destroy_scene(scene);
 }
 
+void Renderer::load_block(Block** block, const char* vox_file){
+    size_t buffer_size;
+    char* buffer = readFileBuffer(vox_file, &buffer_size);
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
+    free(buffer);
+    assert(scene->num_models == 1);
+
+    if((*block) == NULL) {
+        *block = new Block;
+    }
+
+    load_mesh(&(*block)->mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, true);
+    // voxels_extended.allocate(x_size, y_size, z_size);
+    for (int x=0; x < scene->models[0]->size_x; x++){
+    for (int y=0; y < scene->models[0]->size_y; y++){
+    for (int z=0; z < scene->models[0]->size_z; z++){
+        (*block)->voxels[x][y][z] = (u16) scene->models[0]->voxel_data[x + y*scene->models[0]->size_x + z*scene->models[0]->size_x*scene->models[0]->size_y];
+    }}}
+    
+    ogt::vox_destroy_scene(scene);
+}
+
 void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices){
     mesh->size = ivec3(x_size, y_size, z_size);
     if(_make_vertices){
@@ -4132,16 +4523,18 @@ void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int 
 //frees only gpu side stuff, not mesh ptr
 void Renderer::free_mesh(Mesh* mesh){
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        if(not mesh->vertexes.allocs.empty()) vmaDestroyBuffer(VMAllocator, mesh->vertexes.buffers[i], mesh->vertexes.allocs[i]);
-        if(not mesh->indexes.allocs.empty()) vmaDestroyBuffer(VMAllocator, mesh->indexes.buffers[i], mesh->indexes.allocs[i]);
-        if(not mesh->voxels.allocs.empty()) vmaDestroyImage(VMAllocator, mesh->voxels.images[i], mesh->voxels.allocs[i]);
-        if(not mesh->voxels.views.empty()) vkDestroyImageView(device, mesh->voxels.views[i], NULL);
+        if(not mesh->vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
+        if(not mesh->indexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->indexes[i].buffer, mesh->indexes[i].alloc);
+        if(not mesh->voxels.empty()) vmaDestroyImage(VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
+        if(not mesh->voxels.empty()) vkDestroyImageView(device, mesh->voxels[i].view, NULL);
     }
 }
 
 void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
     ogt::ogt_voxel_meshify_context ctx = {};
     ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
+    ogt::ogt_mesh_remove_duplicate_vertices(&ctx, ogt_mesh);
+
     mesh->transform = identity<mat4>();
     tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers((Vertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
     mesh->icount = ogt_mesh->index_count;
