@@ -47,8 +47,11 @@ void main(void){
     ivec3 irelative_vox = ivec3(relative_vox);
 
 
-    if (any(greaterThan(irelative_vox, model_size))) return;
-    if (any(   lessThan(irelative_vox, ivec3(0)))) return;
+    if (any(greaterThanEqual(irelative_vox, model_size))) return;
+    if (any(   lessThan     (irelative_vox, ivec3(0)))) return;
+
+    if (any(greaterThanEqual(itarget_block, ivec3(8)))) return;
+    if (any(   lessThan     (itarget_block, ivec3(0)))) return;
 
     int target_block_in_palette = int(imageLoad(blocks, itarget_block).r);
 

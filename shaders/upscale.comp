@@ -8,6 +8,7 @@ precision highp int;
 
 layout(set = 0, binding = 0, rgba8_snorm) uniform image2D   lowres_matNorm;
 layout(set = 0, binding = 1, rgba8_snorm) uniform image2D  highres_matNorm;
+// layout(set = 0, binding = 2, rgba32f) uniform image2D  denoised_frame; //in
 layout(set = 0, binding = 2, rgba16) uniform image2D  denoised_frame; //in
 layout(set = 0, binding = 3, rgba16) uniform image2D  upscaled_frame; //out
 

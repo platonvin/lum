@@ -5,7 +5,7 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common
 L = -L${VULKAN_SDK}/Lib
-F = -pipe -fno-exceptions -fno-rtti
+F = -pipe -fno-exceptions -fno-rtti -O1
 D = -DNDEBUG
 SA = -O --target-env=vulkan1.1
 A = $(I) $(F) $(args)
@@ -13,6 +13,8 @@ A = $(I) $(F) $(args)
 objs := \
 	obj/main.o\
 	obj/render.o\
+	obj/setup.o\
+	obj/load_stuff.o\
 	obj/ogt_vox.o\
 	obj/ogt_voxel_meshify.o\
 	# obj/visible_world.o\
@@ -20,13 +22,14 @@ objs := \
 srcs := \
 	src/main.cpp\
 	src/renderer/render.cpp\
+	src/renderer/setup.cpp\
+	src/renderer/load_stuff.cpp\
 	common/ogt_vox.cpp\
 	common/ogt_voxel_meshify.cpp\
 	# src/renderer/visible_world.cpp\
 
 headers:= \
 	src/renderer/render.hpp\
-	src/renderer/primitives.hpp\
 	common/ogt_vox.hpp\
 	common/ogt_voxel_meshify.hpp\
 	# src/renderer/visible_world.hpp\
@@ -55,8 +58,12 @@ obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
 	g++ common/ogt_vox.cpp -O2 -c -o obj/ogt_vox.o $(F) $(I) $(args)
 obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp
 	g++ common/ogt_voxel_meshify.cpp -O2 -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
-obj/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/primitives.hpp
+obj/render.o: src/renderer/render.cpp src/renderer/render.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
+obj/setup.o: src/renderer/setup.cpp src/renderer/render.hpp
+	g++ src/renderer/setup.cpp -c -o obj/setup.o $(F) $(I) $(args)
+obj/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp
+	g++ src/renderer/load_stuff.cpp -c -o obj/load_stuff.o $(F) $(I) $(args)
 # obj/visible_world.o: src/renderer/visible_world.cpp src/renderer/visible_world.hpp src/renderer/primitives.hpp
 # 	g++ src/renderer/visible_world.cpp -c -o obj/visible_world.o $(F) $(I) $(args)
 # obj/window.o: src/renderer/window.cpp src/renderer/window.hpp
@@ -68,7 +75,7 @@ obj/main.o: src/main.cpp $(headers)
 client: $(objs) $(_shaders)
 	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk $(args)
 client_opt: $(src) $(headers) $(_shaders)
-	g++ $(srcs) $(F) $(I) $(L) $(D) -lglfw3 -lvolk -Os -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
+	g++ $(srcs) $(I) $(L) $(D) -lglfw3 -lvolk -Oz -pipe -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
 
 temp:
 	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)

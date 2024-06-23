@@ -7,9 +7,9 @@
 
 // VisualWorld world = {};
 Renderer render = {};
-int itimish = 0;
+// int itimish = 0;
 int main() {
-    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2(sqrt(1)), true, false);
+    render.init(8, 8, 8, BLOCK_PALETTE_SIZE, 1024, vec2(2), false, false);
     vkDeviceWaitIdle(render.device);
 
 
@@ -86,45 +86,30 @@ int main() {
     vkDeviceWaitIdle(render.device);
     while(!glfwWindowShouldClose(render.window.pointer) and glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) != GLFW_PRESS){
         glfwPollEvents();
-if((glfwGetKey(render.window.pointer, GLFW_KEY_D) == GLFW_PRESS) and b){
-    robot.transform = translate(robot.transform, vec3(1,0,0));
-    robot.transform = rotate(robot.transform, 0.01f, vec3(0,0,1));
-    render.camera_pos.x += .9;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_SPACE) == GLFW_PRESS) and b){
-    robot.transform = translate(robot.transform, vec3(0,0,.1));
-    // robot.transform = rotate(robot.transform, 0.01f, vec3(0,0,1));
-    // render.camera_pos.x += 1.0;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) and b){
-    robot.transform = translate(robot.transform, vec3(0,0,-.1));
-    // robot.transform = rotate(robot.transform, 0.01f, vec3(0,0,1));
-    // render.camera_pos.x += 1.0;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_A) == GLFW_PRESS) and b){
-    robot.transform = rotate(robot.transform, -0.01f, vec3(0,0,1));
-    robot.transform = translate(robot.transform, vec3(-1,0,0));
-    render.camera_pos.x -= .9;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_W) == GLFW_PRESS) and b){
-    robot.transform = translate(robot.transform, vec3(0,1,0));
-    render.camera_pos.y += .9;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_S) == GLFW_PRESS) and b){
-    robot.transform = translate(robot.transform, vec3(0,-1,0));
-    render.camera_pos.y -= .9;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_LEFT) == GLFW_PRESS) and b){
-    // robot.transform = translate(robot.transform, vec3(0,-1,0));
-    mat4 rot = rotate(identity<mat4>(), .01f, vec3(0,0,1));
-    render.camera_dir = (rot * vec4(render.camera_dir, 1));
-    // render.camera_pos.y -= 1.0;
-}
-if((glfwGetKey(render.window.pointer, GLFW_KEY_RIGHT) == GLFW_PRESS) and b){
-    mat4 rot = rotate(identity<mat4>(), -.01f, vec3(0,0,1));
-    render.camera_dir = (rot * vec4(render.camera_dir, 1));
-}
-render.camera_dir = normalize(render.camera_dir);
+// if((glfwGetKey(render.window.pointer, GLFW_KEY_D) == GLFW_PRESS) and b){
+//     // robot.transform = translate(robot.transform, vec3(1,0,0));
+//     // robot.transform = rotate(robot.transform, 0.01f, vec3(0,0,1));
+//     render.camera_pos.x += .9;
+// }
+#define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
+    set_key(GLFW_KEY_W, render.camera_pos += vec3(  +.5,0,0));
+    set_key(GLFW_KEY_S, render.camera_pos += vec3(  -.5,0,0));
+    set_key(GLFW_KEY_A, render.camera_pos += vec3(0,+.5,0));
+    set_key(GLFW_KEY_D, render.camera_pos += vec3(0,-.5,0));
+
+    set_key(GLFW_KEY_UP   , robot.transform = glm::translate(robot.transform, vec3(  +1.5,0,0)));
+    set_key(GLFW_KEY_DOWN , robot.transform = glm::translate(robot.transform, vec3(  -1.5,0,0)));
+    set_key(GLFW_KEY_RIGHT, robot.transform = glm::translate(robot.transform, vec3(0,+1.5,0)));
+    set_key(GLFW_KEY_LEFT , robot.transform = glm::translate(robot.transform, vec3(0,-1.5,0)));
+    // set_key(GLFW_KEY_W, render.camera_pos += render.camera_dir*.5f);
+    // set_key(GLFW_KEY_S, render.camera_pos -= render.camera_dir*.5f);
+    // set_key(GLFW_KEY_A, render.camera_dir = normalize(rotate(identity<mat4>(),  .05f, vec3(0,0,1)) * vec4(render.camera_dir,0)));
+    // set_key(GLFW_KEY_D, render.camera_dir = normalize(rotate(identity<mat4>(), -.05f, vec3(0,0,1)) * vec4(render.camera_dir,0)));
+    
+    // set_key(GLFW_KEY_S, render.camera_pos -= render.camera_dir*.5f);
+    // set_key(GLFW_KEY_W, render.camera_pos += render.camera_dir*.5f);
+    // set_key(GLFW_KEY_W, render.camera_pos += render.camera_dir*.5f);
+// render.camera_dir = normalize(render.camera_dir);
         // robot.transform = glm::translate(robot.transform, vec3(.01,0,0));
         // robot.transform = glm::rotate(robot.transform, 0.001f, vec3(0,0,1));
         
@@ -143,7 +128,7 @@ render.camera_dir = normalize(render.camera_dir);
                         assert(block_mesh != NULL);
                     // assert(block_mesh != NULL);
                         block_mesh->    transform = translate(identity<mat4>(), vec3(xx*16,yy*16, zz*16));
-                        block_mesh->old_transform = translate(identity<mat4>(), vec3(xx*16,yy*16, zz*16));
+                        block_mesh->old_transform = block_mesh->transform;
                     
                     render.RaygenMesh(block_mesh);
                     }
@@ -165,7 +150,7 @@ render.camera_dir = normalize(render.camera_dir);
                 // render.recalculate_df();
 
                 render.raytrace();
-                render.denoise(3);
+                render.denoise(4);
                 if(render.is_scaled){
                     render.upscale();
                 }
@@ -174,6 +159,8 @@ render.camera_dir = normalize(render.camera_dir);
             render.present(); 
             // render.end_Present();
         render.end_Frame();
+    // vkDeviceWaitIdle(render.device);
+        
     }
     //lol this was in main loop
     vkDeviceWaitIdle(render.device);
@@ -181,14 +168,16 @@ render.camera_dir = normalize(render.camera_dir);
     //TODO: temp
 
     render.free_mesh(&robot);
-    // render.free_mesh(&block154);
-    // render.free_mesh(&dyn_mesh1);
-    // render.free_mesh(&dyn_mesh2);
+println
+    render.free_block(&block_palette[1]);
+    render.free_block(&block_palette[2]);
+    render.free_block(&block_palette[3]);
+    render.free_block(&block_palette[4]);
+    render.free_block(&block_palette[5]);
     vkDeviceWaitIdle(render.device);
 
+println
     render.cleanup();
-    // vmaBuildStatsString(render.VMAllocator, &dump, 1);
-    // cout << dump;
-    // vmaFreeStatsString(render.VMAllocator, dump);
+println
     return 0;
 }

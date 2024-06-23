@@ -2,7 +2,9 @@
 
 layout(set = 0, binding = 0, rgba8) uniform image2D  matNorm;
 layout(set = 0, binding = 1       )  uniform sampler2D  depth;
-layout(set = 0, binding = 2, rgba16) uniform image2D raytraced_frame;
+layout(set = 0, binding = 2, rgba32f) uniform image2D raytraced_frame;
+// layout(set = 0, binding = 3, rgba32f) uniform image2D  denoised_frame;
+// layout(set = 0, binding = 2, rgba16) uniform image2D raytraced_frame;
 layout(set = 0, binding = 3, rgba16) uniform image2D  denoised_frame;
 
 layout(push_constant) uniform constants{
@@ -62,7 +64,7 @@ float calculate_weight(
     phiNormal = 128.0;
     phiDepth = 0.0;
     // phiIllum = 0.7;
-    phiIllum = 0.5;
+    phiIllum = 0;
     
     // float weightPos = distance(vec2(pix), vec2(center_pix));
     // weightPos*=weightPos;
@@ -145,7 +147,7 @@ float calculate_weight_atrous(
     // phiDepth = _phiDepth;
     phiNormal = 128.0;
     phiDepth = 0;
-    phiIllum = .5;
+    phiIllum = 5.0;
     
     float weightPos = (atrous_weight[x+A_RADIUS]) * (atrous_weight[y+A_RADIUS]);
 
@@ -164,11 +166,12 @@ ivec2 get_atrous_pix(int x, int y, ivec2 center_pix, int iter){
     ivec2 shift = ivec2(x,y)*int(1+iter);
     return center_pix+shift;
 }
+//multi-pass less reads, lower memory coherence, better quality
 vec3 denoise_atrous(ivec2 center_pix){
     float sum_weight = 0.0;
      vec3 sum_color  = vec3(0);
 
-     vec3 color_center = imageLoad(raytraced_frame, center_pix).rgb;
+     vec3 color_center = clamp(imageLoad(denoised_frame, center_pix).rgb,0,10);
     float depth_center = load_depth(center_pix);
       int   mat_center = load_mat(center_pix);
      vec3  norm_center = load_norm(center_pix);
@@ -180,7 +183,7 @@ vec3 denoise_atrous(ivec2 center_pix){
         bool inside = all(greaterThanEqual(pix, ivec2(0))) && all(lessThan(pix, size));
 
         if (inside){
-             vec3 color = imageLoad(raytraced_frame, pix).rgb;
+             vec3 color = clamp(imageLoad(denoised_frame, pix).rgb,0,10);
             float depth = load_depth(pix);
               int mat   = load_mat(pix);
              vec3 norm  = load_norm(pix);
@@ -211,17 +214,23 @@ void main(void){
     // ratio = vec2(imageSize(matNorm))/vec2(size);
     
     // vec3 color = denoise(pix);
+    if(PushConstants.iteration == 0){imageStore(denoised_frame, pix, imageLoad(raytraced_frame, pix));}
+
     // imageStore(denoised_frame, pix, vec4(color,1));
     vec3 color = denoise_atrous(pix);
-        // color = imageLoad(raytraced_frame, pix).xyz;
-    imageStore(raytraced_frame, pix, vec4(color,1));
+        // color = imageLoad(denoised_frame, pix).xyz;
+    // imageStore(raytraced_frame, pix, vec4(color,1));
 
-    if(PushConstants.iteration == 2){
-        color = imageLoad(raytraced_frame, pix).xyz;
-        // imageStore(raytraced_frame, pix, vec4(color,1));
-        imageStore(denoised_frame, pix, vec4(color,1));
-
+    if(PushConstants.iteration == 3){
+        float max_component = max(color.x, max(color.y, color.z));
+        vec3 normalized_color;
+        if(max_component > 1.0){
+            normalized_color = color / max_component;
+            color = normalized_color;
+        }
     }
+
+    imageStore(denoised_frame, pix, vec4(color,1));
     // color.r =0;
     // vec3 color = imageLoad(raytraced_frame, pix).xyz;
     // vec3 old_color = imageLoad(denoised_frame, pix).xyz;

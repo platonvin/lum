@@ -35,7 +35,6 @@
 #include <limits>
 #include <fstream>
 
-
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
@@ -53,6 +52,21 @@ using namespace std;
 #define    BLOCK_PALETTE_SIZE_Y 32
 #define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
 
+// #define STENCIL
+
+// #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+// #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+#define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R32G32B32A32_SFLOAT
+#define  FINAL_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+#define OLD_UV_FORMAT VK_FORMAT_R32G32_SFLOAT
+#define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
+#ifdef STENCIL
+#define DEPTH_FORMAT VK_FORMAT_D24_UNORM_S8_UINT 
+#else
+#define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
+#endif
+
+//should be 2 for temporal accumulation, but can be changed if rebind images
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 typedef   u8 MatID_t;
@@ -241,6 +255,7 @@ public:
     void load_vertices(Mesh* mesh, Vertex* vertices);
     // void extrude_palette(Material* material_palette);
     void load_block(Block** block, const char* vox_file);
+    void free_block(Block** block);
     
     Material mat_palette[MATERIAL_PALETTE_SIZE];
     table3d<BlockID_t>  origin_world = {};
@@ -255,9 +270,15 @@ public:
     bool is_vsync = false;
     bool is_fullscreen = false;
 
-    vec3 camera_pos = vec3(60, 0, 50);
-    vec3 camera_dir = normalize(vec3(0.1, 1.0, -0.5));
-    mat4 old_trans = identity<mat4>();
+    bool is_resized = false;
+
+    vec3     camera_pos = vec3(60, 0, 50);
+    vec3 old_camera_pos = vec3(60, 0, 50);
+    vec3     camera_dir = normalize(vec3(0.1, 1.0, -0.5));
+    vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
+
+    mat4 current_trans = identity<mat4>();
+    mat4     old_trans = identity<mat4>();
     // vec3 old_camera_pos = vec3(60, 0, 50);
     // vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
 
@@ -265,16 +286,19 @@ public:
         void startRaygen();
         void RaygenMesh(Mesh* mesh);
         void   endRaygen();
+        void RaygenParticles();
         // Start of computeCommandBuffer
         void startCompute();
                 void startBlockify();
                 void blockifyMesh(Mesh* mesh);
+                    void blockifyCustom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
                 void   endBlockify();
-                 void blockifyCustom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
+                void blockifyParticles();
             void execCopies();
                 void startMap();
                 void mapMesh(Mesh* mesh);
                 void   endMap();
+                void mapParticles();
             void recalculate_df();
             void raytrace();
             void denoise(int iterations);
@@ -292,7 +316,15 @@ public:
     void update_Material_Palette(Material* materialPalette);
     void update_SingleChunk(BlockID_t* blocks);
 private:
-    void recreate_Swapchain();
+    //including fullscreen and scaled images
+    void  cleanup_SwapchainDependent();
+    //including fullscreen and scaled images
+    void   create_SwapchainDependent();
+    //including fullscreen and scaled images
+    void  recreate_SwapchainDependent();
+
+    void  cleanup_Images();
+
 
     void create_Allocator();
     
@@ -338,9 +370,19 @@ private:
     // void update_Descriptors();
 
     void delete_Images(vector<Image>* images);
-    void create_Image_Storages(vector<Image>* image, 
+    void delete_Images(Image* images);
+    void create_Image_Storages(vector<Image>* images, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size);
+    void create_Image_Storages(Image* image, 
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
+    uvec3 size);
+// #ifdef STENCIL 
+    void create_Image_Storages_DepthStencil(vector<VkImage>* images, vector<VmaAllocation>* allocs, vector<VkImageView>* depthViews, vector<VkImageView>* stencilViews,
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
+    uvec3 size);
+// #endif
+
     // void destroy_images
     void create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
     void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size);
@@ -435,45 +477,67 @@ public:
     // vector<VkImage>           rayGenNormImages;
     // vector<VkImage>           rayGenPosDiffImages;
     //TODO: no copy if supported
-    vector<Image> depthForChecks; //used for depth testing
-    vector<Image> depth ; //copy to this
-    vector<Image> depth_downscaled;
-    vector<Image> matNorm;
-    vector<Image> matNorm_downscaled;
-    vector<Image> oldUv;
-    vector<Image> oldUv_downscaled;
+
+    // vector<Image> depth ; //copy to this
+    // vector<Image> depth_downscaled;
+
+    //if scaled, we render to matnorm and downscale
+    //if not scaled, we render to  matnorm_downscaled and just use it with nearest sampler
+    
+    // vector<Image> oldUv;
+    // vector<Image> oldUv_downscaled;
+    // vector<Image> oldUv_downscaled;
     // vector<VkSampler> oldUvSampler;
 
     // vector<Image> gBuffer;
     // vector<Image> gBuffer_downscaled;
-    vector<Image> step_count;
-    vector<Image> raytraced_frame;
-    vector<Image>  denoised_frame;
-    vector<Image>  upscaled_frame;
-    vector<VkSampler>  raytracedImageSamplers;
-    vector<VkSampler>  denoisedImageSamplers;
+    // vector<Image> step_count;
+    // vector<Image> raytraced_frame;
+    // vector<Image>  denoised_frame;
+    // vector<Image>  upscaled_frame;
+#ifdef STENCIL
+    vector<VkImage> depthStencilImages; //used for depth testing
+    vector<VmaAllocation> depthStencilAllocs; //used for depth testing
+    vector<VkImageView>   depthViews; //used for depth testing
+    vector<VkImageView> stencilViews; //used for depth testing
+#else
+    vector<Image> depthBuffer; //used for depth testing
+#endif
+           Image  matNorm; //render always to one, other stored downscaled
+    vector<Image> matNorm_downscaled;
+           Image oldUv;
+           Image step_count;
+    vector<Image>          frame;
+           Image  upscaled_frame;
+    vector<Image> swapchain_images;
+    VkSampler  nearestSampler;
+    VkSampler  linearSampler;
 
-    vector<Buffer>       staging_world;
-    vector<void*> staging_world_mapped;
-    vector<Image>                world;
+    
+    //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
+    vector<Buffer>      staging_world;
+    vector<void*>       staging_world_mapped;
+
+           Image                world; //can i really use just one?
+           
     vector<Image> origin_block_palette;
-    vector<Image>        block_palette;
+           Image        block_palette;
     vector<Image> material_palette;
     
-    vector<Image> swapchain_images;
+    vector<Buffer>         uniform;
     
     // vector<Buffer> 
-    vector<Buffer>       depthStaging; //atomic
+    // vector<Buffer>       depthStaging; //atomic
     // vector<VmaAllocation>        paletteCounterBufferAllocations;
 
     // vector<Buffer> copy_queue;
-    vector<VkBuffer>          copyCounterBuffers; //atomic
-    vector<VmaAllocation>           copyCounterBufferAllocations;
+    // vector<VkBuffer>          copyCounterBuffers; //atomic
+    // vector<VmaAllocation>           copyCounterBufferAllocations;
 
-    vector<Buffer> uniform;
-    vector<Buffer> RayGenUniformBuffers;
+    // vector<Buffer> uniform;
+    // vector<Buffer> staging_uniform;
+    // vector<void*>  staging_uniform_mapped;
     // vector<VmaAllocation>           RayGenUniformBufferAllocations;
-    vector<void*> RayGenUniformMapped;
 
     //g buffer of prev_pixel pos, matid and normal
     // vector<VkImageView>           rayGenNormImageViews;
@@ -496,17 +560,17 @@ public:
     VkDescriptorSetLayout  upscaleDescriptorSetLayout;
     vector<VkDescriptorSet>  upscaleDescriptorSets;
 
-    VkDescriptorSetLayout  blockifyDescriptorSetLayout;
-    vector<VkDescriptorSet>  blockifyDescriptorSets;
+    // VkDescriptorSetLayout  blockifyDescriptorSetLayout;
+    // vector<VkDescriptorSet>  blockifyDescriptorSets;
 
-    VkDescriptorSetLayout      copyDescriptorSetLayout;
-    vector<VkDescriptorSet>      copyDescriptorSets;
+    // VkDescriptorSetLayout      copyDescriptorSetLayout;
+    // vector<VkDescriptorSet>      copyDescriptorSets;
 
     VkDescriptorSetLayout       mapDescriptorSetLayout;
     vector<VkDescriptorSet>       mapDescriptorSets;
 
-    VkDescriptorSetLayout        dfDescriptorSetLayout;
-    vector<VkDescriptorSet>        dfDescriptorSets;
+    // VkDescriptorSetLayout        dfDescriptorSetLayout;
+    // vector<VkDescriptorSet>        dfDescriptorSets;
 
     VkDescriptorSetLayout graphicalDescriptorSetLayout;
     vector<VkDescriptorSet> graphicalDescriptorSets;
@@ -520,21 +584,21 @@ public:
     VkPipelineLayout raytraceLayout;
     VkPipelineLayout denoiseLayout;
     VkPipelineLayout upscaleLayout;
-    VkPipelineLayout blockifyLayout;
-    VkPipelineLayout     copyLayout;
+    // VkPipelineLayout blockifyLayout;
+    // VkPipelineLayout     copyLayout;
     VkPipelineLayout      mapLayout;
-    VkPipelineLayout       dfxLayout;
-    VkPipelineLayout       dfyLayout;
-    VkPipelineLayout       dfzLayout;
+    // VkPipelineLayout       dfxLayout;
+    // VkPipelineLayout       dfyLayout;
+    // VkPipelineLayout       dfzLayout;
     VkPipeline raytracePipeline;
     VkPipeline denoisePipeline;
     VkPipeline upscalePipeline;
-    VkPipeline blockifyPipeline;
-    VkPipeline     copyPipeline;
+    // VkPipeline blockifyPipeline;
+    // VkPipeline     copyPipeline;
     VkPipeline      mapPipeline;
-    VkPipeline       dfxPipeline;
-    VkPipeline       dfyPipeline;
-    VkPipeline       dfzPipeline;
+    // VkPipeline       dfxPipeline;
+    // VkPipeline       dfyPipeline;
+    // VkPipeline       dfzPipeline;
 
     VmaAllocator VMAllocator; 
 private:
@@ -542,8 +606,9 @@ private:
 
     //wraps around MAX_FRAMES_IN_FLIGHT
     int itime = 0;
-    u32 currentFrame = 0;
+    u32  currentFrame = 0;
     u32 previousFrame = 0;
+    u32     nextFrame = 0;
     int palette_counter = 0;
     // VisualWorld* _world = world;
     VkDebugUtilsMessengerEXT debugMessenger;

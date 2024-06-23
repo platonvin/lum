@@ -1,5 +1,7 @@
 #version 450
 
+precision highp float;
+
 layout(location = 0) in vec3 posIn;
 layout(location = 1) in vec3 normIn;
 layout(location = 2) in uint MatIDIn;
@@ -30,6 +32,8 @@ layout(binding = 0, set = 0) uniform UniformBufferObject {
 layout(push_constant) uniform constants{
     mat4 trans_m2w; //model to world and than to screen
     mat4 trans_m2w_old; //old
+    mat4 trans_w2s;
+    mat4 trans_w2s_old;
 } pco;
 
 precision highp float;
@@ -60,13 +64,18 @@ void main() {
 
     vec4 world_pos     = pco.trans_m2w     * vec4(posIn,1);
     vec4 world_pos_old = pco.trans_m2w_old * vec4(posIn,1);
-    // vec3 relative_pos     = world_pos    .xyz - cameraPos;
-    // vec3 relative_pos_old = world_pos_old.xyz - cameraPos;
-    
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
          clip_coords.z = -clip_coords.z;
-
     vec3 clip_coords_old = (ubo.trans_w2s_old*world_pos_old).xyz;
+
+    // vec4 world_pos     = pco.trans_m2w     * vec4(posIn,1);
+    // vec4 world_pos_old = pco.trans_m2w_old * vec4(posIn,1);
+    // vec3 clip_coords =     ((pco.trans_w2s    *pco.trans_m2w)    * vec4(posIn,1)).xyz;
+    //      clip_coords.z = -clip_coords.z;
+    // vec3 clip_coords_old = ((pco.trans_w2s_old*pco.trans_m2w_old) * vec4(posIn,1)).xyz;
+    // vec3 clip_coords =     ((pco.trans_m2w    )  * vec4(posIn,1)).xyz;
+    //      clip_coords.z = -clip_coords.z;
+    // vec3 clip_coords_old = ((pco.trans_m2w_old) * vec4(posIn,1)).xyz;
 
     gl_Position  = vec4(clip_coords, 1);    
     
@@ -76,6 +85,11 @@ void main() {
 
     norm = normalize(m2w_normals*normIn);
     mat = uint(MatIDIn);
+
+    // if (ubo.trans_w2s != pco.trans_w2s){
+    // gl_Position  = vec4(vec3(0), 1);    
+
+    // }
 }
 /*
 #version 450
