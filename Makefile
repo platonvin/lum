@@ -2,12 +2,13 @@
 
 #libs are -lglfw3 -lglew32s -lopengl32 -lgdi32 -lccd -lenet64 -lws2_32 -lwinmm
 # G++ = C:\msys64\mingw64\bin\g++ exe
+RML_UI = C:/prog/RmlUi
 
-I = -I./src -I${VULKAN_SDK}/Include -I./common
-L = -L${VULKAN_SDK}/Lib
+I = -I./src -I${VULKAN_SDK}/Include -I./common -I$(RML_UI)/Include
+L = -L${VULKAN_SDK}/Lib -L$(RML_UI)/Bin/Static-Release
 F = -pipe -fno-exceptions -fno-rtti -O1
 D = -DNDEBUG
-SA = -O --target-env=vulkan1.1
+SA = -Os --target-env=vulkan1.1
 A = $(I) $(F) $(args)
 
 objs := \
@@ -39,6 +40,8 @@ _shaders:= \
 	shaders/compiled/frag.spv\
 	shaders/compiled/rayGenVert.spv\
 	shaders/compiled/rayGenFrag.spv\
+	shaders/compiled/rayGenParticlesVert.spv\
+	shaders/compiled/rayGenParticlesGeom.spv\
 	shaders/compiled/blockify.spv\
 	shaders/compiled/copy.spv\
 	shaders/compiled/map.spv\
@@ -73,9 +76,9 @@ obj/main.o: src/main.cpp $(headers)
 # obj/main.pch: src/main.h
 # 	g++ src/main.cpp -c -o obj/main.o $(F) $(I) $(args)
 client: $(objs) $(_shaders)
-	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk $(args)
+	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk -lRmlCore $(args)
 client_opt: $(src) $(headers) $(_shaders)
-	g++ $(srcs) $(I) $(L) $(D) -lglfw3 -lvolk -Oz -pipe -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
+	g++ $(srcs) $(I) $(L) $(D) -lglfw3 -lvolk -Os -pipe -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
 
 temp:
 	g++ .\src\renderer\temp.cpp $(F) $(I) $(L)
@@ -88,6 +91,11 @@ shaders/compiled/rayGenVert.spv: shaders/rayGen.vert
 	glslc shaders/rayGen.vert -o shaders/compiled/rayGenVert.spv $(SA)
 shaders/compiled/rayGenFrag.spv: shaders/rayGen.frag
 	glslc shaders/rayGen.frag -o shaders/compiled/rayGenFrag.spv $(SA)
+shaders/compiled/rayGenParticlesVert.spv: shaders/rayGenParticles.vert
+	glslc shaders/rayGenParticles.vert -o shaders/compiled/rayGenParticlesVert.spv $(SA)
+shaders/compiled/rayGenParticlesGeom.spv: shaders/rayGenParticles.geom
+	glslc shaders/rayGenParticles.geom -o shaders/compiled/rayGenParticlesGeom.spv $(SA)
+
 shaders/compiled/blockify.spv: shaders/blockify.comp
 	glslc shaders/blockify.comp -o shaders/compiled/blockify.spv $(SA)
 shaders/compiled/copy.spv: shaders/copy.comp

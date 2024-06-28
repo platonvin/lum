@@ -1,7 +1,7 @@
 #version 450
 
-precision highp float;
-precision highp int;
+precision lowp float;
+precision lowp int;
 
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_KHR_shader_subgroup_shuffle : enable
@@ -11,6 +11,7 @@ layout(set = 0, binding = 1, rgba8_snorm) uniform image2D  highres_matNorm;
 // layout(set = 0, binding = 2, rgba32f) uniform image2D  denoised_frame; //in
 layout(set = 0, binding = 2, rgba16) uniform image2D  denoised_frame; //in
 layout(set = 0, binding = 3, rgba16) uniform image2D  upscaled_frame; //out
+layout(set = 0, binding = 4, rg32f) uniform image2D  oldUv; //out
 
 ivec2 size;
 vec2 ratio;
@@ -31,13 +32,6 @@ int load_highres_mat(ivec2 pixel){
     int mat = int(round(imageLoad(highres_matNorm, pixel).x*127.0))+127;
     return mat;
 }
-// float load_depth(ivec2 pixel){
-//     // ivec2 size = imageSize(Gbuffer);
-//     // if(any(greaterThanEqual(pixel, size)) || any(lessThan(pixel, ivec2(0)))) return 100000000000000.0;
-    
-//     float depth_encoded = imageLoad(depth, pixel).x;
-//     return -(depth_encoded-0.5)*200.0;
-// }
 
 /*
 so we have lowres denoised frame and highres gBuffer with material and normal info
@@ -192,11 +186,12 @@ void main(){
 
     // vec3 hh_lowres_color = subgroupShuffle(ll_lowres_color, hh_id);
 
-    // ll_weight *= (1 / (ll_dist+1e-8));
-    // lh_weight *= (1 / (lh_dist+1e-8));
-    // hl_weight *= (1 / (hl_dist+1e-8));
-    // hh_weight *= (1 / (hh_dist+1e-8));
     ll_weight += 0.0001; //to prevent weird rounding errors
+    // hh_weight += 0.0001; //to prevent weird rounding errors
+    // ll_weight = (1);
+    // lh_weight = (1);
+    // hl_weight = (1);
+    // hh_weight = (1);
 
     color = (
         ll_lowres_color * ll_weight+
@@ -213,6 +208,7 @@ void main(){
 
 
     vec3 final_color = color / weight;
+    
     // final_color = ll_lowres_color;
     // bool is_trade_legit = any(greaterThanEqual(ivec2(pixel_to_load_from.xy), ivec2(8,4))) || (gl_SubgroupInvocationID >= gl_SubgroupSize-1);
 
@@ -238,6 +234,61 @@ void main(){
     // float color_resolution = 6.0;
     // final_color = floor(final_color * color_resolution) / (color_resolution - 1.0);
     // if(distance(ll_lowres_color, hh_lowres_color)>.1) final_color = vec3(0);
+    vec2 old_uv_shift = imageLoad(oldUv, highres_pix).xy;
     
+    vec3 old_color = imageLoad(upscaled_frame, highres_pix + ivec2(old_uv_shift*vec2(highres_size))).xyz;
+    final_color = mix(final_color, old_color, 0.99);
+
+
+// vec2 half_texel_size = 0.5 / vec2(size);
+// vec2 old_pix_center =  (round(old_uv*vec2(size)))/vec2(size);
+
+// vec2 p00_center = old_pix_center + vec2(-half_texel_size.x, -half_texel_size.y);
+// vec2 p10_center = old_pix_center + vec2(+half_texel_size.x, -half_texel_size.y);
+// vec2 p01_center = old_pix_center + vec2(-half_texel_size.x, +half_texel_size.y);
+// vec2 p11_center = old_pix_center + vec2(+half_texel_size.x, +half_texel_size.y); 
+
+// vec4 p00 = texture(old_frame, p00_center);
+// vec4 p10 = texture(old_frame, p10_center);
+// vec4 p01 = texture(old_frame, p01_center);
+// vec4 p11 = texture(old_frame, p11_center);
+
+// int p00_mat = int(round(texture(old_matNorm, p00_center).x*127.0 + 127.0));
+// int p10_mat = int(round(texture(old_matNorm, p10_center).x*127.0 + 127.0));
+// int p01_mat = int(round(texture(old_matNorm, p01_center).x*127.0 + 127.0));
+// int p11_mat = int(round(texture(old_matNorm, p11_center).x*127.0 + 127.0));
+
+// float x_mix = (old_uv*vec2(size)).x - (p00_center*vec2(size)).x;
+// float y_mix = (old_uv*vec2(size)).y - (p00_center*vec2(size)).y;
+
+// float p00_weight = distance(old_uv, p00_center);
+// float p10_weight = distance(old_uv, p10_center);
+// float p01_weight = distance(old_uv, p01_center);
+// float p11_weight = distance(old_uv, p11_center);
+// float p11_weight = +(    x_mix)*(    y_mix) * (float((p11_mat==mat)));// * float(dot(texture(old_matNorm, p11_center).yzw, load_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_matNorm, p00_center).yzw, load_norm(pix)) > 10.5)));// * float(dot(texture(old_matNorm, p00_center).yzw, load_norm(pix)) > -.1);
+// float p10_weight = +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat)));// * float(dot(texture(old_matNorm, p10_center).yzw, load_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_matNorm, p10_center).yzw, load_norm(pix)) > 10.5)));// * float(dot(texture(old_matNorm, p10_center).yzw, load_norm(pix)) > -.1);
+// float p01_weight = +(1.0-x_mix)*(    y_mix) * (float((p01_mat==mat)));// * float(dot(texture(old_matNorm, p01_center).yzw, load_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_matNorm, p01_center).yzw, load_norm(pix)) > 10.5)));// * float(dot(texture(old_matNorm, p01_center).yzw, load_norm(pix)) > -.1);
+// float p00_weight = +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat)));// * float(dot(texture(old_matNorm, p00_center).yzw, load_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_matNorm, p11_center).yzw, load_norm(pix)) > 10.5)));// * float(dot(texture(old_matNorm, p11_center).yzw, load_norm(pix)) > -.1);
+// p00_weight += 1e-8;
+// p11_weight += 1e-8;
+
+// p11_weight *= p11_weight;
+// p10_weight *= p10_weight;
+// p01_weight *= p01_weight;
+// p00_weight *= p00_weight;
+
+// float weight = (
+//     p00_weight+
+//     p10_weight+
+//     p01_weight+
+//     p11_weight
+// );
+// old_color = ((
+//     p00*p00_weight+
+//     p10*p10_weight+
+//     p01*p01_weight+
+//     p11*p11_weight
+// ).xyz)/(weight);
+
     imageStore(upscaled_frame, highres_pix, vec4(final_color,1));
 }

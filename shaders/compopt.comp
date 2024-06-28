@@ -22,13 +22,14 @@ layout(set = 0, binding = 3) uniform sampler2D     old_depthBuffer;
 layout(set = 0, binding = 4) uniform sampler2D old_matNorm;
 // layout(set = 0, binding = 1, rgba32f) readonly uniform image2D norms;
 // layout(set = 0, binding = 2, rgba32f) readonly uniform image2D diffs;
-layout(set = 0, binding = 5, r32i) uniform iimage3D blocks;
-layout(set = 0, binding = 6, rg8ui) uniform uimage3D blockPalette;
+layout(set = 0, binding = 5, r16i) uniform iimage3D blocks;
+layout(set = 0, binding = 6, r8ui) uniform uimage3D blockPalette;
 layout(set = 0, binding = 7, r32f) readonly uniform image2D voxelPalette;
 layout(set = 0, binding = 8, rgba8ui) uniform uimage2D step_count;
 layout(set = 0, binding = 9, rgba32f) uniform image2D frame;
 // layout(set = 0, binding = 9, rgba16) uniform image2D frame;
-layout(set = 0, binding = 10        ) uniform sampler2D old_frame;
+layout(set = 0, binding = 10       ) uniform sampler2D old_frame;
+// layout(set = 0, binding = 10, rgba32f) uniform image2D old_frame;
 
 // vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
 // vec3 cameraPos = vec3(60, 0, 50);
@@ -47,7 +48,7 @@ vec3 old_horizline         ;
 vec3 old_vertiline         ;
 // vec3 cameraPos = vec3(-13, -22, -8)*1.5/16.0;
 
-const int BLOCK_PALETTE_SIZE_X = 32;
+const int BLOCK_PALETTE_SIZE_X = 64;
 #define MAX_DEPTH 4
 #define NUM_SAMPLES 1
 #define PI 3.1415926535
@@ -55,14 +56,15 @@ const int BLOCK_PALETTE_SIZE_X = 32;
 #define nIN 1.0
 #define nOUT 1.0
 
-#define WIDTH_B  (8)
-#define LENGTH_B (8)
-#define HEIGHT_B (8)
+const ivec3 world_size =ivec3(48,48,16);
+#define WIDTH_B  (16)
+#define LENGTH_B (16)
+#define HEIGHT_B (16)
 
 vec3 randvec;
 
-const float view_width  = 1920.0 / 42.0; //in block_diags
-const float view_height = 1080.0 / 42.0; //in blocks
+const float view_width  = 1920.0 / 10.0; //in block_diags
+const float view_height = 1080.0 / 10.0; //in blocks
 // const ivec2 size = ivec2(ivec2(1920, 1061) / sqrt(2.0));
 ivec2 size;
 ivec2 warp_id;
@@ -199,7 +201,7 @@ int GetBlock(in ivec3 block_pos){
 // if (block_pos.x < 0 || block_pos.x >=8) return 0;
 // if (block_pos.y < 0 || block_pos.y >=8) return 0;
 // if (block_pos.z < 0 || block_pos.z >=8) return 0;
-
+    if (block_pos.z > 2) return 0;
 
     block = int((imageLoad(blocks, block_pos).r));
 
@@ -352,8 +354,8 @@ Material GetMat(in int voxel){
     mat.smoothness   = 1.0 - imageLoad(voxelPalette, ivec2(5,voxel)).r;
     mat.transparancy = 0;
 
-    // mat.smoothness   = 0.99;
-    // mat.emmitance = clamp(mat.emmitance, 0, 1);
+    mat.smoothness   = 0.;
+    // mat.emmitance += .1;
 return mat;
 }
 
@@ -441,23 +443,22 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
         tMax += tDelta * fcurrentStepDiretion;
 
         
-        current_voxel = GetVoxel(voxel_pos);
-        //     ivec3 block_pos = voxel_pos / 16;
-        //     ivec3 relative_voxel_pos = voxel_pos % 16;
+        // current_voxel = GetVoxel(voxel_pos);
+            ivec3 block_pos = voxel_pos / 16;
+            ivec3 relative_voxel_pos = voxel_pos % 16;
 
-        //     int block_id = GetBlock(block_pos);
-        //     ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-        //     current_voxel = 0;
-        //     if(block_id != 0) {} 
-        //     current_voxel = int(imageLoad(blockPalette, voxel_pos).r);
-        // if(block_id == 0){
-        //     // vec3 _tFinal = tMax - tDelta;
-        //     // block_fraction += dot(tFinal, fcurrentStepDiretion);
-        //     // vec3 current_pos = rayOrigin + rayDirection*dot(_tFinal, fcurrentStepDiretion);
+            int block_id = GetBlock(block_pos);
+            ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+            current_voxel = 0;
+            if(block_id != 0) {} 
+            current_voxel = int(imageLoad(blockPalette, voxel_pos).r);
+        // if(block_pos.z > 4){
+        //     block_hit = false;
+        //     break;
         // }
         
         // if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos,imageSize(blocks)*16))) {
-        if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos,ivec3(8*16)))) {
+        if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos,world_size*ivec3(16)))) {
             block_hit = false;
             break;
         }
@@ -847,10 +848,10 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
     ouGbuffer.z = mat;
     ouGbuffer.w = floatBitsToUint(depth);
 */
-vec2 load_old_uv(ivec2 pixel){
+vec2 load_uv_shift(ivec2 pixel){
     // vec2 old_uv = imageLoad(oldUv, pixel).xy;
-    vec2 old_uv = texture(oldUv, (vec2(pixel)+.5) / vec2(size)).xy;
-    return old_uv;
+    vec2 uv_shift = texture(oldUv, (vec2(pixel)+.5) / vec2(size)).xy;
+    return uv_shift;
 }
 // vec3 decode(vec2 f){
 //     f = f * 2.0 - 1.0;
@@ -875,7 +876,9 @@ float load_depth(ivec2 pixel){
     vec2 uv = (vec2(pixel)+0.5)/vec2(size);
     float depth_encoded = texture(depthBuffer, uv).x;
     // float depth_encoded = imageLoad(depthBuffer, pixel).x;
-    return (1.0-depth_encoded)*100.0; //HOW TF I TYPED CORRECT FORMULA ON ACCIDENT
+    // float zView = 2.0 * 100.0 * 1000.0 / ((1000.0 - 100.0) * zNorm - 100.0 - 1000.0);
+    return (1.0-depth_encoded)*3333.0;
+    // return zView; //HOW TF I TYPED CORRECT FORMULA ON ACCIDENT
 }
 float load_old_depth(vec2 uv){
     // ivec2 size = imageSize(Gbuffer);
@@ -883,7 +886,7 @@ float load_old_depth(vec2 uv){
     // vec2 uv = (vec2(pixel)+0.5)/vec2(size);
     float depth_encoded = texture(old_depthBuffer, uv).x;
     // float depth_encoded = imageLoad(depthBuffer, pixel).x;
-    return (1.0-depth_encoded)*100.0; //HOW TF I TYPED CORRECT FORMULA ON ACCIDENT
+    return (1.0-depth_encoded)*3333.0;
 }
 
 bool ssr_intersects(in float test_depth, in vec2 pix, inout bool smooth_intersection){
@@ -957,61 +960,82 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out floa
 
 //     weight
 // }
-vec4 custom_sampler(vec2 uv, vec2 size, in int mat, out bool should_mix){
-    // vec4 color = vec4(0);
-    
-    // vec2 fraction = fract(uv*size);
-    // vec2 pix = floor(uv*size);
-    
-    // vec2 ll_center = vec2(0.5);
-    // vec2 lh_center = vec2(0.5, 1.5);
-    // vec2 hl_center = vec2(1.5, 0.5);
-    // vec2 hh_center = vec2(1.5);
-
-    
-    // float ll_dist = distance(fraction, ll_center);
-    // float lh_dist = distance(fraction, lh_center);
-    // float hl_dist = distance(fraction, hl_center);
-    // float hh_dist = distance(fraction, hh_center);
-
-    // vec4 ll_color = imageLoad(old_frame, ivec2(pix) + ivec2(0,0));
-    // vec4 lh_color = imageLoad(old_frame, ivec2(pix) + ivec2(0,1));
-    // vec4 hl_color = imageLoad(old_frame, ivec2(pix) + ivec2(1,0));
-    // vec4 hh_color = imageLoad(old_frame, ivec2(pix) + ivec2(1,1));
-
-    // int ll_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(0,0)).z);
-    // int lh_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(0,1)).z);
-    // int hl_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(1,0)).z);
-    // int hh_mat = int(imageLoad(old_Gbuffer, ivec2(pix) + ivec2(1,1)).z);
-
-    // float ll_weight = (1.0 / (ll_dist + 1e-8));//*float(ll_mat == mat);
-    // float lh_weight = (1.0 / (lh_dist + 1e-8));//*float(lh_mat == mat);
-    // float hl_weight = (1.0 / (hl_dist + 1e-8));//*float(hl_mat == mat);
-    // float hh_weight = (1.0 / (hh_dist + 1e-8));//*float(hh_mat == mat);
-    
-    // float weight = (
-    //     ll_weight+
-    //     lh_weight+
-    //     hl_weight+
-    //     hh_weight
-    // );
-
-    // color = (
-    //     ll_color*ll_weight+
-    //     lh_color*lh_weight+
-    //     hl_color*hl_weight+
-    //     hh_color*hh_weight
-    // );
-
-    // should_mix = weight != 0;
-    // return color / weight;
-    should_mix = int(round(texture(old_matNorm, uv).x*127.0 + 127.0)) == mat;
-    return texture(old_frame, uv);
-}
 float luminance(vec3 color){
     vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
     return dot(color, luminance_const);
 }
+vec4 cubic(float v){
+    vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - v;
+    vec4 s = n * n * n;
+    float x = s.x;
+    float y = s.y - 4.0 * s.x;
+    float z = s.z - 4.0 * s.y + 6.0 * s.x;
+    float w = 6.0 - x - y - z;
+    return vec4(x, y, z, w) * (1.0/6.0);
+}
+vec4 tex2DBiLinear(vec2 uv )
+{
+    vec2 fsize = vec2(size);
+    // ivec2 texCoord_i = ivec2(uv * vec2(size-1));
+    // vec2 texCoord_i = uv - .5/fsize;
+    vec2 texCoord_i = ceil(uv*fsize)/fsize;
+    float texelSizeX = 1.0 / float(size.x+1);
+    float texelSizeY = 1.0 / float(size.y+1);
+    // vec2 small = 
+    vec4 p0q0 = texture(old_frame, texCoord_i);
+    vec4 p1q0 = texture(old_frame, texCoord_i + vec2(texelSizeX, 0));
+    vec4 p0q1 = texture(old_frame, texCoord_i + vec2(0, texelSizeY));
+    vec4 p1q1 = texture(old_frame, texCoord_i + vec2(texelSizeX , texelSizeY));
+    // vec4 p0q0 = imageLoad(old_frame, texCoord_i);
+    // vec4 p1q0 = imageLoad(old_frame, texCoord_i + ivec2(1,0));
+
+    // vec4 p0q1 = imageLoad(old_frame, texCoord_i + ivec2(0,1));
+    // vec4 p1q1 = imageLoad(old_frame, texCoord_i + ivec2(1,1));
+
+    float a = fract( uv.x * fsize.x ); // Get Interpolation factor for X direction.
+					// Fraction near to valid data.
+
+    vec4 pInterp_q0 = mix( p0q0, p1q0, a ); // Interpolates top row in X direction.
+    vec4 pInterp_q1 = mix( p0q1, p1q1, a ); // Interpolates bottom row in X direction.
+
+    float b = fract( uv.y * fsize.y );// Get Interpolation factor for Y direction.
+    return mix( pInterp_q0, pInterp_q1, b ); // Interpolate in Y direction.
+    // return p0q0; // Interpolate in Y direction.
+}
+vec4 textureBicubic(sampler2D samp, vec2 texCoords){
+
+   vec2 texSize = textureSize(samp, 0);
+   vec2 invTexSize = 1.0 / texSize;
+   
+   texCoords = texCoords * texSize - 0.5;
+
+   
+    vec2 fxy = fract(texCoords);
+    texCoords -= fxy;
+
+    vec4 xcubic = cubic(fxy.x);
+    vec4 ycubic = cubic(fxy.y);
+
+    vec4 c = texCoords.xxyy + vec2 (-0.5, +1.5).xyxy;
+    
+    vec4 s = vec4(xcubic.xz + xcubic.yw, ycubic.xz + ycubic.yw);
+    vec4 offset = c + vec4 (xcubic.yw, ycubic.yw) / s;
+    
+    offset *= invTexSize.xxyy;
+    
+    vec4 sample0 = texture(samp, offset.xz);
+    vec4 sample1 = texture(samp, offset.yz);
+    vec4 sample2 = texture(samp, offset.xw);
+    vec4 sample3 = texture(samp, offset.yw);
+
+    float sx = s.x / (s.x + s.y);
+    float sy = s.z / (s.z + s.w);
+
+    return mix(
+       mix(sample3, sample2, sx), mix(sample1, sample0, sx)
+    , sy);
+}
+
 //TODO: balance
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -1092,89 +1116,38 @@ void main(void){
     // int iterations_left;
 
     //actually its has to be <= 4 cause that is how i store extra steps. TODO for highly reflective
-    for (int i = 0; (i < 4); i++)
-    {
-        hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0, i);
-        // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
+    vec3 multipass_color = vec3(0);
+    vec3 stored_accumulated_reflection = accumulated_reflection;
+    vec3 stored_accumulated_light = accumulated_light;
+    vec3 stored_direction = direction;
+    vec3 stored_origin = origin;
 
-        if(!hit) break;
-        ProcessHit(origin, direction, 
-            fraction, normal, material, 
-            accumulated_light, accumulated_reflection);
+    #define MULTIPASS 1
+    for(int pass = 0; (pass < MULTIPASS); pass++){
+        accumulated_reflection = stored_accumulated_reflection;
+        accumulated_light = stored_accumulated_light;
+        direction = stored_direction;
+        origin = stored_origin + Random3D()/10.0;
+        for (int i = 0; (i < 3); i++)
+        {
+            hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0, i);
+            // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
 
-        if(length(accumulated_reflection) < 0.1 || length(accumulated_light) > sqrt(2.0)) break;
+            if(!hit) break;
+            ProcessHit(origin, direction, 
+                fraction, normal, material, 
+                accumulated_light, accumulated_reflection);
+
+            if(length(accumulated_reflection) < 0.1 || length(accumulated_light) > sqrt(2.0)) break;
+        }
+        float global_light_participance = -dot(direction, globalLightDir);
+        if (global_light_participance > 0.0) {
+            accumulated_light += (vec3(.9,.9,.6)/1.0) * accumulated_reflection * global_light_participance;
+        }
+        multipass_color += accumulated_light / float(MULTIPASS);
     }
 
-    float global_light_participance = -dot(direction, globalLightDir);
-    if (global_light_participance > 0.0) {
-        accumulated_light += (vec3(.9,.9,.6)/2.0) * accumulated_reflection * global_light_participance;
-    }
+    vec3 color = multipass_color;   
 
-    vec3 color = accumulated_light;   
-    // imageStore(frame, pix, vec4(color, 1));
-
-    int mat = load_mat(pix);
-    // bool should_mix;
-
-    const vec2 old_uv = load_old_uv(pix);
-    // vec2 old_uv = (vec2(pix)+.5) / vec2 (size); 
-    // ivec2 old_pix = ivec2((old_uv*vec2(size)));
-
-    vec3 old_color = texture(old_frame, old_uv).rgb;
-    // float depth;
-    int old_mat = int(round(texture(old_matNorm, old_uv).x*127.0 + 127.0));
-    bool same_mat = old_mat == mat;
-
-    // vec3 origin
-    // bool close_in_world = distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .25;
-    bool same_depth = abs(depth - load_old_depth(old_uv)) < .5;
-
-    bool same_normals = dot(texture(old_matNorm, old_uv).yzw, load_norm(pix)) > .5;
-    // same_normals = true;
-    // return pow(clamp(dot(normal_center, normal), 0, 1), phiNormal);
-    
-    // vec3 old_color = imageLoad(frame, pix).rgb;
-
-    // int old_mat = int(imageLoad(old_Gbuffer, ivec2(vec2(old_pix)*ratio)).z);
-    // vec2 current_uv = (vec2(pix)+.5) / vec2(size);
-    // vec2 uv_diff = 
-    //     (vec2(pix)+.5) / vec2(size) - old_uv;
-    // if(mat == old_mat){
-    // float old_illum = luminance(old_color);
-    // float     illum = luminance(    color);
-    // float variance = distance(color, old_color) / sqrt(3.0);
-    // variance = 0;
-    // float illum_diff = distance(color, old_color);
-    // old_color = clamp(old_color, 0.0, 1.0);
-    // old_color = abs(old_color);
-    float color_diff = distance(GetMat(old_mat).color, GetMat(mat).color);
-    float  lumi_diff = distance(GetMat(old_mat).emmitance, GetMat(mat).emmitance);
-    // diff = 0;
-    float sm = GetMat(mat).smoothness;
-    float mixing_ratio = .975 - pow(sm, 4.0)/4.0 - color_diff*4.0 - lumi_diff*2.0;
-    mixing_ratio = clamp(mixing_ratio, 0.0, 1.0);
-    // mixing_ratio = .9;
-    if(
-        (same_depth && same_normals) ||
-        (same_mat && same_normals) ||
-        // true ||
-        false ){
-            // float mixing_ratio = .99;
-            color = mix(color, old_color, mixing_ratio);
-
-    } else {
-        // old_uv = 2.0*current_uv - old_uv;
-        // same_mat = int(round(imageLoad(old_matNorm, ivec2(old_uv*size)).x*127.0 + 127.0)) == mat;
-        // old_color = imageLoad(old_frame, ivec2(old_uv*size)).rgb;
-        // color = vec;
-    }
-    // float max_component = max(color.x, max(color.y, color.z));
-    // vec3 normalized_color;
-    // if(max_component > 1.0){
-    //     normalized_color = color / max_component;
-    //     vec3 color_diff = color - normalized_color;
-    //     color = normalized_color;
-    //     imageStore(frame, pix+1, imageLoad(frame, pix+1)+vec4(color_diff, 0));        
-    // }
     imageStore(frame, pix, vec4(color, 1));
 }

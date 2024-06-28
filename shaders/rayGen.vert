@@ -7,7 +7,7 @@ layout(location = 1) in vec3 normIn;
 layout(location = 2) in uint MatIDIn;
 
 // layout(location = 0)      out float depth;
-layout(location = 0)      out vec2 old_uv;
+layout(location = 0)      out vec2 uv_shift;
 layout(location = 1) flat out vec3 norm;
 layout(location = 2) flat out uint mat;
 // layout(location = 3)      out float depth;
@@ -29,41 +29,26 @@ layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
     mat4 trans_w2s_old;
 } ubo;
+
+//quatornions!
 layout(push_constant) uniform constants{
-    mat4 trans_m2w; //model to world and than to screen
-    mat4 trans_m2w_old; //old
-    mat4 trans_w2s;
-    mat4 trans_w2s_old;
+    vec4 rot, old_rot;
+    vec4 shift, old_shift;
 } pco;
 
 precision highp float;
 
-// vec2 encode (in vec3 normal){
-//     return normalize(normal.xy)*sqrt(normal.z*0.5+0.5);
-// }
-vec2 OctWrap(vec2 v)
-{   
-    vec2 res;
-    res = (1.0 - abs(v.yx));
-    res.x *=(v.x >= 0.0 ? 1.0 : -1.0);
-    res.y *=(v.y >= 0.0 ? 1.0 : -1.0);
-    return res;
-}
- 
-vec2 encode(vec3 n)
-{
-    n /= (abs(n.x) + abs(n.y) + abs(n.z));
-    n.xy = n.z >= 0.0 ? n.xy : OctWrap(n.xy);
-    n.xy = n.xy * 0.5 + 0.5;
-    return n.xy;
-}
+vec3 qtransform( vec4 q, vec3 v ){ 
+	return v + 2.0*cross(cross(v, -q.xyz ) + q.w*v, -q.xyz);
+    // return (q*vec4(v,0)).xyz;
+} 
 
 void main() {
-    float view_width  = 1920.0 / 42.0; //in block_diags
-	float view_height = 1080.0 / 42.0; //in blocks
+    vec4 world_pos     = vec4(qtransform(pco.rot    , posIn) + pco.shift.xyz ,1);
+    // vec4 world_pos     = vec4(posIn + pco.shift.xyz ,1);
+    vec4 world_pos_old = vec4(qtransform(pco.old_rot, posIn) + pco.old_shift.xyz ,1);
+    // vec4 world_pos_old = vec4(posIn + pco.old_shift.xyz ,1);
 
-    vec4 world_pos     = pco.trans_m2w     * vec4(posIn,1);
-    vec4 world_pos_old = pco.trans_m2w_old * vec4(posIn,1);
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
          clip_coords.z = -clip_coords.z;
     vec3 clip_coords_old = (ubo.trans_w2s_old*world_pos_old).xyz;
@@ -79,11 +64,11 @@ void main() {
 
     gl_Position  = vec4(clip_coords, 1);    
     
-    mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
+    // mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
 
-    old_uv = clip_coords_old.xy/2.0 + 0.5; //0..1
-
-    norm = normalize(m2w_normals*normIn);
+    uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
+    
+    norm = (qtransform(pco.rot,normIn));
     mat = uint(MatIDIn);
 
     // if (ubo.trans_w2s != pco.trans_w2s){

@@ -9,11 +9,12 @@ using namespace glm;
 
 tuple<int, int> get_block_xy(int N);
 
-void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int copy_queue_size, vec2 ratio, bool vsync, bool fullscreen){
+void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, int max_particle_count, vec2 ratio, bool vsync, bool fullscreen){
     world_size = ivec3(x_size, y_size, z_size);
      origin_world.allocate(world_size);
     current_world.allocate(world_size);
     _ratio = ratio;
+    _max_particle_count = max_particle_count;
     is_scaled = (ratio != vec2(1));
     is_vsync = vsync;
     is_fullscreen = fullscreen;
@@ -39,11 +40,21 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
 
     create_RenderPass_Graphical();
     create_RenderPass_RayGen();
+    create_RenderPass_RayGen_Particles();
 
     create_Command_Pool();
     create_Command_Buffers(&graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = commandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+        allocInfo.commandBufferCount = 2;
+
+    rayGenSecondaryCommandBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, rayGenSecondaryCommandBuffer.data())); 
 
     create_samplers();
 
@@ -65,7 +76,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         world_size); //TODO: dynamic
     create_Image_Storages(&origin_block_palette,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8G8_UINT,
+        VK_FORMAT_R8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -76,7 +87,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
     create_Image_Storages(&block_palette,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8G8_UINT,
+        VK_FORMAT_R8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -97,6 +108,9 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT ,
         {6, 256, 1}); //TODO: dynamic, text formats, pack Material into smth other than 6 floats :)
 
+    create_Buffer_Storages(&gpu_particles,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        _max_particle_count*sizeof(Particle), true);
     // create_Buffer_Storages(&staging_uniform,
     //     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     //     sizeof(mat4)*2, true);
@@ -105,9 +119,10 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
         sizeof(mat4)*2, false);
     // staging_uniform_mapped.resize(MAX_FRAMES_IN_FLIGHT);
     staging_world_mapped.resize(MAX_FRAMES_IN_FLIGHT);
+    gpu_particles_mapped.resize(MAX_FRAMES_IN_FLIGHT);
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        // vmaMapMemory(VMAllocator, staging_uniform[i].alloc, &staging_uniform_mapped[i]);
-        vmaMapMemory(VMAllocator,  staging_world[i].alloc, &staging_world_mapped[i]);
+        vmaMapMemory(VMAllocator, gpu_particles[i].alloc, &gpu_particles_mapped[i]);
+        vmaMapMemory(VMAllocator, staging_world[i].alloc, &staging_world_mapped[i]);
     }
     
     create_Descriptor_Set_Layouts();
@@ -120,8 +135,10 @@ void Renderer::init(int x_size, int y_size, int z_size, int block_palette_size, 
     }
     setup_Graphical_Descriptors();
     setup_RayGen_Descriptors();
+    setup_RayGen_Particles_Descriptors();
 
     create_RayGen_Pipeline();
+    create_RayGen_Particles_Pipeline();
     create_Graphics_Pipeline();
 
     create_compute_pipelines();
@@ -158,12 +175,15 @@ void Renderer::cleanup(){
             // vmaUnmapMemory(VMAllocator,                          staging_uniform[i].alloc);
         // vmaDestroyBuffer(VMAllocator, staging_uniform[i].buffer, staging_uniform[i].alloc);
             vmaUnmapMemory(VMAllocator,                           staging_world[i].alloc);
+            vmaUnmapMemory(VMAllocator,                           gpu_particles[i].alloc);
         vmaDestroyBuffer(VMAllocator,  staging_world[i].buffer, staging_world[i].alloc);
+        vmaDestroyBuffer(VMAllocator,  gpu_particles[i].buffer, gpu_particles[i].alloc);
         vmaDestroyBuffer(VMAllocator,  uniform[i].buffer, uniform[i].alloc);
     }
 
     vkDestroyDescriptorPool(device, descriptorPool, NULL);
     vkDestroyDescriptorSetLayout(device,     RayGenDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,     RayGenParticlesDescriptorSetLayout, NULL);
     // vkDestroyDescriptorSetLayout(device,   blockifyDescriptorSetLayout, NULL);
     // vkDestroyDescriptorSetLayout(device,       copyDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,        mapDescriptorSetLayout, NULL);
@@ -186,8 +206,10 @@ void Renderer::cleanup(){
     vkDestroyCommandPool(device, commandPool, NULL);
     vkDestroyRenderPass(device, graphicalRenderPass, NULL);
     vkDestroyRenderPass(device, rayGenRenderPass, NULL);
+    vkDestroyRenderPass(device, rayGenParticlesRenderPass, NULL);
 
     vkDestroyPipeline(device,   rayGenPipeline, NULL);
+    vkDestroyPipeline(device,   rayGenParticlesPipeline, NULL);
     // vkDestroyPipeline(device, blockifyPipeline, NULL);
     // vkDestroyPipeline(device,     copyPipeline, NULL);
     vkDestroyPipeline(device,      mapPipeline, NULL);
@@ -200,6 +222,7 @@ void Renderer::cleanup(){
     vkDestroyPipeline(device, graphicsPipeline, NULL);
 
     vkDestroyPipelineLayout(device,   rayGenPipelineLayout, NULL);
+    vkDestroyPipelineLayout(device,   rayGenParticlesPipelineLayout, NULL);
     // vkDestroyPipelineLayout(device, blockifyLayout, NULL);
     // vkDestroyPipelineLayout(device,     copyLayout, NULL);
     vkDestroyPipelineLayout(device,      mapLayout, NULL);
@@ -213,6 +236,9 @@ void Renderer::cleanup(){
 
     vkDestroyShaderModule(device, rayGenVertShaderModule, NULL);
     vkDestroyShaderModule(device, rayGenFragShaderModule, NULL); 
+    vkDestroyShaderModule(device, rayGenParticlesVertShaderModule, NULL);
+    vkDestroyShaderModule(device, rayGenParticlesGeomShaderModule, NULL);
+    vkDestroyShaderModule(device, rayGenParticlesFragShaderModule, NULL);
     vkDestroyShaderModule(device, graphicsVertShaderModule, NULL);
     vkDestroyShaderModule(device, graphicsFragShaderModule, NULL); 
 println
@@ -373,17 +399,29 @@ void Renderer::create_SwapchainDependent(){
         VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, 
         {swapChainExtent.width, swapChainExtent.height, 1});
     if(is_scaled){
-        // create_Image_Storages(&oldUv_downscaled,
-        //     VK_IMAGE_TYPE_2D,
-        //     OLD_UV_FORMAT,
-        //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        //     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        //     VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        //     VK_IMAGE_ASPECT_COLOR_BIT,
-        //     VK_IMAGE_LAYOUT_GENERAL,
-        //     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        //     VK_ACCESS_SHADER_WRITE_BIT, 
-        //     {raytraceExtent.width, raytraceExtent.height, 1});
+        create_Image_Storages(&depthBuffer_downscaled,
+            VK_IMAGE_TYPE_2D,
+            DEPTH_FORMAT,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+            DEPTH_LAYOUT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT, 
+            {raytraceExtent.width, raytraceExtent.height, 1});
+
+        create_Image_Storages(&oldUv_downscaled,
+            VK_IMAGE_TYPE_2D,
+            OLD_UV_FORMAT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_ACCESS_SHADER_WRITE_BIT, 
+            {raytraceExtent.width, raytraceExtent.height, 1});
 
         
         create_Image_Storages(&matNorm,
@@ -408,6 +446,7 @@ void Renderer::create_SwapchainDependent(){
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             VK_ACCESS_SHADER_WRITE_BIT, 
             {raytraceExtent.width, raytraceExtent.height, 1});
+            // {swapChainExtent.width, Extent.height, 1});
 
         create_Image_Storages(&upscaled_frame,
             VK_IMAGE_TYPE_2D,
@@ -499,6 +538,14 @@ void Renderer::create_SwapchainDependent(){
         #endif
     }
     create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+
+    vector<vector<VkImageView>> rayGenVeiws_downscaled(3);
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
+        rayGenVeiws_downscaled[0].push_back(matNorm_downscaled[i].view);
+        rayGenVeiws_downscaled[1].push_back(oldUv_downscaled.view);   
+        rayGenVeiws_downscaled[2].push_back(depthBuffer_downscaled[i].view);
+    }
+    create_N_Framebuffers(&rayGenFramebuffers_downscaled, &rayGenVeiws_downscaled, rayGenRenderPass, MAX_FRAMES_IN_FLIGHT, raytraceExtent.width, raytraceExtent.height);
 }
 void Renderer::recreate_SwapchainDependent(){
     int width = 0, height = 0;
@@ -574,16 +621,44 @@ void Renderer::create_N_Framebuffers(vector<VkFramebuffer>* framebuffers, vector
     }
 }
 
+void Renderer::updateParticles(){
+    int write_index = 0;
+    for (int i=0; i<particles.size(); i++){
+        bool should_keep = particles[i].lifeTime > 0;
+        
+        if(should_keep){
+            particles[write_index] = particles[i];
+            delta_time = 1/75.0;
+            particles[write_index].pos += particles[write_index].vel * float(delta_time);
+            particles[write_index].lifeTime -= delta_time;
+            
+            write_index++;
+        }        
+    }
+    particles.resize(write_index);
+
+    int capped_particle_count = glm::clamp(int(particles.size()), 0, _max_particle_count);
+    
+    memcpy(gpu_particles_mapped[currentFrame], particles.data(), sizeof(Particle)*capped_particle_count);
+    vmaFlushAllocation(VMAllocator, gpu_particles[currentFrame].alloc, 0, sizeof(Particle)*capped_particle_count);
+}
+
+#include <glm/gtx/string_cast.hpp>
 void Renderer::start_Frame(){
     vec3 up = glm::vec3(0.0f, 0.0f, 1.0f); // Up vector
 
     mat4 view = glm::lookAt(camera_pos, camera_pos+camera_dir, up);
-    mat4 projection = glm::ortho(-1920.f/42.f, 1920.f/42.f, 1080.f/42.f, -1080.f/42.f, -0.f, 200.f); // => *100.0 decoding
+    // mat4 projection = glm::ortho(-1920.f/42.f, 1920.f/42.f, 1080.f/42.f, -1080.f/42.f, -100.f, +300.f); // => *100.0 decoding
+    mat4 projection = glm::ortho(-1920.f/10.f, 1920.f/10.f, 1080.f/10.f, -1080.f/10.f, -0.f, +6666.f); // => *100.0 decoding
     mat4     worldToScreen = projection * view;
     // mat4 old_worldToScreen = projection * view;
         old_trans = current_trans;
     current_trans = worldToScreen;
-
+    old_camera_dir = camera_dir;
+    old_camera_pos = camera_pos;
+    // cout << glm::to_string(current_trans) << "\n";
+    // cout << glm::to_string(inverse(current_trans)) << "\n";
+    // cout << "\n";
     // struct unicopy {mat4 trans; mat4 old_trans;} unicopy = {current_trans, old_trans};
     
     // memcpy(staging_uniform_mapped[currentFrame], &unicopy, sizeof(unicopy));
@@ -604,15 +679,6 @@ void Renderer::startRaygen(){
         beginInfo.flags = 0;
         beginInfo.pInheritanceInfo = NULL;
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0, NULL,
-            0, NULL,
-            0, NULL
-        ); 
     
     struct unicopy {mat4 trans; mat4 old_trans;} unicopy = {current_trans, old_trans};
     vkCmdUpdateBuffer(commandBuffer, uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
@@ -685,58 +751,126 @@ void Renderer::startRaygen(){
         scissor.extent = swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
+// void Renderer::inter(){
+//     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
+//     vkCmdEndRenderPass(commandBuffer);
+
+//     vector<VkClearValue> clearColors = {
+//         {}, 
+//         // {}, 
+//         {}, 
+//         {}
+//     };
+//     VkRenderPassBeginInfo renderPassInfo = {};
+//         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+//         renderPassInfo.renderPass = rayGenRenderPass;
+//         renderPassInfo.framebuffer = rayGenFramebuffers_downscaled[currentFrame];
+//         renderPassInfo.renderArea.offset = {0, 0};
+//         renderPassInfo.renderArea.extent = raytraceExtent;
+//         renderPassInfo.clearValueCount = clearColors.size();
+//         renderPassInfo.pClearValues    = clearColors.data();
+//     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+//     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipeline);
+//     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipelineLayout, 0, 1, &RayGenDescriptorSets[currentFrame], 0, 0);
+
+//     VkViewport viewport = {};
+//         viewport.x = 0.0f;
+//         viewport.y = 0.0f;
+//         viewport.width  = (float)(raytraceExtent.width );
+//         viewport.height = (float)(raytraceExtent.height);
+//         viewport.minDepth = 0.0f;
+//         viewport.maxDepth = 1.0f;
+//     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+//     VkRect2D scissor = {};
+//         scissor.offset = {0, 0};
+//         scissor.extent = raytraceExtent;
+//     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+// }
+VkBuffer old_buff = NULL;
 void Renderer::RaygenMesh(Mesh *mesh){
-    
+    // VkCommandBuffer &commandBuffer = rayGenSecondaryCommandBuffer[currentFrame];
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
         VkBuffer vertexBuffers[] = {(*mesh).vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
     
     //m2s = w2s * m2w
-    mat4 id = identity<dmat4>();
-    mat4 m2s     = ((*mesh).    transform);
+    // mat4 id = identity<dmat4>();
+    // mat4 m2s     = ((*mesh).    transform);
     // mat4 m2s     = (*mesh).transform*current_trans;
-    mat4 m2s_old =     ((*mesh).old_transform);
+    // mat4 m2s_old =     ((*mesh).old_transform);
     // mat4 m2s_old =     (*mesh).old_transform*old_trans;
     // struct {mat4 m1; mat4 m2; mat4 m3; mat4 m4;} tmp = {(*mesh).transform, (*mesh).old_transform, current_trans, old_trans};
     // struct {mat4 m1; mat4 m2; mat4 m3; mat4 m4;} tmp = {m2s, m2s_old, id, id};
-    struct {mat4 m1; mat4 m2; mat4 m3; mat4 m4;} tmp = {m2s, m2s_old, current_trans, old_trans};
+    struct {quat r1,r2; vec4 s1,s2;} rgpc = {(*mesh).rot, (*mesh).old_rot, vec4((*mesh).shift,0), vec4((*mesh).old_shift,0)};
     //TODO:
-    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(tmp), &tmp);
+    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
     // vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(mat4), sizeof(mat4), &(*mesh).old_transform);
     // vkcmd
 
-    (*mesh).old_transform = (*mesh).transform;
+    (*mesh).old_rot   = (*mesh).rot;
+    (*mesh).old_shift = (*mesh).shift;
 
     // glm::mult
-
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, (*mesh).indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+    if(old_buff != (*mesh).indexes[currentFrame].buffer){
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        old_buff = (*mesh).indexes[currentFrame].buffer;
+    }
     vkCmdDrawIndexed(commandBuffer, (*mesh).icount, 1, 0, 0, 0);
 }
+void Renderer::rayGenMapParticles(){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
+    // vkCmdEndRenderPass(commandBuffer);
+    // VK_CHECK(vkEndCommandBuffer(rayGenSecondaryCommandBuffer[currentFrame]));
+    // vkCmdExecuteCommands(commandBuffer, 1, &rayGenSecondaryCommandBuffer[currentFrame]);
+    // VkRenderPassBeginInfo renderPassInfo = {};
+    //     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    //     renderPassInfo.renderPass = rayGenParticlesRenderPass;
+    //     renderPassInfo.framebuffer = rayGenFramebuffers[currentFrame];
+    //     renderPassInfo.renderArea.offset = {0, 0};
+    //     renderPassInfo.renderArea.extent = swapChainExtent;
+    //     renderPassInfo.clearValueCount = 0;
+    //     renderPassInfo.pClearValues    = NULL;
+    // vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // if(particles.size() > 0){ //driver probably handles this automatically, but just for safity
+    //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenParticlesPipeline);
+    //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenParticlesPipelineLayout, 0, 1, &RayGenParticlesDescriptorSets[currentFrame], 0, 0);
+
+    //     VkViewport viewport = {};
+    //         viewport.x = 0.0f;
+    //         viewport.y = 0.0f;
+    //         viewport.width  = (float)(swapChainExtent.width );
+    //         viewport.height = (float)(swapChainExtent.height);
+    //         viewport.minDepth = 0.0f;
+    //         viewport.maxDepth = 1.0f;
+    //     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    //     VkRect2D scissor = {};
+    //         scissor.offset = {0, 0};
+    //         scissor.extent = swapChainExtent;
+    //     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    //     VkDeviceSize offsets[] = {0};
+    //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &gpu_particles[currentFrame].buffer, offsets);
+    //     // assert(particles.size() != 0);
+    //     vkCmdDraw(commandBuffer, particles.size(), 1, 0, 0);
+    // }
+}
+// void Renderer::endRaygen_first(){
+//     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
+// }
 void Renderer::endRaygen(){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
 
     vkCmdEndRenderPass(commandBuffer);
 
-    VkImageBlit blit = {};
-        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        blit.srcSubresource.layerCount = 1;
-        blit.dstSubresource.layerCount = 1;
-        blit.srcOffsets[0].x = 0;
-        blit.srcOffsets[0].y = 0;
-        blit.srcOffsets[0].z = 0;
-        blit.srcOffsets[1].x = swapChainExtent.width;
-        blit.srcOffsets[1].y = swapChainExtent.height;
-        blit.srcOffsets[1].z = 1;
-
-        blit.dstOffsets[0].x = 0;
-        blit.dstOffsets[0].y = 0;
-        blit.dstOffsets[0].z = 0;
-        blit.dstOffsets[1].x = swapChainExtent.width;
-        blit.dstOffsets[1].y = swapChainExtent.height;
-        blit.dstOffsets[1].z = 1;
-    VkFilter blit_filter = VK_FILTER_NEAREST;
     VkImageMemoryBarrier barrier = {};
         vkCmdPipelineBarrier(
             commandBuffer,
@@ -782,13 +916,53 @@ void Renderer::endRaygen(){
             0, NULL,
             1, &barrier
         );
+        barrier.image = depthBuffer[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.image = block_palette.image;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
     //LOL drawing to depth twice is more efficient than drawing once and copying
     if (is_scaled) {
-            blit.dstOffsets[1].x = raytraceExtent.width;
-            blit.dstOffsets[1].y = raytraceExtent.height;
-        // vkCmdBlitImage(commandBuffer, matNorm[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, matNorm_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
+    VkImageBlit blit = {};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.layerCount = 1;
+        blit.dstSubresource.layerCount = 1;
+        blit.srcOffsets[0].x = 0;
+        blit.srcOffsets[0].y = 0;
+        blit.srcOffsets[0].z = 0;
+        blit.srcOffsets[1].x = swapChainExtent.width;
+        blit.srcOffsets[1].y = swapChainExtent.height;
+        blit.srcOffsets[1].z = 1;
+
+        blit.dstOffsets[0].x = 0;
+        blit.dstOffsets[0].y = 0;
+        blit.dstOffsets[0].z = 0;
+        blit.dstOffsets[1].x = raytraceExtent.width;
+        blit.dstOffsets[1].y = raytraceExtent.height;
+        blit.dstOffsets[1].z = 1;
+        // blit.dstOffsets[1].x = raytraceExtent.width;
+        // blit.dstOffsets[1].y = raytraceExtent.height;
+        // vkCmdBlitImage(commandBuffer,   oldUv.image, VK_IMAGE_LAYOUT_GENERAL,                 oldUv_downscaled.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
         vkCmdBlitImage(commandBuffer, matNorm.image, VK_IMAGE_LAYOUT_GENERAL, matNorm_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
-        // vkCmdBlitImage(commandBuffer, oldUv[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, oldUv_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_LINEAR);
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        vkCmdBlitImage(commandBuffer, depthBuffer[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, depthBuffer_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
         // vkCmdBlitImage(commandBuffer, oldUv.image, VK_IMAGE_LAYOUT_GENERAL, oldUv_downscaled[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_LINEAR);
     }
 
@@ -806,6 +980,25 @@ void Renderer::endRaygen(){
         barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT  | VK_ACCESS_MEMORY_WRITE_BIT;    
         barrier.image = matNorm_downscaled[currentFrame].image;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+        barrier.image = oldUv_downscaled.image;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+        barrier.image = depthBuffer_downscaled[currentFrame].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         vkCmdPipelineBarrier(
             commandBuffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -963,14 +1156,14 @@ void Renderer::startBlockify(){
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
     memcpy(current_world.data(), origin_world.data(), size_to_copy);
 
-    vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0, NULL,
-            0, NULL,
-            0, NULL
-        ); 
+    // vkCmdPipelineBarrier(
+    //         commandBuffer,
+    //         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    //         0,
+    //         0, NULL,
+    //         0, NULL,
+    //         0, NULL
+    //     ); 
 }
 struct AABB {
   vec3 min;
@@ -1012,22 +1205,24 @@ static AABB get_shift(mat4 trans, ivec3 size){
 //TODO: MAKE THIS ACTUALLY DYNAMIC
 void Renderer::blockifyMesh(Mesh* mesh){
     //cpu code that does smth in mapped memory and than "flushes" to gpu
+    mat4 rotate = toMat4((*mesh).rot);
+    mat4 shift = translate(identity<mat4>(), (*mesh).shift);
 
-    struct AABB border_in_voxel = get_shift((*mesh).transform, (*mesh).size);
+    struct AABB border_in_voxel = get_shift(shift*rotate, (*mesh).size);
     
     struct {ivec3 min; ivec3 max;} border; 
-    border.min = ivec3(border_in_voxel.min) / ivec3(16) -ivec3(1);
-    border.max = ivec3(border_in_voxel.max) / ivec3(16) +ivec3(1);
+    border.min = (ivec3(border_in_voxel.min)-ivec3(1)) / ivec3(16);
+    border.max = (ivec3(border_in_voxel.max)+ivec3(1)) / ivec3(16);
 
     // border.min = ivec3(0);
     // border.max = ivec3(7);
 
-    border.min = clamp(border.min, ivec3(0), ivec3(7));
-    border.max = clamp(border.max, ivec3(0), ivec3(7));
+    // border.min = clamp(border.min, ivec3(0), ivec3(7));
+    // border.max = clamp(border.max, ivec3(0), ivec3(7));
     
-    for(int xx = border.min.x; xx <= border.max.x; xx++){
-    for(int yy = border.min.y; yy <= border.max.y; yy++){
-    for(int zz = border.min.z; zz <= border.max.z; zz++){
+    for(int xx = std::max(border.min.x,0); xx <= std::min(border.max.x,world_size.x-1); xx++){
+    for(int yy = std::max(border.min.y,0); yy <= std::min(border.max.y,world_size.y-1); yy++){
+    for(int zz = std::max(border.min.z,0); zz <= std::min(border.max.z,world_size.z-1); zz++){
         //if inside model TODO
         // if(
         //     any(greaterThanEqual(ivec3(xx,yy,zz), ivec3(8))) ||
@@ -1072,20 +1267,16 @@ void Renderer::blockifyMesh(Mesh* mesh){
     }}}
 }
 void Renderer::endBlockify(){
-    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
-    // int* block_image = (int*)stagingWorldvector<BuffersMapped>[currentFrame];
+    // vkDeviceWaitIdle(device);
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
     assert(size_to_copy != 0);
     memcpy(staging_world_mapped[currentFrame], current_world.data(), size_to_copy);
-    vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0, NULL,
-            0, NULL,
-            0, NULL
-        ); 
     vmaFlushAllocation(VMAllocator, staging_world[currentFrame].alloc, 0, size_to_copy);
+}
+
+void Renderer::execCopies(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    // int* block_image = (int*)stagingWorldvector<BuffersMapped>[currentFrame];
 
     vkCmdPipelineBarrier(
             commandBuffer,
@@ -1233,7 +1424,12 @@ void Renderer::mapMesh(Mesh* mesh){
         vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite, blocksWrite, blockPaletteWrite};
 
     vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-    struct AABB border_in_voxel = get_shift((*mesh).transform, (*mesh).size);
+
+    mat4 rotate = toMat4((*mesh).rot);
+    mat4 shift = translate(identity<mat4>(), (*mesh).shift);
+    mat4 transform = shift*rotate;
+    
+    struct AABB border_in_voxel = get_shift(transform, (*mesh).size);
     
     struct {ivec3 min; ivec3 max;} border; 
     border.min = ivec3(border_in_voxel.min) -ivec3(1);
@@ -1242,7 +1438,7 @@ void Renderer::mapMesh(Mesh* mesh){
     ivec3 map_area = border.max - border.min;
 
     // struct {mat4 trans; ivec3 size;} trans_size = {mesh.transform, mesh.size};
-    struct {mat4 trans; ivec4 size;} itrans_shift = {inverse((*mesh).transform), ivec4(border.min, 0)};
+    struct {mat4 trans; ivec4 size;} itrans_shift = {inverse(transform), ivec4(border.min, 0)};
     // trans = glm::scale(trans, vec3(0.95));
     vkCmdPushConstants(commandBuffer, mapLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(itrans_shift), &itrans_shift);
     // ivec3 adjusted_size = ivec3(vec3(mesh.size) * vec3(2.0));
@@ -1989,7 +2185,7 @@ vector<Image> Renderer::create_RayTrace_VoxelImages(u16* voxels, ivec3 size){
 
     create_Image_Storages(&voxelImages,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8G8_UINT,
+        VK_FORMAT_R8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -2129,6 +2325,7 @@ void Renderer::create_Descriptor_Set_Layouts(){
         // VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //depth    (highres)
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //denoised in
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //upscaled out
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //oldUv
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, upscaleDescriptorSetLayout, device);
 
@@ -2136,6 +2333,12 @@ void Renderer::create_Descriptor_Set_Layouts(){
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, //frame-constant world_to_screen mat4
         }, 
         VK_SHADER_STAGE_VERTEX_BIT, RayGenDescriptorSetLayout, device);
+    create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, //frame-constant world_to_screen mat4
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //blocks
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //voxel palette
+        }, 
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, RayGenParticlesDescriptorSetLayout, device);
 
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //in frame (raytraced)
@@ -2198,36 +2401,9 @@ void Renderer::allocate_Descriptors(){
     // allocate_Descriptors_helper(     dfDescriptorSets,      dfDescriptorSetLayout, descriptorPool, device); 
     allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
     allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
+    allocate_Descriptors_helper(RayGenParticlesDescriptorSets, RayGenParticlesDescriptorSetLayout, descriptorPool, device);      
 }
-// void Renderer::setup_Copy_Descriptors(){
-//     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-//         VkDescriptorImageInfo inputBlockPaletteInfo = {};
-//             inputBlockPaletteInfo.imageView = block_palette[i].view;
-//             inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-//         VkDescriptorBufferInfo copyCounterBufferInfo = {};
-//             copyCounterBufferInfo.buffer = copyCounterBuffers[i];
-//             copyCounterBufferInfo.offset = 0;
-//             copyCounterBufferInfo.range = VK_WHOLE_SIZE;
 
-//         VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-//             blockPaletteWrite.dstSet = copyDescriptorSets[i];
-//             blockPaletteWrite.dstBinding = 0;
-//             blockPaletteWrite.dstArrayElement = 0;
-//             blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-//             blockPaletteWrite.descriptorCount = 1;
-//             blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
-//         VkWriteDescriptorSet copyCounterWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-//             copyCounterWrite.dstSet = copyDescriptorSets[i];
-//             copyCounterWrite.dstBinding = 1;
-//             copyCounterWrite.dstArrayElement = 0;
-//             copyCounterWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-//             copyCounterWrite.descriptorCount = 1;
-//             copyCounterWrite.pBufferInfo = &copyCounterBufferInfo;
-//         vector<VkWriteDescriptorSet> descriptorWrites = {blockPaletteWrite, copyCounterWrite};
-
-//         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
-//     }
-// }
 //SHOULD NOT EXIST push descriptors to command buffer instead
 void Renderer::setup_Map_Descriptors(){
     // for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -2262,26 +2438,28 @@ void Renderer::setup_Raytrace_Descriptors(){
             matNormInfo.imageView = matNorm_downscaled[i].view;
             matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo oldUvInfo = {};
-            oldUvInfo.imageView = oldUv.view;
+            oldUvInfo.imageView = is_scaled? oldUv_downscaled.view : oldUv.view;
             oldUvInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            oldUvInfo.sampler = linearSampler;
+            oldUvInfo.sampler = nearestSampler;
         VkDescriptorImageInfo depthInfo = {};
 #ifdef STENCIL
             depthInfo.imageView = depthViews[i];
 #else 
-            depthInfo.imageView = depthBuffer[i].view;
+            // depthInfo.imageView = depthBuffer[i].view;
+            depthInfo.imageView = is_scaled? depthBuffer_downscaled[i].view : depthBuffer[i].view;
 #endif
             depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            depthInfo.sampler = linearSampler;
+            depthInfo.sampler = nearestSampler;
         VkDescriptorImageInfo old_depthInfo = {};
             // old_depthInfo.imageView = is_scaled? depth_downscaled[i].view : depth[i].view;
 #ifdef STENCIL
             old_depthInfo.imageView = depthViews[previous_frame];
 #else 
-            old_depthInfo.imageView = depthBuffer[previous_frame].view;
+            // old_depthInfo.imageView = depthBuffer[previous_frame].view;
+            old_depthInfo.imageView = is_scaled? depthBuffer_downscaled[previous_frame].view : depthBuffer[previous_frame].view;
 #endif
             old_depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            old_depthInfo.sampler = linearSampler;
+            old_depthInfo.sampler = nearestSampler;
         VkDescriptorImageInfo old_matNormInfo = {};
             old_matNormInfo.imageView = matNorm_downscaled[previous_frame].view;
             old_matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -2406,7 +2584,7 @@ void Renderer::setup_Denoise_Descriptors(){
 #ifdef STENCIL
             depthInfo.imageView = depthViews[i];
 #else
-            depthInfo.imageView = depthBuffer[i].view;
+            depthInfo.imageView = is_scaled? depthBuffer_downscaled[i].view : depthBuffer[i].view;
 #endif
             depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             depthInfo.sampler = nearestSampler;
@@ -2468,6 +2646,9 @@ void Renderer::setup_Upscale_Descriptors(){
         VkDescriptorImageInfo upscaledFrameInfo = {};
             upscaledFrameInfo.imageView = upscaled_frame.view;
             upscaledFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo oldUvInfo = {};
+            oldUvInfo.imageView = oldUv.view;
+            oldUvInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             
         VkWriteDescriptorSet lowres_matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             lowres_matNormWrite.dstSet = upscaleDescriptorSets[i];
@@ -2477,27 +2658,34 @@ void Renderer::setup_Upscale_Descriptors(){
             lowres_matNormWrite.descriptorCount = 1;
             lowres_matNormWrite.pImageInfo = &lowres_matNormInfo;
         VkWriteDescriptorSet highres_matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-           highres_matNormWrite.dstSet = upscaleDescriptorSets[i];
-           highres_matNormWrite.dstBinding = 1;
-           highres_matNormWrite.dstArrayElement = 0;
-           highres_matNormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-           highres_matNormWrite.descriptorCount = 1;
-           highres_matNormWrite.pImageInfo = &highres_matNormInfo;
+            highres_matNormWrite.dstSet = upscaleDescriptorSets[i];
+            highres_matNormWrite.dstBinding = 1;
+            highres_matNormWrite.dstArrayElement = 0;
+            highres_matNormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            highres_matNormWrite.descriptorCount = 1;
+            highres_matNormWrite.pImageInfo = &highres_matNormInfo;
         VkWriteDescriptorSet denoisedFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-           denoisedFrameWrite.dstSet = upscaleDescriptorSets[i];
-           denoisedFrameWrite.dstBinding = 2;
-           denoisedFrameWrite.dstArrayElement = 0;
-           denoisedFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-           denoisedFrameWrite.descriptorCount = 1;
-           denoisedFrameWrite.pImageInfo = &denoisedFrameInfo;
+            denoisedFrameWrite.dstSet = upscaleDescriptorSets[i];
+            denoisedFrameWrite.dstBinding = 2;
+            denoisedFrameWrite.dstArrayElement = 0;
+            denoisedFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            denoisedFrameWrite.descriptorCount = 1;
+            denoisedFrameWrite.pImageInfo = &denoisedFrameInfo;
         VkWriteDescriptorSet upscaledFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-           upscaledFrameWrite.dstSet = upscaleDescriptorSets[i];
-           upscaledFrameWrite.dstBinding = 3;
-           upscaledFrameWrite.dstArrayElement = 0;
-           upscaledFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-           upscaledFrameWrite.descriptorCount = 1;
-           upscaledFrameWrite.pImageInfo = &upscaledFrameInfo;
-        vector<VkWriteDescriptorSet> descriptorWrites = {lowres_matNormWrite, highres_matNormWrite, denoisedFrameWrite, upscaledFrameWrite/*blockPaletteSampler*/};
+            upscaledFrameWrite.dstSet = upscaleDescriptorSets[i];
+            upscaledFrameWrite.dstBinding = 3;
+            upscaledFrameWrite.dstArrayElement = 0;
+            upscaledFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            upscaledFrameWrite.descriptorCount = 1;
+            upscaledFrameWrite.pImageInfo = &upscaledFrameInfo;
+        VkWriteDescriptorSet oldUvWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            oldUvWrite.dstSet = upscaleDescriptorSets[i];
+            oldUvWrite.dstBinding = 4;
+            oldUvWrite.dstArrayElement = 0;
+            oldUvWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            oldUvWrite.descriptorCount = 1;
+            oldUvWrite.pImageInfo = &oldUvInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {lowres_matNormWrite, highres_matNormWrite, denoisedFrameWrite, upscaledFrameWrite, oldUvWrite/*blockPaletteSampler*/};
 
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
@@ -2508,16 +2696,16 @@ void Renderer::create_samplers(){
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         samplerInfo.magFilter = VK_FILTER_NEAREST;
         samplerInfo.minFilter = VK_FILTER_NEAREST;
-        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
         samplerInfo.anisotropyEnable = VK_FALSE;
         // samplerInfo.maxAnisotropy = 0;
-        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
         samplerInfo.compareEnable = VK_FALSE;
-        samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
         samplerInfo.mipLodBias = 0.0f;
         samplerInfo.minLod = 0.0f;
         samplerInfo.maxLod = 0.0f;
@@ -2529,11 +2717,11 @@ void Renderer::create_samplers(){
     // for (auto& sampler : nearestSamplers) {
     // }
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &nearestSampler));
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &linearSampler));
     // samplerInfo.magFilter = VK_FILTER_CUBIC_EXT;
     // samplerInfo.minFilter = VK_FILTER_CUBIC_EXT;
+    // samplerInfo.magFilter = VK_FILTER_LINEAR;
+    // samplerInfo.minFilter = VK_FILTER_LINEAR;
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &linearSampler));
     // for (auto& sampler : linearSamplers) {
     // }
 }
@@ -2547,7 +2735,7 @@ void Renderer::setup_Graphical_Descriptors(){
                 storageImageInfo.imageView = frame[i].view;
             }
             storageImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            storageImageInfo.sampler = linearSampler;
+            storageImageInfo.sampler = nearestSampler;
         VkWriteDescriptorSet descriptorWrite = {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrite.dstSet = graphicalDescriptorSets[i];
@@ -2574,6 +2762,48 @@ void Renderer::setup_RayGen_Descriptors(){
             descriptorWrite.descriptorCount = 1;
             descriptorWrite.pBufferInfo = &transInfo;
         vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
+    }
+}
+void Renderer::setup_RayGen_Particles_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VkDescriptorBufferInfo transInfo = {};
+            transInfo.offset = 0;
+            transInfo.buffer = uniform[i].buffer;
+            transInfo.range = VK_WHOLE_SIZE;
+        VkDescriptorImageInfo inputBlockInfo = {};
+            inputBlockInfo.imageView = world.view;
+            inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            // inputBlockInfo.sampler = blockPaletteImageSamplers[i];
+        VkDescriptorImageInfo inputBlockPaletteInfo = {};
+            inputBlockPaletteInfo.imageView = block_palette.view;
+            inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        
+        VkWriteDescriptorSet uniformWrite = {};
+            uniformWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            uniformWrite.dstSet = RayGenParticlesDescriptorSets[i];
+            uniformWrite.dstBinding = 0;
+            uniformWrite.dstArrayElement = 0;
+            uniformWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            uniformWrite.descriptorCount = 1;
+            uniformWrite.pBufferInfo = &transInfo;
+        VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockWrite.dstSet = RayGenParticlesDescriptorSets[i];
+            blockWrite.dstBinding = 1;
+            blockWrite.dstArrayElement = 0;
+            blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockWrite.descriptorCount = 1;
+            blockWrite.pImageInfo = &inputBlockInfo;
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = RayGenParticlesDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 2;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
+
+        vector<VkWriteDescriptorSet> descriptorWrites = {uniformWrite, blockWrite, blockPaletteWrite};
+
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
 }
 

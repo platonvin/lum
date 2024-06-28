@@ -48,8 +48,8 @@ using namespace std;
 #define MATERIAL_PALETTE_SIZE 256 //0 always empty
 
 // on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
-#define    BLOCK_PALETTE_SIZE_X 32
-#define    BLOCK_PALETTE_SIZE_Y 32
+#define    BLOCK_PALETTE_SIZE_X 64
+#define    BLOCK_PALETTE_SIZE_Y 64
 #define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
 
 // #define STENCIL
@@ -84,6 +84,12 @@ typedef struct Vertex {
     vec3 norm;
     MatID_t matID;
 } Vertex;
+typedef struct Particle {
+    vec3 pos;
+    vec3 vel;
+    float lifeTime;
+    MatID_t matID;
+} Particle;
 // typedef struct MeshData {
 //     vector<VkBuffer> vertices;
 //     vector<VkBuffer>  indices;
@@ -116,8 +122,13 @@ typedef struct Mesh {
     u32 icount;
     vector<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
 
-    mat4 transform; //used to transform from self coordinate system to world coordinate system
-    mat4 old_transform; //for denoising
+    quat rot;
+    quat old_rot;
+    vec3 shift;
+    vec3 old_shift;
+
+    // mat4 transform; //used to transform from self coordinate system to world coordinate system
+    // mat4 old_transform; //for denoising
     
     ivec3 size;
     // Voxel* host_voxels; // single copy of voxel memory on cpu. If NULL then you store your data yourself
@@ -243,7 +254,7 @@ public:
 class Renderer {
 
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int copy_queue_size=1024, vec2 ratio = vec2(1.0), bool vsync=true, bool fullscreen = false);
+    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int max_particle_count=1024, vec2 ratio = vec2(1.0), bool vsync=true, bool fullscreen = false);
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -264,18 +275,21 @@ private:
     ivec3 world_size;
     bool has_palette = false;
     vec2 _ratio;
+    int _max_particle_count;
     vector<VkImageCopy> copy_queue = {};
 public:
+    double delta_time = 0;
+
     bool is_scaled = false;
     bool is_vsync = false;
     bool is_fullscreen = false;
 
     bool is_resized = false;
 
-    vec3     camera_pos = vec3(60, 0, 50);
-    vec3 old_camera_pos = vec3(60, 0, 50);
-    vec3     camera_dir = normalize(vec3(0.1, 1.0, -0.5));
-    vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
+    vec3     camera_pos = vec3(60, 0, 128);
+    vec3 old_camera_pos = camera_pos;
+    vec3     camera_dir = normalize(vec3(0.4, 1.0, -0.8));
+    vec3 old_camera_dir = normalize(vec3(0.4, 1.0, -0.8));
 
     mat4 current_trans = identity<mat4>();
     mat4     old_trans = identity<mat4>();
@@ -283,22 +297,23 @@ public:
     // vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
 
     void start_Frame();
+        void updateParticles();
         void startRaygen();
         void RaygenMesh(Mesh* mesh);
+        void inter();
+        void rayGenMapParticles();
+        void   endRaygen_first();
         void   endRaygen();
-        void RaygenParticles();
         // Start of computeCommandBuffer
         void startCompute();
                 void startBlockify();
                 void blockifyMesh(Mesh* mesh);
                     void blockifyCustom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
                 void   endBlockify();
-                void blockifyParticles();
             void execCopies();
                 void startMap();
                 void mapMesh(Mesh* mesh);
                 void   endMap();
-                void mapParticles();
             void recalculate_df();
             void raytrace();
             void denoise(int iterations);
@@ -348,8 +363,10 @@ private:
     void create_Swapchain_Image_Views();
     void create_RenderPass_Graphical();
     void create_RenderPass_RayGen();
+    void create_RenderPass_RayGen_Particles();
     void create_Graphics_Pipeline(); 
     void create_RayGen_Pipeline();
+    void create_RayGen_Particles_Pipeline();
     void create_Descriptor_Set_Layouts();
     void create_Descriptor_Pool();
     void allocate_Descriptors();
@@ -366,6 +383,7 @@ private:
     void setup_Upscale_Descriptors();
     void setup_Graphical_Descriptors();
     void setup_RayGen_Descriptors();
+    void setup_RayGen_Particles_Descriptors();
     void create_samplers();
     // void update_Descriptors();
 
@@ -442,6 +460,10 @@ public:
 
     VkShaderModule rayGenVertShaderModule;
     VkShaderModule rayGenFragShaderModule;
+
+    VkShaderModule rayGenParticlesVertShaderModule;
+    VkShaderModule rayGenParticlesFragShaderModule;
+    VkShaderModule rayGenParticlesGeomShaderModule;
     // VkShaderModule   blockifyShaderModule;
     // VkShaderModule       copyShaderModule;
     // VkShaderModule        mapShaderModule;
@@ -450,17 +472,22 @@ public:
 
 //rasterization pipeline things
     VkRenderPass    rayGenRenderPass;
+    VkRenderPass    rayGenParticlesRenderPass;
     VkRenderPass graphicalRenderPass;
     VkPipelineLayout rayGenPipelineLayout;
+    VkPipelineLayout rayGenParticlesPipelineLayout;
     VkPipelineLayout       graphicsLayout;
     VkPipeline   rayGenPipeline;
+    VkPipeline   rayGenParticlesPipeline;
     VkPipeline graphicsPipeline;
 
 
     vector<VkFramebuffer> swapChainFramebuffers;
     vector<VkFramebuffer>    rayGenFramebuffers;
+    vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
 
     vector<VkCommandBuffer>    rayGenCommandBuffers;
+    vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
     //It is so because they are too similar and easy to record (TODO: make concurent)
     vector<VkCommandBuffer>   computeCommandBuffers; 
     vector<VkCommandBuffer> graphicalCommandBuffers;
@@ -502,10 +529,13 @@ public:
     vector<VkImageView> stencilViews; //used for depth testing
 #else
     vector<Image> depthBuffer; //used for depth testing
+    vector<Image> depthBuffer_downscaled; //used for depth testing
+    // vector<Image> depthBuffer; //used for depth testing
 #endif
            Image  matNorm; //render always to one, other stored downscaled
     vector<Image> matNorm_downscaled;
            Image oldUv;
+           Image oldUv_downscaled;
            Image step_count;
     vector<Image>          frame;
            Image  upscaled_frame;
@@ -519,13 +549,33 @@ public:
     vector<void*>       staging_world_mapped;
 
            Image                world; //can i really use just one?
-           
+
     vector<Image> origin_block_palette;
            Image        block_palette;
     vector<Image> material_palette;
     
     vector<Buffer>         uniform;
     
+    //so we have buffer for particles
+    //it is divided in chunks
+    //when no particles left in chunk, it is freed
+    //NO ATOMICS!
+    //spawnParticles(vec3 center, vec3 direction, float deviation, int count)
+    /*
+    particles are in gpoups of fixed size
+    each groups has header in separate buffer
+    headers are copied to cpu every frame
+    cpu will remove empty groups from calculations and
+    work is submitted in groups
+    also, there is world for particle marking so cpu can allocate blocks 
+
+    particles move and have a chance to be reprojected in the world 
+    */
+    vector<Particle>     particles;
+    vector<Buffer>   gpu_particles; //multiple because cpu-related work
+    vector<void* >   gpu_particles_mapped; //multiple because cpu-related work
+
+    // Buffer 
     // vector<Buffer> 
     // vector<Buffer>       depthStaging; //atomic
     // vector<VmaAllocation>        paletteCounterBufferAllocations;
@@ -550,6 +600,9 @@ public:
 
     VkDescriptorSetLayout    RayGenDescriptorSetLayout;
     vector<VkDescriptorSet>    RayGenDescriptorSets;
+
+    VkDescriptorSetLayout    RayGenParticlesDescriptorSetLayout;
+    vector<VkDescriptorSet>    RayGenParticlesDescriptorSets;
 
     VkDescriptorSetLayout  raytraceDescriptorSetLayout;
     vector<VkDescriptorSet>  raytraceDescriptorSets;

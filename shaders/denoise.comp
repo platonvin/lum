@@ -1,5 +1,8 @@
 #version 450 core
 
+precision lowp float;
+precision lowp int;
+
 layout(set = 0, binding = 0, rgba8) uniform image2D  matNorm;
 layout(set = 0, binding = 1       )  uniform sampler2D  depth;
 layout(set = 0, binding = 2, rgba32f) uniform image2D raytraced_frame;
@@ -42,7 +45,7 @@ float load_depth(ivec2 pixel){
     vec2 uv = (vec2(pixel)+0.5)/vec2(size);
     float depth_encoded = texture(depth, uv).x;
     // float depth_encoded = imageLoad(depth, pixel).x;
-    return -(depth_encoded-0.5)*200.0;
+    return -(depth_encoded-0.5)*400.0;
 }
 
 //how bright pixel is
@@ -50,82 +53,83 @@ float luminance(vec3 color){
     vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
     return dot(color, luminance_const);
 }
-float calculate_weight(
-    vec3 color, vec3 color_center,
-    vec3 normal, vec3 normal_center,
-    int mat, int mat_center,
-    float depth, float depth_center,
-    ivec2 pix, ivec2 center_pix,
-    float _phiDepth
-){
-    float weight;
+// float calculate_weight(
+//     vec3 color, vec3 color_center,
+//     vec3 normal, vec3 normal_center,
+//     int mat, int mat_center,
+//     float depth, float depth_center,
+//     ivec2 pix, ivec2 center_pix,
+//     float _phiDepth
+// ){
+//     float weight;
 
-    float phiNormal, phiDepth, phiIllum;
-    phiNormal = 128.0;
-    phiDepth = 0.0;
-    // phiIllum = 0.7;
-    phiIllum = 0;
+//     float phiNormal, phiDepth, phiIllum;
+//     phiNormal = 128.0;
+//     phiDepth = 0.5;
+//     // phiIllum = 0.7;
+//     // phiIllum = 0;
     
-    // float weightPos = distance(vec2(pix), vec2(center_pix));
-    // weightPos*=weightPos;
-        float weightPos=0;
-    const float weightNormal = pow(clamp(dot(normal_center, normal), 0, 1), phiNormal);
-    const float weightZ = (phiDepth == 0) ? 0.0f : abs(depth_center - depth) / phiDepth;
-    const float weightLillum = (phiIllum == 0) ? 0.0f : abs(luminance(color_center) - luminance(color)) / phiIllum;
-    const float weigth_mat = (mat == mat_center) ? 1 : 0;
+//     // float weightPos = distance(vec2(pix), vec2(center_pix));
+//     // weightPos*=weightPos;
+//         float weightPos=0;
+//     const float weightNormal = pow(clamp(dot(normal_center, normal), 0, 1), phiNormal);
+//     const float weightZ = (phiDepth == 0) ? 0.0f : abs(depth_center - depth) / phiDepth;
+//     const float weightLillum = (phiIllum == 0) ? 0.0f : abs(luminance(color_center) - luminance(color)) / phiIllum;
+//     const float weigth_mat = (mat == mat_center) ? 1 : 0;
 
-    weight = exp(0.0 - weightLillum - weightZ - weightPos) * weightNormal * weigth_mat;
+//     weight = exp(0.0 - weightLillum - weightZ - weightPos) * weightNormal * weigth_mat;
 
-    return weight;
-}
-//well, its time to implement denoiser. Spatial after temporal seems fine
-vec3 denoise(ivec2 center_pix){
-    ivec2 screenSize = size;
+//     return weight;
+// }
+// //well, its time to implement denoiser. Spatial after temporal seems fine
+// vec3 denoise(ivec2 center_pix){
+//     ivec2 screenSize = size;
 
-    float sum_weight = 0.0;
-    vec3 sum_color = vec3(0);
+//     float sum_weight = 0.0;
+//     vec3 sum_color = vec3(0);
 
-     vec3 color_center = imageLoad(raytraced_frame, center_pix).rgb;
-    float depth_center = load_depth(center_pix);
-      int   mat_center = load_mat(center_pix);
-     vec3  norm_center = load_norm(center_pix);
+//      vec3 color_center = imageLoad(raytraced_frame, center_pix).rgb;
+//     float depth_center = load_depth(center_pix);
+//       int   mat_center = load_mat(center_pix);
+//      vec3  norm_center = load_norm(center_pix);
 
-    const int radius = 5;
-    for(int xx = -radius; xx <= radius; xx++){
-    for(int yy = -radius; yy <= radius; yy++){
-        ivec2 pix = center_pix + ivec2(xx,yy);
-        const bool inside = all(greaterThanEqual(pix, ivec2(0))) && all(lessThan(pix, screenSize));
-        const bool samePixel = (xx == 0 && yy == 0);
-        if (inside){
-             vec3 color = imageLoad(raytraced_frame, pix).rgb;
-            float depth = load_depth(pix);
-              int mat   = load_mat(pix);
-             vec3 norm  = load_norm(pix);
+//     const int radius = 5;
+//     for(int xx = -radius; xx <= radius; xx++){
+//     for(int yy = -radius; yy <= radius; yy++){
+//         ivec2 pix = center_pix + ivec2(xx,yy);
+//         const bool inside = all(greaterThanEqual(pix, ivec2(0))) && all(lessThan(pix, screenSize));
+//         const bool samePixel = (xx == 0 && yy == 0);
+//         if (inside){
+//              vec3 color = imageLoad(raytraced_frame, pix).rgb;
+//             float depth = load_depth(pix);
+//               int mat   = load_mat(pix);
+//              vec3 norm  = load_norm(pix);
             
-            float phiDepth = max(depth, 1e-8) * 3.0;
+//             float phiDepth = max(depth, 1e-8) * 3.0;
 
-            float weight = calculate_weight(
-                color, color_center,
-                norm, norm_center,
-                mat, mat_center,
-                depth, depth_center,
-                pix, center_pix,
-                phiDepth
-            );
+//             float weight = calculate_weight(
+//                 color, color_center,
+//                 norm, norm_center,
+//                 mat, mat_center,
+//                 depth, depth_center,
+//                 pix, center_pix,
+//                 phiDepth
+//             );
 
-            sum_color += weight*color;
-            sum_weight+= weight;
-        }
-    }}
+//             sum_color += weight*color;
+//             sum_weight+= weight;
+//         }
+//     }}
 
-    return sum_color / sum_weight;
-}
+//     return sum_color / sum_weight;
+// }
 
 
 //CaLlMeKeRnEl
 // #define A_RADIUS 2
-#define A_RADIUS 2
+#define A_RADIUS 1
 #if A_RADIUS == 3
+    #error "define weights"
     // float atrous_weight[5] = {1.0/16.0, 1.0/4.0, 3.0/8.0, 1.0/4.0, 1.0/16.0};
 #elif A_RADIUS == 2
     float atrous_weight[5] = {1.0/16.0, 1.0/4.0, 3.0/8.0, 1.0/4.0, 1.0/16.0};
@@ -146,15 +150,17 @@ float calculate_weight_atrous(
     float phiNormal, phiDepth, phiIllum;
     // phiDepth = _phiDepth;
     phiNormal = 128.0;
-    phiDepth = 0;
+    phiDepth = 0.5;
+    // phiDepth = 0.3;
+    // phiIllum = 0.01;
     phiIllum = 5.0;
     
     float weightPos = (atrous_weight[x+A_RADIUS]) * (atrous_weight[y+A_RADIUS]);
 
-    const float weightNormal = pow(clamp(dot(normal_center, normal), 0, 1), phiNormal);
+    const float weightNormal = float(dot(normal_center, normal) > .95);
     const float weightZ      = (phiDepth == 0) ? 0.0f : abs(depth_center - depth) / phiDepth;
     const float weightLillum = (phiIllum == 0) ? 0.0f : abs(luminance(color_center) - luminance(color)) / phiIllum;
-    const float weigth_mat = (mat == mat_center) ? 1 : 0;
+    const float weigth_mat = (mat == mat_center) ? 1.0 : 0.0;
 
     weight = exp(0.0 - weightLillum - weightZ) * weightPos * weightNormal * weigth_mat;
 
@@ -163,7 +169,7 @@ float calculate_weight_atrous(
 // PushConstants.iteration
 ivec2 get_atrous_pix(int x, int y, ivec2 center_pix, int iter){
     // int radius = iter;
-    ivec2 shift = ivec2(x,y)*int(1+iter);
+    ivec2 shift = ivec2(x,y)*int(1 << iter);
     return center_pix+shift;
 }
 //multi-pass less reads, lower memory coherence, better quality
@@ -206,7 +212,7 @@ vec3 denoise_atrous(ivec2 center_pix){
 
     return sum_color / sum_weight;
 }
-
+// #pragma optionNV(unroll all) 
 layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
@@ -214,14 +220,14 @@ void main(void){
     // ratio = vec2(imageSize(matNorm))/vec2(size);
     
     // vec3 color = denoise(pix);
-    if(PushConstants.iteration == 0){imageStore(denoised_frame, pix, imageLoad(raytraced_frame, pix));}
+    // if(PushConstants.iteration == 0){imageStore(denoised_frame, pix, imageLoad(raytraced_frame, pix));}
 
     // imageStore(denoised_frame, pix, vec4(color,1));
     vec3 color = denoise_atrous(pix);
-        // color = imageLoad(denoised_frame, pix).xyz;
+        // color = clamp(imageLoad(denoised_frame, pix).xyz, 0,10);
     // imageStore(raytraced_frame, pix, vec4(color,1));
 
-    if(PushConstants.iteration == 3){
+    if(PushConstants.iteration == 2){
         float max_component = max(color.x, max(color.y, color.z));
         vec3 normalized_color;
         if(max_component > 1.0){

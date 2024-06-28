@@ -5,15 +5,22 @@ using namespace glm;
  
 tuple<int, int> get_block_xy(int N);
 
+#ifdef DISTANCE_FIELD
 struct bp_tex {u8 r; u8 g;};
+#else
+struct bp_tex {u8 r;};
+#endif
 //block palette on cpu side is expected to be array of pointers to blocks
 void Renderer::update_Block_Palette(Block** blockPalette){
     //block palette is in u8, but for easy copying we convert it to u16 cause block palette is R16_UNIT
     VkDeviceSize bufferSize = (sizeof(bp_tex))*16*BLOCK_PALETTE_SIZE_X* 16*BLOCK_PALETTE_SIZE_Y* 16;
     table3d<bp_tex> blockPaletteLinear = {};
         blockPaletteLinear.allocate(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16);
+        #ifdef DISTANCE_FIELD
         blockPaletteLinear.set({0,0});
-        
+        #else
+        blockPaletteLinear.set({0});
+        #endif
     for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
         for(i32 x=0; x<BLOCK_SIZE; x++){
         for(i32 y=0; y<BLOCK_SIZE; y++){
@@ -166,7 +173,8 @@ void Renderer::load_block(Block** block, const char* vox_file){
 
     // load_mesh(&(*block)->mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, true);
     (*block)->mesh.size = ivec3(scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
-    (*block)->mesh.transform = identity<mat4>();
+    (*block)->mesh.shift = vec3(0);
+    (*block)->mesh.rot = quat_identity<float, defaultp>();
     make_vertices(&(*block)->mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
     
     for (int x=0; x < scene->models[0]->size_x; x++){
@@ -201,7 +209,8 @@ void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int 
     }}}
 
     mesh->voxels = create_RayTrace_VoxelImages(voxels_extended.data(), mesh->size);
-    mesh->transform = identity<mat4>();
+    mesh->shift = vec3(0);
+    mesh->rot = quat_identity<float, defaultp>();
     
     voxels_extended.deallocate();
 }
@@ -220,7 +229,8 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
     ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
     ogt::ogt_mesh_remove_duplicate_vertices(&ctx, ogt_mesh);
 
-    mesh->transform = identity<mat4>();
+    mesh->shift = vec3(0);
+    mesh->rot = quat_identity<float, defaultp>();
     tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers((Vertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
     mesh->icount = ogt_mesh->index_count;
 }

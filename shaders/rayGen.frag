@@ -1,7 +1,7 @@
 #version 450
 
 // layout(location = 0) in float depth;
-layout(location = 0)      in vec2 old_uv;
+layout(location = 0)      in vec2 uv_shift;
 layout(location = 1) flat in vec3 norm;
 layout(location = 2) flat in uint mat;
 // layout(location = 3)      in float depth; //uint8 thing. But in float
@@ -16,7 +16,7 @@ layout(location = 1) out vec2 outOldUv;
 void main() {
     // uint uv_encoded = packUnorm2x16(old_uv);
 
-    outOldUv = old_uv;
+    outOldUv = uv_shift;
 
     outMatNorm.x = (float(mat)-127.0)/127.0;
     outMatNorm.gba = norm.xyz;

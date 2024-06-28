@@ -14,10 +14,10 @@ layout(push_constant) uniform constants{
 
 layout(set = 0, binding = 0, r8ui)  readonly uniform uimage3D modelVoxels;
 //blocks and blockPalettes are copies 
-layout(set = 0, binding = 1, r32i)  uniform iimage3D blocks;
-layout(set = 0, binding = 2, rg8ui) uniform uimage3D blockPalette;
+layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
+layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
 
-const int BLOCK_PALETTE_SIZE_X = 32;
+const int BLOCK_PALETTE_SIZE_X = 64;
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -37,7 +37,7 @@ void main(void){
      vec3  absolute_but_relative_to_shift_voxel = gl_GlobalInvocationID.xyz;
     ivec3 iabsolute_but_relative_to_shift_voxel = ivec3(absolute_but_relative_to_shift_voxel);
     
-     vec3  absolute_voxel = absolute_but_relative_to_shift_voxel + vec3(shift) + .5;
+     vec3  absolute_voxel = absolute_but_relative_to_shift_voxel + vec3(shift) + .1;
     ivec3 iabsolute_voxel = iabsolute_but_relative_to_shift_voxel + shift;
 
     ivec3 itarget_block = iabsolute_voxel/16;
@@ -50,7 +50,7 @@ void main(void){
     if (any(greaterThanEqual(irelative_vox, model_size))) return;
     if (any(   lessThan     (irelative_vox, ivec3(0)))) return;
 
-    if (any(greaterThanEqual(itarget_block, ivec3(8)))) return;
+    if (any(greaterThanEqual(itarget_block, ivec3(48,48,16)))) return;
     if (any(   lessThan     (itarget_block, ivec3(0)))) return;
 
     int target_block_in_palette = int(imageLoad(blocks, itarget_block).r);
@@ -58,8 +58,10 @@ void main(void){
     ivec3 target_palette_voxel = voxel_in_palette(iabsolute_voxel.xyz % 16, target_block_in_palette);
 
     uvec4 voxel = imageLoad(modelVoxels, irelative_vox);
+
     // voxel = uvec4(56);
-    if (voxel.r != 0){
+    // if ((voxel.r != 0) && (target_block_in_palette>5)){
+    if ((voxel.r != 0)){
         imageStore(blockPalette, target_palette_voxel, voxel); // maybe atomic?.. Could use temporal shared block for this
     }
 }
