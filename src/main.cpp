@@ -41,7 +41,7 @@ quat find_quat(vec3 v1, vec3 v2){
 }
 int main() {
     // render.init(48, 48, 16, BLOCK_PALETTE_SIZE, 8128, vec2(1) false);
-    render.init(48, 48, 16, BLOCK_PALETTE_SIZE, 8128, vec2(1.5), true, false);
+    render.init(48, 48, 16, BLOCK_PALETTE_SIZE, 8128, vec2(2.0), true, false);
     vkDeviceWaitIdle(render.device);
 
 
@@ -58,10 +58,10 @@ int main() {
     }}
     for(int xx=0; xx<48; xx++){
     for(int yy=0; yy<48; yy++){
-        if(((xx+yy) % 6) == 5){
+        if(((xx+yy*yy) % 9) == 4){
             render.origin_world(xx, yy, 2) = 3;
         }
-        if(((xx*yy) % 7) == 2){
+        if(((xx*yy / 2) % 17) == 6){
             render.origin_world(xx, yy, 2) = 5;
         }
         if(((2*xx/(yy+1)) % 11) == 5){
@@ -75,7 +75,8 @@ int main() {
     Mesh tank_lf_leg = {};
     Mesh tank_rb_leg = {};
     Mesh tank_lb_leg = {};
-    vec2 points[4]; // that each leg follows
+    vec2 points[4] = {}; // that each leg follows
+    vec2 interpolated_points[4] = {}; // that each leg follows
     vec2 target_points[4]; // that each leg follows
     // Mesh tank_head = {};
         render.load_mesh(&tank_body, "assets/tank_body.vox");
@@ -120,22 +121,24 @@ int main() {
         glfwPollEvents();
 
         #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
-        set_key(GLFW_KEY_W, render.camera_pos += vec3(0,+.5,0));
-        set_key(GLFW_KEY_S, render.camera_pos += vec3(0,-.5,0));
-        set_key(GLFW_KEY_A, render.camera_pos += vec3(  -.5,0,0));
-        set_key(GLFW_KEY_D, render.camera_pos += vec3(  +.5,0,0));
+        set_key(GLFW_KEY_W, render.camera_pos += vec3(0,+1.,0));
+        set_key(GLFW_KEY_S, render.camera_pos += vec3(0,-1.,0));
+        set_key(GLFW_KEY_A, render.camera_pos += vec3(  -1.,0,0));
+        set_key(GLFW_KEY_D, render.camera_pos += vec3(  +1.,0,0));
         set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
         set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
+        set_key(GLFW_KEY_COMMA  , render.camera_dir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
+        set_key(GLFW_KEY_PERIOD , render.camera_dir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
 
         vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
         vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
         // render.particles[0].vel = vec3(0);
-        set_key(GLFW_KEY_LEFT      , tank_body.shift -= tank_direction_right*0.4f);
-        set_key(GLFW_KEY_RIGHT     , tank_body.shift += tank_direction_right*0.4f);
+        set_key(GLFW_KEY_LEFT      , tank_body.shift -=   tank_direction_right*0.4f);
+        set_key(GLFW_KEY_RIGHT     , tank_body.shift +=   tank_direction_right*0.4f);
         set_key(GLFW_KEY_UP        , tank_body.shift += tank_direction_forward*0.4f);
         set_key(GLFW_KEY_DOWN      , tank_body.shift -= tank_direction_forward*0.4f);
-        set_key(GLFW_KEY_LEFT_CONTROL       , tank_body.shift.z += 0.5f);
-        set_key(GLFW_KEY_LEFT_ALT      , tank_body.shift.z -= 0.5f);
+        set_key(GLFW_KEY_LEFT_CONTROL       , tank_body.shift.z += 0.501f);
+        set_key(GLFW_KEY_LEFT_ALT      , tank_body.shift.z -= 0.501f);
 
 
         if(glfwGetKey(render.window.pointer, GLFW_KEY_PAGE_UP) == GLFW_PRESS){
@@ -214,19 +217,16 @@ int main() {
         target_points[3] = vec2(body_rb_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
 
         for (int i=0; i<4; i++){
-            if(distance(points[i], target_points[i]) > 6.f) {points[i] = target_points[i];};
+            if(distance(points[i], target_points[i]) > 6.f) {
+                points[i] = target_points[i];
+            };
+            interpolated_points[i] = mix(interpolated_points[i], points[i], 0.6);
         }
         
-        // points[0] = vec2(body_rf_leg_joint) + vec2( tank_direction_right) - vec2(tank_direction_forward)*.5f;
-        // points[1] = vec2(body_lb_leg_joint) + vec2(-tank_direction_right) - vec2(tank_direction_forward)*.5f;
-        // points[2] = vec2(body_lf_leg_joint) + vec2(-tank_direction_right) - vec2(tank_direction_forward)*.5f;
-        // points[3] = vec2(body_rb_leg_joint) + vec2( tank_direction_right) - vec2(tank_direction_forward)*.5f;        
-
-        
-        vec2 rf_direction = normalize(points[0] - vec2(body_rf_leg_joint));
-        vec2 lb_direction = normalize(points[1] - vec2(body_lb_leg_joint));
-        vec2 lf_direction = normalize(points[2] - vec2(body_lf_leg_joint));
-        vec2 rb_direction = normalize(points[3] - vec2(body_rb_leg_joint));
+        vec2 rf_direction = normalize(interpolated_points[0] - vec2(body_rf_leg_joint));
+        vec2 lb_direction = normalize(interpolated_points[1] - vec2(body_lb_leg_joint));
+        vec2 lf_direction = normalize(interpolated_points[2] - vec2(body_lf_leg_joint));
+        vec2 rb_direction = normalize(interpolated_points[3] - vec2(body_rb_leg_joint));
         //now legs are attached
         //to make them animated, we need to pick a point and try to follow it for while
         //we know tank direction
@@ -261,15 +261,6 @@ int main() {
                 struct block_render br = {};
                 br.pos = ivec3(xx*16,yy*16, zz*16);
                 br.index = block_id;
-                // block_mesh = &block_palette[block_id]->mesh;
-
-                // assert(block_mesh != NULL);
-
-                // block_mesh->shift = vec3(xx*16,yy*16, zz*16);
-                // block_mesh->old_shift = block_mesh->shift;
-                // block_mesh->rot = quat_identity<float, defaultp>();
-            
-                // render.RaygenMesh(block_mesh);
                 que.push_back(br);
             }
         }}}
@@ -293,53 +284,17 @@ int main() {
                 render.RaygenMesh(&tank_lb_leg);
                 render.RaygenMesh(&tank_lf_leg);
                 render.RaygenMesh(&tank_rb_leg);
-
-                // render.inter();
-                // for(auto b : que){
-                //     Mesh* block_mesh = NULL;
-                //     block_mesh = &block_palette[b.index]->mesh;
-                //     block_mesh->shift = vec3(b.pos);
-                //     block_mesh->old_shift = vec3(b.pos);
-
-                //     render.RaygenMesh(block_mesh);
-                // }
-                
-                // for(int xx=0; xx<48; xx++){
-                // for(int yy=0; yy<48; yy++){
-                // for(int zz=0; zz<5; zz++){
-                //     Mesh* block_mesh = NULL;
-                    
-                //     int block_id = render.origin_world(xx,yy,zz);
-                //     if(block_id != 0){
-                //         block_mesh = &block_palette[block_id]->mesh;
-
-                //         assert(block_mesh != NULL);
-
-                //         block_mesh->shift = vec3(xx*16,yy*16, zz*16);
-                //         block_mesh->old_shift = block_mesh->shift;
-                //         block_mesh->rot = quat_identity<float, defaultp>();
-                    
-                //         render.RaygenMesh(block_mesh);
-                //     }
-                // }}}
-                // render.RaygenMesh(&tank_body);
-                // render.RaygenMesh(&tank_head);
-
-                // render.RaygenMesh(&tank_rf_leg);
-                // render.RaygenMesh(&tank_lb_leg);
-                // render.RaygenMesh(&tank_lf_leg);
-                // render.RaygenMesh(&tank_rb_leg);
-                // render.rayGenMapParticles();
+                render.rayGenMapParticles();
             render.endRaygen();
 
             render.startBlockify();
                 render.blockifyMesh(&tank_body);
                 render.blockifyMesh(&tank_head);
             
-            render.blockifyMesh(&tank_rf_leg);
-            render.blockifyMesh(&tank_lb_leg);
-            render.blockifyMesh(&tank_lf_leg);
-            render.blockifyMesh(&tank_rb_leg);
+                render.blockifyMesh(&tank_rf_leg);
+                render.blockifyMesh(&tank_lb_leg);
+                render.blockifyMesh(&tank_lf_leg);
+                render.blockifyMesh(&tank_rb_leg);
         render.endBlockify();
 
         render.updateParticles();
@@ -361,16 +316,19 @@ int main() {
                 // render.recalculate_df();
 
                 render.raytrace();
-                render.denoise(3);
                 if(render.is_scaled){
+                    render.denoise(5, 2, DENOISE_TARGET_LOWRES);
                     render.upscale();
                 }
+                render.accumulate();
+                render.denoise(2, 2, DENOISE_TARGET_HIGHRES);
             render.endCompute();
 
             render.present(); 
             // render.end_Present();
         render.end_Frame();
         
+    vkDeviceWaitIdle(render.device);
     }
     //lol this was in main loop
     vkDeviceWaitIdle(render.device);

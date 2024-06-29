@@ -5,14 +5,15 @@ precision lowp int;
 
 layout(set = 0, binding = 0, rgba8) uniform image2D  matNorm;
 layout(set = 0, binding = 1       )  uniform sampler2D  depth;
-layout(set = 0, binding = 2, rgba32f) uniform image2D raytraced_frame;
-// layout(set = 0, binding = 3, rgba32f) uniform image2D  denoised_frame;
-// layout(set = 0, binding = 2, rgba16) uniform image2D raytraced_frame;
+layout(set = 0, binding = 2, rgba16) uniform image2D raytraced_frame;
 layout(set = 0, binding = 3, rgba16) uniform image2D  denoised_frame;
 
 layout(push_constant) uniform constants{
     int iteration;
+    int radius;
 } PushConstants;
+
+#define A_RADIUS 2
 
 ivec2 size;
 vec2 ratio;
@@ -38,6 +39,15 @@ int load_mat(ivec2 pixel){
     int mat = int(round(imageLoad(matNorm, pixel).x*127.0))+127;
     return mat;
 }
+
+const float COLOR_ENCODE_VALUE = 5.0;
+vec3 decode_color(vec3 encoded_color){
+    return clamp(encoded_color,0,1)*vec3(COLOR_ENCODE_VALUE);
+}
+vec3 encode_color(vec3 color){
+    return clamp(color/vec3(COLOR_ENCODE_VALUE), 0,1);
+}
+
 float load_depth(ivec2 pixel){
     // ivec2 size = imageSize(Gbuffer);
     // if(any(greaterThanEqual(pixel, size)) || any(lessThan(pixel, ivec2(0)))) return 100000000000000.0;
@@ -127,7 +137,6 @@ float luminance(vec3 color){
 
 //CaLlMeKeRnEl
 // #define A_RADIUS 2
-#define A_RADIUS 1
 #if A_RADIUS == 3
     #error "define weights"
     // float atrous_weight[5] = {1.0/16.0, 1.0/4.0, 3.0/8.0, 1.0/4.0, 1.0/16.0};
@@ -148,11 +157,12 @@ float calculate_weight_atrous(
     float weight;
 
     float phiNormal, phiDepth, phiIllum;
-    // phiDepth = _phiDepth;
+    phiDepth = 0.0;
+    phiIllum = 0.0;
     phiNormal = 128.0;
-    phiDepth = 0.5;
-    // phiDepth = 0.3;
-    // phiIllum = 0.01;
+    // phiDepth = _phiDepth;
+    phiDepth = 1.0;
+    // phiIllum = .01;
     phiIllum = 5.0;
     
     float weightPos = (atrous_weight[x+A_RADIUS]) * (atrous_weight[y+A_RADIUS]);
@@ -161,6 +171,8 @@ float calculate_weight_atrous(
     const float weightZ      = (phiDepth == 0) ? 0.0f : abs(depth_center - depth) / phiDepth;
     const float weightLillum = (phiIllum == 0) ? 0.0f : abs(luminance(color_center) - luminance(color)) / phiIllum;
     const float weigth_mat = (mat == mat_center) ? 1.0 : 0.0;
+    // const float weigth_mat = (mat == mat_center) ? 1.0 : 1.0;
+    // const float weight_color
 
     weight = exp(0.0 - weightLillum - weightZ) * weightPos * weightNormal * weigth_mat;
 
@@ -177,11 +189,10 @@ vec3 denoise_atrous(ivec2 center_pix){
     float sum_weight = 0.0;
      vec3 sum_color  = vec3(0);
 
-     vec3 color_center = clamp(imageLoad(denoised_frame, center_pix).rgb,0,10);
+     vec3 color_center = decode_color(imageLoad(raytraced_frame, center_pix).rgb);
     float depth_center = load_depth(center_pix);
       int   mat_center = load_mat(center_pix);
      vec3  norm_center = load_norm(center_pix);
-
 
     for(int xx = -A_RADIUS; xx <= A_RADIUS; xx++){
     for(int yy = -A_RADIUS; yy <= A_RADIUS; yy++){
@@ -189,7 +200,7 @@ vec3 denoise_atrous(ivec2 center_pix){
         bool inside = all(greaterThanEqual(pix, ivec2(0))) && all(lessThan(pix, size));
 
         if (inside){
-             vec3 color = clamp(imageLoad(denoised_frame, pix).rgb,0,10);
+             vec3 color = decode_color(imageLoad(raytraced_frame, pix).rgb);
             float depth = load_depth(pix);
               int mat   = load_mat(pix);
              vec3 norm  = load_norm(pix);
@@ -215,19 +226,22 @@ vec3 denoise_atrous(ivec2 center_pix){
 // #pragma optionNV(unroll all) 
 layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
-    ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
     size = imageSize(raytraced_frame);
+    ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(pix, size))) return;
+
     // ratio = vec2(imageSize(matNorm))/vec2(size);
     
     // vec3 color = denoise(pix);
     // if(PushConstants.iteration == 0){imageStore(denoised_frame, pix, imageLoad(raytraced_frame, pix));}
 
     // imageStore(denoised_frame, pix, vec4(color,1));
-    vec3 color = denoise_atrous(pix);
-        // color = clamp(imageLoad(denoised_frame, pix).xyz, 0,10);
+    vec3 color;
+    color = denoise_atrous(pix);
+    // color = clamp(decode_color(imageLoad(denoised_frame, pix).xyz), 0,10);
     // imageStore(raytraced_frame, pix, vec4(color,1));
 
-    if(PushConstants.iteration == 2){
+    if(PushConstants.iteration == 4){
         float max_component = max(color.x, max(color.y, color.z));
         vec3 normalized_color;
         if(max_component > 1.0){
@@ -236,7 +250,7 @@ void main(void){
         }
     }
 
-    imageStore(denoised_frame, pix, vec4(color,1));
+    imageStore(denoised_frame, pix, vec4(encode_color(color),1));
     // color.r =0;
     // vec3 color = imageLoad(raytraced_frame, pix).xyz;
     // vec3 old_color = imageLoad(denoised_frame, pix).xyz;

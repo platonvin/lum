@@ -56,7 +56,8 @@ using namespace std;
 
 // #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
 // #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
-#define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R32G32B32A32_SFLOAT
+#define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+// #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R32G32B32A32_SFLOAT
 #define  FINAL_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
 #define OLD_UV_FORMAT VK_FORMAT_R32G32_SFLOAT
 #define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
@@ -90,20 +91,6 @@ typedef struct Particle {
     float lifeTime;
     MatID_t matID;
 } Particle;
-// typedef struct MeshData {
-//     vector<VkBuffer> vertices;
-//     vector<VkBuffer>  indices;
-//     vector<VmaAllocation> verticesAllocation;
-//     vector<VmaAllocation>  indicesAllocation;
-//     u32 icount;
-// } MeshData;
-// typedef struct VoxelData {
-//     vector<VkBuffer> vertices;
-//     vector<VkBuffer>  indices;
-//     vector<VmaAllocation> verticesAllocation;
-//     vector<VmaAllocation>  indicesAllocation;
-//     u32 icount;
-// } MeshData;
 typedef struct Buffer {
     VkBuffer buffer;
     VmaAllocation alloc;
@@ -251,6 +238,11 @@ public:
 
 //TODO:
 
+enum denoise_targets{
+    DENOISE_TARGET_LOWRES,
+    DENOISE_TARGET_HIGHRES,
+};
+
 class Renderer {
 
 public: 
@@ -316,7 +308,8 @@ public:
                 void   endMap();
             void recalculate_df();
             void raytrace();
-            void denoise(int iterations);
+            void denoise(int iterations, int denoising_radius, denoise_targets target);
+            void accumulate();
             void upscale();
         void   endCompute();
         // End of computeCommandBuffer
@@ -326,7 +319,7 @@ public:
 
     tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount); 
     tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices); 
-    vector<Image>  create_RayTrace_VoxelImages(u16* voxels, ivec3 size);
+    vector<Image>  create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size);
     void update_Block_Palette(Block** blockPalette);
     void update_Material_Palette(Material* materialPalette);
     void update_SingleChunk(BlockID_t* blocks);
@@ -380,6 +373,7 @@ private:
     void setup_Df_Descriptors();
     void setup_Raytrace_Descriptors();
     void setup_Denoise_Descriptors();
+    void setup_Accumulate_Descriptors();
     void setup_Upscale_Descriptors();
     void setup_Graphical_Descriptors();
     void setup_RayGen_Descriptors();
@@ -484,7 +478,7 @@ public:
 
     vector<VkFramebuffer> swapChainFramebuffers;
     vector<VkFramebuffer>    rayGenFramebuffers;
-    vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
+    // vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
 
     vector<VkCommandBuffer>    rayGenCommandBuffers;
     vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
@@ -529,21 +523,23 @@ public:
     vector<VkImageView> stencilViews; //used for depth testing
 #else
     vector<Image> depthBuffer; //used for depth testing
-    vector<Image> depthBuffer_downscaled; //used for depth testing
+           Image  depthBuffer_downscaled; //used for depth testing
     // vector<Image> depthBuffer; //used for depth testing
 #endif
-           Image  matNorm; //render always to one, other stored downscaled
-    vector<Image> matNorm_downscaled;
+    vector<Image> matNorm; //render always to one, other stored downscaled
+           Image  matNorm_downscaled;
            Image oldUv;
-           Image oldUv_downscaled;
+        //    Image oldUv_downscaled; //dont need it
            Image step_count;
-    vector<Image>          frame;
-           Image  upscaled_frame;
+           Image mix_ratio;
+           Image lowres_frame;
+    vector<Image> highres_frame;
+        //    Image de
     vector<Image> swapchain_images;
     VkSampler  nearestSampler;
     VkSampler  linearSampler;
 
-    
+
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
     vector<Buffer>      staging_world;
     vector<void*>       staging_world_mapped;
@@ -595,9 +591,6 @@ public:
     // vector<VkImageView>         originBlocksImageViews;
     // vector<VkImageView>   originVoxelPaletteImageViews; //unused - voxel mat palette does not change
 
-    //buffers dont need view
-    
-
     VkDescriptorSetLayout    RayGenDescriptorSetLayout;
     vector<VkDescriptorSet>    RayGenDescriptorSets;
 
@@ -608,16 +601,14 @@ public:
     vector<VkDescriptorSet>  raytraceDescriptorSets;
 
     VkDescriptorSetLayout  denoiseDescriptorSetLayout;
-    vector<VkDescriptorSet>  denoiseDescriptorSets;
+    vector<VkDescriptorSet>  denoiseDescriptorSets_lowres;
+    vector<VkDescriptorSet>  denoiseDescriptorSets_highres;
 
     VkDescriptorSetLayout  upscaleDescriptorSetLayout;
     vector<VkDescriptorSet>  upscaleDescriptorSets;
 
-    // VkDescriptorSetLayout  blockifyDescriptorSetLayout;
-    // vector<VkDescriptorSet>  blockifyDescriptorSets;
-
-    // VkDescriptorSetLayout      copyDescriptorSetLayout;
-    // vector<VkDescriptorSet>      copyDescriptorSets;
+    VkDescriptorSetLayout  accumulateDescriptorSetLayout;
+    vector<VkDescriptorSet>  accumulateDescriptorSets;
 
     VkDescriptorSetLayout       mapDescriptorSetLayout;
     vector<VkDescriptorSet>       mapDescriptorSets;
@@ -630,13 +621,12 @@ public:
 
     VkDescriptorPool descriptorPool;
     
-    //basically just MAX_FRAMES_IN_FLIGHT of same descriptors
-    //raygen does not need this, for raygen its inside renderpass thing
 // upscale denoise
 //compute pipeline things
     VkPipelineLayout raytraceLayout;
     VkPipelineLayout denoiseLayout;
     VkPipelineLayout upscaleLayout;
+    VkPipelineLayout accumulateLayout;
     // VkPipelineLayout blockifyLayout;
     // VkPipelineLayout     copyLayout;
     VkPipelineLayout      mapLayout;
@@ -645,6 +635,7 @@ public:
     // VkPipelineLayout       dfzLayout;
     VkPipeline raytracePipeline;
     VkPipeline denoisePipeline;
+    VkPipeline accumulatePipeline;
     VkPipeline upscalePipeline;
     // VkPipeline blockifyPipeline;
     // VkPipeline     copyPipeline;

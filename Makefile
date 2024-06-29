@@ -6,7 +6,7 @@ RML_UI = C:/prog/RmlUi
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common -I$(RML_UI)/Include
 L = -L${VULKAN_SDK}/Lib -L$(RML_UI)/Bin/Static-Release
-F = -pipe -fno-exceptions -fno-rtti -O1
+F = -pipe -fno-exceptions -fno-rtti -O1 -DNDEBUG
 D = -DNDEBUG
 SA = -Os --target-env=vulkan1.1
 A = $(I) $(F) $(args)
@@ -50,6 +50,7 @@ _shaders:= \
 	shaders/compiled/dfz.spv\
 	shaders/compiled/comp.spv\
 	shaders/compiled/denoise.spv\
+	shaders/compiled/accumulate.spv\
 	shaders/compiled/upscale.spv\
 
 # flags = 
@@ -116,6 +117,8 @@ shaders/compiled/denoise.spv: shaders/denoise.comp
 	glslc shaders/denoise.comp -o shaders/compiled/denoise.spv $(SA)
 shaders/compiled/upscale.spv: shaders/upscale.comp
 	glslc shaders/upscale.comp -o shaders/compiled/upscale.spv $(SA)
+shaders/compiled/accumulate.spv: shaders/accumulate.comp
+	glslc shaders/accumulate.comp -o shaders/compiled/accumulate.spv $(SA)
 
 init:
 	mkdir obj

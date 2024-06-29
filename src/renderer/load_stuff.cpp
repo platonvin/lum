@@ -200,19 +200,19 @@ void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int 
         make_vertices(mesh, Voxels, x_size, y_size, z_size);
     }
 
-    table3d<u16> voxels_extended = {};
-    voxels_extended.allocate(x_size, y_size, z_size);
-    for (int x=0; x < x_size; x++){
-    for (int y=0; y < y_size; y++){
-    for (int z=0; z < z_size; z++){
-        voxels_extended(x,y,z) = (u16) Voxels[x + y*x_size + z*x_size*y_size];
-    }}}
+    // table3d<Voxel> voxels_extended = {};
+    // voxels_extended.allocate(x_size, y_size, z_size);
+    // for (int x=0; x < x_size; x++){
+    // for (int y=0; y < y_size; y++){
+    // for (int z=0; z < z_size; z++){
+    //     voxels_extended(x,y,z) = (Voxel) Voxels[x + y*x_size + z*x_size*y_size];
+    // }}}
 
-    mesh->voxels = create_RayTrace_VoxelImages(voxels_extended.data(), mesh->size);
+    mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
     mesh->shift = vec3(0);
     mesh->rot = quat_identity<float, defaultp>();
     
-    voxels_extended.deallocate();
+    // voxels_extended.deallocate();
 }
 //frees only gpu side stuff, not mesh ptr
 void Renderer::free_mesh(Mesh* mesh){
