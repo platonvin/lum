@@ -12,7 +12,8 @@ layout(set = 0, binding = 2, rgba8_snorm) uniform image2D  new_matNorm;
 layout(set = 0, binding = 3, rgba8_snorm) uniform image2D  old_matNorm;
 layout(set = 0, binding = 4, rgba16) uniform image2D  oldShift;
 layout(set = 0, binding = 5, r16) uniform image2D mix_ratio_image;
-
+layout(set = 0, binding = 6       )  uniform sampler2D old_depth;
+layout(set = 0, binding = 7       )  uniform sampler2D new_depth;
 vec3 load_new_norm(ivec2 pixel){
     vec3 norm = (imageLoad(new_matNorm, pixel).gba);
     return norm;
@@ -67,10 +68,10 @@ ivec2 p10_pix = clamp(ivec2(p10_center),ivec2(0), size-1);
 ivec2 p01_pix = clamp(ivec2(p01_center),ivec2(0), size-1);
 ivec2 p11_pix = clamp(ivec2(p11_center),ivec2(0), size-1); 
 
-vec3 p00 = decode_color(imageLoad(old_frame, p00_pix).rgb);
-vec3 p10 = decode_color(imageLoad(old_frame, p10_pix).rgb);
-vec3 p01 = decode_color(imageLoad(old_frame, p01_pix).rgb);
-vec3 p11 = decode_color(imageLoad(old_frame, p11_pix).rgb);
+vec3 p00 = (imageLoad(old_frame, p00_pix).rgb);
+vec3 p10 = (imageLoad(old_frame, p10_pix).rgb);
+vec3 p01 = (imageLoad(old_frame, p01_pix).rgb);
+vec3 p11 = (imageLoad(old_frame, p11_pix).rgb);
 
 int mat = load_new_mat(pix);
 int p00_mat = load_old_mat(p00_pix);
@@ -86,6 +87,12 @@ float y_mix = old_pos.y - p00_center.y;
 // float p01_weight = distance(old_uv, p01_center);
 // float p11_weight = distance(old_uv, p11_center);
 
+float new_depth = texelFetch(new_depth, pix, 0).x;
+float p00_depth_distance = abs(texelFetch(old_depth, p00_pix, 0).x - new_depth) + 0.001 / 2000.0;
+float p10_depth_distance = abs(texelFetch(old_depth, p10_pix, 0).x - new_depth) + 0.001 / 2000.0;
+float p01_depth_distance = abs(texelFetch(old_depth, p01_pix, 0).x - new_depth) + 0.001 / 2000.0;
+float p11_depth_distance = abs(texelFetch(old_depth, p11_pix, 0).x - new_depth) + 0.001 / 2000.0;
+
 float p00_weight = +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat))) * float(dot(load_old_norm(p00_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > -.1);
 float p10_weight = +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat))) * float(dot(load_old_norm(p10_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > -.1);
 float p01_weight = +(1.0-x_mix)*(    y_mix) * (float((p01_mat==mat))) * float(dot(load_old_norm(p01_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > -.1);
@@ -93,10 +100,10 @@ float p11_weight = +(    x_mix)*(    y_mix) * (float((p11_mat==mat))) * float(do
 // p00_weight += 1e-8;
 // p11_weight += 1e-8;
 
-// p11_weight *= p11_weight;
-// p10_weight *= p10_weight;
-// p01_weight *= p01_weight;
-// p00_weight *= p00_weight;
+// p11_weight *=  (1.0/p00_depth_distance);
+// p10_weight *=  (1.0/p10_depth_distance);
+// p01_weight *=  (1.0/p01_depth_distance);
+// p00_weight *=  (1.0/p11_depth_distance);
 
 float weight = (
     p00_weight+
@@ -130,5 +137,5 @@ vec3 old_color = ((
     }
     imageStore(mix_ratio_image, pix, vec4(mix_ratio));
 
-    imageStore(new_frame, pix, vec4(encode_color(final_color),1));
+    imageStore(new_frame, pix, vec4(final_color,1));
 }

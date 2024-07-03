@@ -38,6 +38,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
+#define RMLUI_STATIC_LIB
+#include <RmlUi/Core.h>
+// #include <RmlUi/Debugger.h>
+// #include <RmlUi/../../Backends/RmlUi_Backend.h>
+// #include <RmlUi/Core/RenderInterface.h>
+
 #include <defines.hpp>
 
 using namespace glm;
@@ -69,6 +75,50 @@ using namespace std;
 
 //should be 2 for temporal accumulation, but can be changed if rebind images
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+using namespace std;
+using namespace glm;
+
+// extern VisualWorld world;
+#define STRINGIZE(x) STRINGIZE2(x)
+#define STRINGIZE2(x) #x
+#define __LINE_STRING__ STRINGIZE(__LINE__)
+
+#define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, #string); exit(69);} while(0)
+
+// #define NDEBUG
+#ifdef NDEBUG
+// #define VMA_NAME(allocation) 
+#define VKNDEBUG
+#define VK_CHECK(func) do{\
+    VkResult result = func;\
+    if (result != VK_SUCCESS) {\
+        exit(result);\
+    }} while (0)
+#else
+#define VK_CHECK(func) do{\
+    VkResult result = (func);\
+    if (result != VK_SUCCESS) {\
+        fprintf(stderr, "LINE :%d Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
+        exit(1);\
+    }} while (0)
+#define malloc(x)   ({void* res_ptr =(malloc)(x  ); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
+#define calloc(x,y) ({void* res_ptr =(calloc)(x,y); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
+#endif
+
+// #define SET_ALLOC_NAMES
+#ifdef SET_ALLOC_NAMES
+#define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
+    VkResult res = (vmaCreateImage)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
+    vmaSetAllocationName(allocator,* pAllocation, #pAllocation __LINE_STRING__);\
+    res;\
+    }
+#define vmaCreateBuffer(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
+    VkResult res = (vmaCreateBuffer)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
+    vmaSetAllocationName(allocator,* pAllocation, #pAllocation " " __LINE_STRING__);\
+    res;\
+    }
+#endif
 
 typedef   u8 MatID_t;
 typedef  i16 BlockID_t;
@@ -120,6 +170,24 @@ typedef struct Mesh {
     ivec3 size;
     // Voxel* host_voxels; // single copy of voxel memory on cpu. If NULL then you store your data yourself
 } Mesh;
+typedef struct UiMesh {
+    Buffer vertexes;
+    Buffer indexes;
+    u32 icount;
+    Image* image;
+} UiMesh;
+typedef struct UiMeshDeletion {
+    UiMesh* mesh;
+    int life_counter;
+} UiMeshDeletion;
+typedef struct UiImageDeletion {
+    Image* image;
+    int life_counter;
+} UiImageDeletion;
+typedef struct UiBufferDeletion {
+    Buffer* buffer;
+    int life_counter;
+} UiBufferDeletion;
 
 
 typedef struct Block {
@@ -164,50 +232,6 @@ public:
         free(memory);
     }
 };
-
-using namespace std;
-using namespace glm;
-
-// extern VisualWorld world;
-#define STRINGIZE(x) STRINGIZE2(x)
-#define STRINGIZE2(x) #x
-#define __LINE_STRING__ STRINGIZE(__LINE__)
-
-#define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, #string); exit(69);} while(0)
-
-// #define NDEBUG
-#ifdef NDEBUG
-// #define VMA_NAME(allocation) 
-#define VKNDEBUG
-#define VK_CHECK(func) do{\
-    VkResult result = func;\
-    if (result != VK_SUCCESS) {\
-        exit(result);\
-    }} while (0)
-#else
-#define VK_CHECK(func) do{\
-    VkResult result = (func);\
-    if (result != VK_SUCCESS) {\
-        fprintf(stderr, "LINE :%d Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
-        exit(1);\
-    }} while (0)
-#define malloc(x)   ({void* res_ptr =(malloc)(x  ); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
-#define calloc(x,y) ({void* res_ptr =(calloc)(x,y); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
-#endif
-
-#ifdef SET_ALLOC_NAMES
-#define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
-    VkResult res = (vmaCreateImage)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(allocator,* pAllocation, #pAllocation __LINE_STRING__);\
-    res;\
-    }
-#define vmaCreateBuffer(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
-    VkResult res = (vmaCreateBuffer)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(allocator,* pAllocation, #pAllocation __LINE_STRING__);\
-    res;\
-    }
-#endif
-
 typedef struct Window{
     GLFWwindow* pointer;
     int width;
@@ -243,10 +267,11 @@ enum denoise_targets{
     DENOISE_TARGET_HIGHRES,
 };
 
-class Renderer {
+class MyRenderInterface;   
 
+class Renderer {
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int block_palette_size=128, int max_particle_count=1024, vec2 ratio = vec2(1.0), bool vsync=true, bool fullscreen = false);
+    void init(int x_size=8, int y_size=8, int z_size=8, int _static_block_palette_size=128, int max_particle_count=1024, vec2 ratio = vec2(2.0), bool vsync=true, bool fullscreen = false);
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -259,12 +284,17 @@ public:
     // void extrude_palette(Material* material_palette);
     void load_block(Block** block, const char* vox_file);
     void free_block(Block** block);
+
+    void load_scene(const char* scene_file);
+    void save_scene(const char* scene_file);
     
     Material mat_palette[MATERIAL_PALETTE_SIZE];
     table3d<BlockID_t>  origin_world = {};
     table3d<BlockID_t> current_world = {};
-private:
+    MyRenderInterface* UiRenderInterface;
+    int static_block_palette_size;
     ivec3 world_size;
+private:
     bool has_palette = false;
     vec2 _ratio;
     int _max_particle_count;
@@ -278,13 +308,13 @@ public:
 
     bool is_resized = false;
 
-    vec3     camera_pos = vec3(60, 0, 128);
-    vec3 old_camera_pos = camera_pos;
-    vec3     camera_dir = normalize(vec3(0.4, 1.0, -0.8));
-    vec3 old_camera_dir = normalize(vec3(0.4, 1.0, -0.8));
+    dvec3     camera_pos = vec3(60, 0, 128);
+    dvec3 old_camera_pos = camera_pos;
+    dvec3     camera_dir = normalize(vec3(0.4, 1.0, -0.8));
+    dvec3 old_camera_dir = normalize(vec3(0.4, 1.0, -0.8));
 
-    mat4 current_trans = identity<mat4>();
-    mat4     old_trans = identity<mat4>();
+    dmat4 current_trans = identity<dmat4>();
+    dmat4     old_trans = identity<dmat4>();
     // vec3 old_camera_pos = vec3(60, 0, 50);
     // vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
 
@@ -313,8 +343,9 @@ public:
             void upscale();
         void   endCompute();
         // End of computeCommandBuffer
-        void present();
-        void   end_Present();
+        void start_ui();
+        void draw_ui();
+        void   present();
     void end_Frame();
 
     tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount); 
@@ -323,6 +354,9 @@ public:
     void update_Block_Palette(Block** blockPalette);
     void update_Material_Palette(Material* materialPalette);
     void update_SingleChunk(BlockID_t* blocks);
+
+    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier);
+    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkBufferMemoryBarrier* barrier);
 private:
     //including fullscreen and scaled images
     void  cleanup_SwapchainDependent();
@@ -426,6 +460,8 @@ private:
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
     void copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst);
     
+    void process_ui_deletion_queue();
+
     void get_Instance_Extensions();
     // void get_PhysicalDevice_Extensions();
 public:
@@ -485,6 +521,8 @@ public:
     //It is so because they are too similar and easy to record (TODO: make concurent)
     vector<VkCommandBuffer>   computeCommandBuffers; 
     vector<VkCommandBuffer> graphicalCommandBuffers;
+    vector<VkCommandBuffer> copyGraphicalCommandBuffers;
+    vector<VkCommandBuffer> renderGraphicalCommandBuffers;
 
     vector<VkSemaphore>   imageAvailableSemaphores;
     vector<VkSemaphore>   renderFinishedSemaphores;
@@ -570,6 +608,9 @@ public:
     vector<Particle>     particles;
     vector<Buffer>   gpu_particles; //multiple because cpu-related work
     vector<void* >   gpu_particles_mapped; //multiple because cpu-related work
+    vector<UiMeshDeletion> ui_mesh_deletion_queue;
+    vector<UiImageDeletion> ui_image_deletion_queue;
+    vector<UiBufferDeletion> ui_buffer_deletion_queue;
 
     // Buffer 
     // vector<Buffer> 
@@ -635,6 +676,7 @@ public:
     // VkPipelineLayout       dfzLayout;
     VkPipeline raytracePipeline;
     VkPipeline denoisePipeline;
+    VkPipeline denoisePipeline_lowres;
     VkPipeline accumulatePipeline;
     VkPipeline upscalePipeline;
     // VkPipeline blockifyPipeline;
@@ -645,14 +687,14 @@ public:
     // VkPipeline       dfzPipeline;
 
     VmaAllocator VMAllocator; 
-private:
     u32 imageIndex = 0;
 
     //wraps around MAX_FRAMES_IN_FLIGHT
-    int itime = 0;
     u32  currentFrame = 0;
     u32 previousFrame = 0;
     u32     nextFrame = 0;
+private:
+    int itime = 0;
     int palette_counter = 0;
     // VisualWorld* _world = world;
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -660,3 +702,56 @@ private:
 
 // void a();1
 
+class MyRenderInterface : public Rml::RenderInterface{   
+public:
+    MyRenderInterface(){}
+    ~MyRenderInterface(){}
+
+    // Called by RmlUi when it wants to render geometry that the application does not wish to optimise
+    void RenderGeometry(Rml::Vertex* vertices,
+                            int num_vertices,
+                            int* indices,
+                            int num_indices,
+                            Rml::TextureHandle texture,
+                            const Rml::Vector2f& translation) override;
+                            
+    // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
+    Rml::CompiledGeometryHandle CompileGeometry(Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture) override;
+
+    // Called by RmlUi when it wants to render application-compiled geometry.
+    void RenderCompiledGeometry(Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation) override;
+
+    // Called by RmlUi when it wants to release application-compiled geometry.
+    void ReleaseCompiledGeometry(Rml::CompiledGeometryHandle geometry) override;
+
+    // Called by RmlUi when it wants to enable or disable scissoring to clip content.
+    void EnableScissorRegion(bool enable) override;
+
+    // Called by RmlUi when it wants to change the scissor region.
+    void SetScissorRegion(int x, int y, int width, int height) override;
+
+    // Called by RmlUi when a texture is required by the library.
+    bool LoadTexture(Rml::TextureHandle& texture_handle,
+                            Rml::Vector2i& texture_dimensions,
+                            const Rml::String& source) override;
+
+    // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
+    bool GenerateTexture(Rml::TextureHandle& texture_handle,
+                                const Rml::byte* source,
+                                const Rml::Vector2i& source_dimensions) override;
+
+    // Called by RmlUi when a loaded texture is no longer required.
+    void ReleaseTexture(Rml::TextureHandle texture_handle) override;
+
+    // Called by RmlUi when it wants the renderer to use a new transform matrix.
+    // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
+    // an identity matrix or otherwise omit the multiplication with the transform.
+    void SetTransform(const Rml::Matrix4f* transform) override;
+    
+    Renderer* render;
+    Image* default_image = NULL;
+
+    mat4 current_transform = identity<mat4>();
+    // bool has_scissors = true;
+    VkRect2D last_scissors = {{0,0}, {1,1}};
+};

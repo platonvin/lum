@@ -69,6 +69,7 @@ void main() {
     uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     
     norm = (qtransform(pco.rot,normIn));
+    // norm = normalize(cross(dFdx(world_pos.xyz), dFdy(world_pos.xyz)));
     mat = uint(MatIDIn);
 
     // if (ubo.trans_w2s != pco.trans_w2s){

@@ -24,4 +24,3 @@ nv_traces
 amd_traces
 intel_traces
 temp.*
-src/renderer/ui.cpp

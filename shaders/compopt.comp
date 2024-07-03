@@ -972,7 +972,7 @@ void main(void){
 
     // cameraPos    = PushConstants.camera_pos.xyz;
     // cameraRayDir = PushConstants.camera_direction.xyz;
-    globalLightDir = normalize(vec3(-.4, -.8, -1));
+    globalLightDir = normalize(vec3(1, 1, -0.5));
 
     // globalLightDir = normalize(vec3(1, 1, -1.6));
     // globalLightDir = rotateAxis(globalLightDir, vec3(0,0,1), PushConstants.timeSeed.x / 100.0);
@@ -1080,8 +1080,8 @@ void main(void){
             if(length(accumulated_reflection) < 0.1 || length(accumulated_light) > sqrt(2.0)) break;
         }
         float global_light_participance = -dot(direction, globalLightDir);
-        if (global_light_participance > 0.0) {
-            accumulated_light += (vec3(.9,.9,.6)*1.0) * accumulated_reflection * global_light_participance;
+        if (global_light_participance > 0.8) {
+            accumulated_light += (vec3(.9,.9,.6)*5.0) * accumulated_reflection * global_light_participance;
         }
         multipass_color += accumulated_light / float(MULTIPASS);
     }

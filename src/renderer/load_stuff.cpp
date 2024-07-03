@@ -31,7 +31,12 @@ void Renderer::update_Block_Palette(Block** blockPalette){
                 blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = 0;
             }
             else {
-                blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = (u16) blockPalette[N]->voxels[x][y][z];
+                if(N < static_block_palette_size){
+                    blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = (u16) blockPalette[N]->voxels[x][y][z];
+                }
+                else {
+                    blockPaletteLinear(x+16*block_x, y+16*block_y, z).r = 0;
+                }
             }
     }}}}
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -40,6 +45,7 @@ void Renderer::update_Block_Palette(Block** blockPalette){
     VmaAllocationCreateInfo stagingAllocInfo = {};
         stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     void* data = NULL;
@@ -70,6 +76,7 @@ void Renderer::update_Material_Palette(Material* materialPalette){
     VmaAllocationCreateInfo stagingAllocInfo = {};
         stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
@@ -88,6 +95,7 @@ void Renderer::update_Material_Palette(Material* materialPalette){
 
 char* readFileBuffer(const char* path, size_t* size) {
     FILE* fp = fopen(path, "rb");
+    assert(fp != NULL);
     *size = _filelength(_fileno(fp));
     char* buffer = (char*) malloc(*size);
     fread(buffer, *size, 1, fp);
@@ -100,7 +108,44 @@ char* readFileBuffer(const char* path, size_t* size) {
 #include <ogt_vox.hpp>
 #include <ogt_voxel_meshify.hpp>
 // } //so we'll have to use ogt::ogt_func :(
+// struct scene_file_header = {int }
 
+void Renderer::load_scene(const char* vox_file){
+    size_t buffer_size;
+    FILE* fp = fopen(vox_file, "rb");
+    if(fp == NULL){
+        origin_world.set(0);
+        return;
+    }
+
+    buffer_size = _filelength(_fileno(fp));
+    char* buffer = (char*) malloc(buffer_size);
+    fread(buffer, buffer_size, 1, fp);
+    fclose(fp);
+
+
+    ivec3* header = (ivec3*)buffer;
+
+    ivec3      stored_world_size = *header;
+    BlockID_t* stored_world = (BlockID_t*)(buffer+sizeof(ivec3));
+
+    ivec3 size2read = glm::clamp(stored_world_size, ivec3(0), world_size);
+    // buffer
+    for(int xx=0; xx< size2read.x; xx++){
+    for(int yy=0; yy< size2read.y; yy++){
+    for(int zz=0; zz< size2read.z; zz++){
+        BlockID_t loaded_block = stored_world[xx + stored_world_size.x*yy + (stored_world_size.x*stored_world_size.y)*zz];        
+        origin_world(xx,yy,zz) = glm::clamp(loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
+    }}}
+    free(buffer);
+}
+void Renderer::save_scene(const char* vox_file){
+    FILE* fp = fopen(vox_file, "wb");
+    assert(fp != NULL);
+    fwrite(&world_size, sizeof(ivec3), 1, fp);
+    fwrite(origin_world.data(), sizeof(BlockID_t), world_size.x*world_size.y*world_size.z, fp);
+    fclose(fp);
+}
 //TODO: alloca
 void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette){
     size_t buffer_size;
@@ -130,7 +175,7 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
                     break;
                 }
                 case ogt::matl_type_emit: {
-                    mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux*2.0);
+                    mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux*4.0);
                     rough = 0.5;
                     break;
                 }

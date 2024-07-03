@@ -1,0 +1,15 @@
+<rml>
+    <head>
+        <title>Simple UI</title>
+        <link type="text/css" href="simple.rcss" />
+    </head>
+    <body>
+        <div id="container">
+            <h1>Simple UI Example</h1>
+            <div data-model="my_model">
+                <button data-event-click="button1">Button 1</button>
+            </div>
+            <button id="button2">Button 2</button>
+        </div>
+    </body>
+</rml>

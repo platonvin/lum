@@ -1,0 +1,35 @@
+<rml>
+	<head>
+		<title>Demodasdasd</title>
+        <link type="text/template" href="window.rml" />
+        <link type="text/css" href="styles.rcss" />
+		<style>
+			body
+			{
+				width: 400dp;
+				height: 225dp;
+
+				margin-left: 10dp;
+				margin-top: 10dp;
+			}
+
+			div#title_bar div#icon
+			{
+				width: 400dp;
+				height: 225dp;
+
+				margin-left: 10dp;
+				margin-top: 10dp;
+				
+			}
+
+			div#content
+			{
+				text-align: left;
+			}
+		</style>
+	</head>
+	<body template="window">
+		This is a sample.
+	</body>
+</rml>

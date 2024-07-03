@@ -1,5 +1,7 @@
 #version 450
 
+// #extension vertexPipelineStoresAndAtomics : enable
+
 precision highp float;
 
 layout(location = 0) in  vec3 posIn;
@@ -22,6 +24,7 @@ layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
 layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
+const int STATIC_BLOCK_COUNT = 10; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -29,6 +32,7 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
 
     return relative_voxel_pos + ivec3(16*block_x, 16*block_y, 0);
 }
+
 
 void main() {
 
@@ -57,7 +61,9 @@ void main() {
 
         int target_block_id = imageLoad(blocks, target_block_in_world).x;
         ivec3 target_voxel_in_palette = voxel_in_palette(target_voxel_in_world % 16, target_block_id);
-        imageStore(blockPalette, target_voxel_in_palette, uvec4(matIDIn));
+        if(target_block_id>=STATIC_BLOCK_COUNT){
+            imageStore(blockPalette, target_voxel_in_palette, uvec4(matIDIn));
+        }
     }
     //LOL dont even need map_particles shader - can be done here
 }

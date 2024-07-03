@@ -1,0 +1,39 @@
+body {
+    font-family: LatoLatin;
+    font-size: 16dp;
+    color: #333;
+    background-color: #f0f0f0;
+}
+
+#container {
+    width: 300dp;
+    margin: 50dp auto;
+    padding: 20dp;
+    background-color: #e0e0e0;
+    border: 1px #ccc;
+    text-align: center;
+}
+
+h1 {
+    font-size: 24dp;
+    color: #555;
+    margin-bottom: 20dp;
+}
+
+button {
+    width: 100dp;
+    height: 60dp;
+    margin: 2dp;
+    background-color: #d0d0d0;
+    border: 1px #bbb;
+    cursor: pointer;
+    text-align: center;
+}
+
+button:hover {
+    background-color: #C13C3C;
+}
+
+button:active {
+    background-color: #C13C3C;
+}
