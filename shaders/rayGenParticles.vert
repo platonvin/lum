@@ -49,7 +49,7 @@ void main() {
     
     // mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
 
-    vs_out.old_uv = clip_coords_old.xy/2.0 + 0.5; //0..1
+    vs_out.old_uv = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     vs_out.mat = uint(matIDIn);
     float size = lifeTimeIn / 14.0;
     vs_out.size = size;

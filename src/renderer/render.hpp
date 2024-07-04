@@ -72,7 +72,7 @@ using namespace std;
 #else
 #define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
 #endif
-
+// #define ACCUMULATE_HIGHRES
 //should be 2 for temporal accumulation, but can be changed if rebind images
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -310,8 +310,8 @@ public:
 
     dvec3     camera_pos = vec3(60, 0, 128);
     dvec3 old_camera_pos = camera_pos;
-    dvec3     camera_dir = normalize(vec3(0.4, 1.0, -0.8));
-    dvec3 old_camera_dir = normalize(vec3(0.4, 1.0, -0.8));
+    dvec3     camera_dir = normalize(vec3(0.6, 1.0, -0.8));
+    dvec3 old_camera_dir = normalize(vec3(0.6, 1.0, -0.8));
 
     dmat4 current_trans = identity<dmat4>();
     dmat4     old_trans = identity<dmat4>();
@@ -357,6 +357,7 @@ public:
 
     void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier);
     void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkBufferMemoryBarrier* barrier);
+    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask);
 private:
     //including fullscreen and scaled images
     void  cleanup_SwapchainDependent();
@@ -554,24 +555,46 @@ public:
     // vector<Image> raytraced_frame;
     // vector<Image>  denoised_frame;
     // vector<Image>  upscaled_frame;
-#ifdef STENCIL
-    vector<VkImage> depthStencilImages; //used for depth testing
-    vector<VmaAllocation> depthStencilAllocs; //used for depth testing
-    vector<VkImageView>   depthViews; //used for depth testing
-    vector<VkImageView> stencilViews; //used for depth testing
-#else
-    vector<Image> depthBuffer; //used for depth testing
-           Image  depthBuffer_downscaled; //used for depth testing
-    // vector<Image> depthBuffer; //used for depth testing
-#endif
-    vector<Image> matNorm; //render always to one, other stored downscaled
-           Image  matNorm_downscaled;
-           Image oldUv;
-        //    Image oldUv_downscaled; //dont need it
            Image step_count;
-           Image mix_ratio;
-           Image lowres_frame;
-    vector<Image> highres_frame;
+    #ifdef ACCUMULATE_HIGHRES
+            Image lowres_frame;
+        vector<Image> highres_frame;
+        #ifdef STENCIL
+        vector<VkImage> depthStencilImages; //used for depth testing
+        vector<VmaAllocation> depthStencilAllocs; //used for depth testing
+        vector<VkImageView>   depthViews; //used for depth testing
+        vector<VkImageView> stencilViews; //used for depth testing
+        #else
+        vector<Image> depthBuffer; //used for depth testing
+            Image  depthBuffer_downscaled; //used for depth testing
+        // vector<Image> depthBuffer; //used for depth testing
+        #endif
+        vector<Image> matNorm; //render always to one, other stored downscaled
+            Image  matNorm_downscaled;
+            Image oldUv;
+            //    Image oldUv_downscaled; //dont need it
+            Image mix_ratio;
+    #else
+        vector<Image> lowres_frame;
+        vector<Image> lowres_sunlight;
+               Image highres_frame;
+        #ifdef STENCIL
+        vector<VkImage> depthStencilImages; //used for depth testing
+        vector<VmaAllocation> depthStencilAllocs; //used for depth testing
+        vector<VkImageView>   depthViews; //used for depth testing
+        vector<VkImageView> stencilViews; //used for depth testing
+        #else
+               Image  depthBuffer; //used for depth testing
+        vector<Image> depthBuffer_downscaled; //used for depth testing
+        // vector<Image> depthBuffer; //used for depth testing
+        #endif
+               Image  matNorm;
+        vector<Image> matNorm_downscaled; //render always to one, other stored downscaled
+               Image oldUv;
+               Image oldUv_downscaled;
+               //    Image oldUv_downscaled; //dont need it
+        vector<Image> mix_ratio;
+    #endif
         //    Image de
     vector<Image> swapchain_images;
     VkSampler  nearestSampler;
@@ -650,6 +673,9 @@ public:
 
     VkDescriptorSetLayout  accumulateDescriptorSetLayout;
     vector<VkDescriptorSet>  accumulateDescriptorSets;
+
+    VkDescriptorSetLayout  estimateVarianceDescriptorSetLayout;
+    vector<VkDescriptorSet>  estimateVarianceDescriptorSets;
 
     VkDescriptorSetLayout       mapDescriptorSetLayout;
     vector<VkDescriptorSet>       mapDescriptorSets;

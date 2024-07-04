@@ -171,7 +171,7 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
             float rough;
             switch (scene->materials.matl[i].type) {
                 case ogt::matl_type_diffuse: {
-                    rough = 0.85;
+                    rough = 1.0;
                     break;
                 }
                 case ogt::matl_type_emit: {

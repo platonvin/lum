@@ -86,7 +86,8 @@ void Engine::setup_graphics(){
     render.load_block(&block_palette[3], "assets/grassNdirt.vox");
     render.load_block(&block_palette[4], "assets/bush.vox");
     // render->load_block(&block_palette[4], "assets/leaves.vox");
-    render.load_block(&block_palette[5], "assets/stone_brick.vox");
+    render.load_block(&block_palette[5], "assets/iron.vox");
+    // render.load_block(&block_palette[5], "assets/stone_brick.vox");
     render.load_block(&block_palette[6], "assets/stone_brick_cracked.vox");
     render.load_block(&block_palette[7], "assets/stone_pack.vox");
     render.load_block(&block_palette[8], "assets/stone_dirt.vox");
@@ -116,10 +117,10 @@ void Engine::handle_input(){
     should_close |= (glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
 
     #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
-    set_key(GLFW_KEY_W, render.camera_pos += vec3(0,+1.,0));
-    set_key(GLFW_KEY_S, render.camera_pos += vec3(0,-1.,0));
-    set_key(GLFW_KEY_A, render.camera_pos += vec3(  -1.,0,0));
-    set_key(GLFW_KEY_D, render.camera_pos += vec3(  +1.,0,0));
+    set_key(GLFW_KEY_W, render.camera_pos += vec3(0,+1.4,0));
+    set_key(GLFW_KEY_S, render.camera_pos += vec3(0,-1.4,0));
+    set_key(GLFW_KEY_A, render.camera_pos += vec3(  -1.4,0,0));
+    set_key(GLFW_KEY_D, render.camera_pos += vec3(  +1.4,0,0));
     set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
     set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
     set_key(GLFW_KEY_COMMA  , render.camera_dir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
@@ -175,7 +176,7 @@ void Engine::process_animations(){
     Particle p = {};
         p.lifeTime = 10.0 * (float(rand()) / float(RAND_MAX));
         p.pos = vec3(17,42,27) + tank_head.shift;
-        p.vel = (rnVec3(0,1)*2.f - 1.f)*1.5f;
+        p.vel = (rnVec3(0,1)*2.f - 1.f)*0.1f;
         // p.matID = 170;
         p.matID = 79;
     render.particles.push_back(p);
@@ -320,14 +321,21 @@ void Engine::draw()
                     render.mapMesh(&tank_lf_leg);
                     render.mapMesh(&tank_rb_leg);
                 render.endMap();
-                
                 render.raytrace();
+                render.denoise(3, 2, DENOISE_TARGET_LOWRES);
+                render.accumulate();
+                render.denoise(7, 2, DENOISE_TARGET_LOWRES);
+                // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
+                // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
+                // render.denoise(5, 2, DENOISE_TARGET_LOWRES);
                 if(render.is_scaled){
-                    render.denoise(7, 1, DENOISE_TARGET_LOWRES);
+                    // render.denoise(9, 3, DENOISE_TARGET_LOWRES);
+                    // render.denoise(5, 1, DENOISE_TARGET_LOWRES);
                     render.upscale();
                 }
-                render.accumulate();
-                render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
+                render.denoise(2, 1, DENOISE_TARGET_HIGHRES);
+                // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
+                // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
         render.endCompute();
 
         render.start_ui(); 

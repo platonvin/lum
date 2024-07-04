@@ -3,17 +3,47 @@
 precision highp float;
 precision highp int;
 
-#extension GL_KHR_shader_subgroup_arithmetic : enable
-#extension GL_KHR_shader_subgroup_shuffle : enable
+// #extension GL_KHR_shader_subgroup_arithmetic : enable
+// #extension GL_KHR_shader_subgroup_shuffle : enable
 
 layout(set = 0, binding = 0, rgba16) uniform image2D  new_frame; //out
 layout(set = 0, binding = 1, rgba16) uniform image2D  old_frame; //in
 layout(set = 0, binding = 2, rgba8_snorm) uniform image2D  new_matNorm;
 layout(set = 0, binding = 3, rgba8_snorm) uniform image2D  old_matNorm;
-layout(set = 0, binding = 4, rgba16) uniform image2D  oldShift;
-layout(set = 0, binding = 5, r16) uniform image2D mix_ratio_image;
-layout(set = 0, binding = 6       )  uniform sampler2D old_depth;
-layout(set = 0, binding = 7       )  uniform sampler2D new_depth;
+layout(set = 0, binding = 4, rgba16) uniform image2D  uvShift_image;
+layout(set = 0, binding = 5, r16) uniform image2D new_mix_ratio_image;
+layout(set = 0, binding = 6       ) uniform sampler2D old_mix_ratio_image;
+layout(set = 0, binding = 7       ) uniform sampler2D old_depth;
+layout(set = 0, binding = 8       ) uniform sampler2D new_depth;
+layout(set = 0, binding = 9, r32f       ) uniform image2D voxelPalette;
+
+
+struct Material{
+    vec3 color; //for each color
+    float emmitance;
+    float smoothness;
+    float transparancy;
+};
+Material GetMat(in int voxel){
+    Material mat;
+
+    mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
+    mat.color.g      = imageLoad(voxelPalette, ivec2(1,voxel)).r;
+    mat.color.b      = imageLoad(voxelPalette, ivec2(2,voxel)).r;
+    mat.transparancy = 1.0 - imageLoad(voxelPalette, ivec2(3,voxel)).r;
+    mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
+    mat.smoothness   = 1.0 - imageLoad(voxelPalette, ivec2(5,voxel)).r;
+    mat.transparancy = 0;
+
+    // mat.smoothness = 0.5;
+    // mat.smoothness = 0;
+    // if(voxel < 30) 
+    // mat.color.rgb = vec3(0.9);
+    // mat.color.rgb = clamp(mat.color.rgb,0.2,1);
+    // mat.emmitance = .0;
+return mat;
+}
+
 vec3 load_new_norm(ivec2 pixel){
     vec3 norm = (imageLoad(new_matNorm, pixel).gba);
     return norm;
@@ -49,11 +79,13 @@ void main(){
     const  vec2 pos = vec2(pix) + 0.5;
     vec3 new_color = decode_color(imageLoad(new_frame, pix).xyz);
 
-    vec2 uv_shift = imageLoad(oldShift, pix).xy;
+    vec2 uv_shift = imageLoad(uvShift_image, pix).xy;
     vec2 old_pos = pos + uv_shift*vec2(size);
+    // vec2 old_pos = pos;
 
     // vec3 old_color = imageLoad(old_frame, ivec2(old_pos)).xyz;
     // vec3 final_color = mix(new_color, old_color, 0.99);
+    // vec3 final_color = new_color;
 
 vec2 half_texel_size = vec2(0.5);
 vec2 sampled_quad_center =  (round(vec2(old_pos)));
@@ -68,10 +100,15 @@ ivec2 p10_pix = clamp(ivec2(p10_center),ivec2(0), size-1);
 ivec2 p01_pix = clamp(ivec2(p01_center),ivec2(0), size-1);
 ivec2 p11_pix = clamp(ivec2(p11_center),ivec2(0), size-1); 
 
-vec3 p00 = (imageLoad(old_frame, p00_pix).rgb);
-vec3 p10 = (imageLoad(old_frame, p10_pix).rgb);
-vec3 p01 = (imageLoad(old_frame, p01_pix).rgb);
-vec3 p11 = (imageLoad(old_frame, p11_pix).rgb);
+vec3 p00_color = (imageLoad(old_frame, p00_pix).rgb);
+vec3 p10_color = (imageLoad(old_frame, p10_pix).rgb);
+vec3 p01_color = (imageLoad(old_frame, p01_pix).rgb);
+vec3 p11_color = (imageLoad(old_frame, p11_pix).rgb);
+
+float p00_mix_ratio = clamp(texture(old_mix_ratio_image, p00_center/size).r, 0.0,0.99);
+float p10_mix_ratio = clamp(texture(old_mix_ratio_image, p10_center/size).r, 0.0,0.99);
+float p01_mix_ratio = clamp(texture(old_mix_ratio_image, p01_center/size).r, 0.0,0.99);
+float p11_mix_ratio = clamp(texture(old_mix_ratio_image, p11_center/size).r, 0.0,0.99);
 
 int mat = load_new_mat(pix);
 int p00_mat = load_old_mat(p00_pix);
@@ -87,11 +124,11 @@ float y_mix = old_pos.y - p00_center.y;
 // float p01_weight = distance(old_uv, p01_center);
 // float p11_weight = distance(old_uv, p11_center);
 
-float new_depth = texelFetch(new_depth, pix, 0).x;
-float p00_depth_distance = abs(texelFetch(old_depth, p00_pix, 0).x - new_depth) + 0.001 / 2000.0;
-float p10_depth_distance = abs(texelFetch(old_depth, p10_pix, 0).x - new_depth) + 0.001 / 2000.0;
-float p01_depth_distance = abs(texelFetch(old_depth, p01_pix, 0).x - new_depth) + 0.001 / 2000.0;
-float p11_depth_distance = abs(texelFetch(old_depth, p11_pix, 0).x - new_depth) + 0.001 / 2000.0;
+// float new_depth = texelFetch(new_depth, pix, 0).x;
+// float p00_depth_distance = abs(texelFetch(old_depth, p00_pix, 0).x - new_depth) + 0.001 / 2000.0;
+// float p10_depth_distance = abs(texelFetch(old_depth, p10_pix, 0).x - new_depth) + 0.001 / 2000.0;
+// float p01_depth_distance = abs(texelFetch(old_depth, p01_pix, 0).x - new_depth) + 0.001 / 2000.0;
+// float p11_depth_distance = abs(texelFetch(old_depth, p11_pix, 0).x - new_depth) + 0.001 / 2000.0;
 
 float p00_weight = +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat))) * float(dot(load_old_norm(p00_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > -.1);
 float p10_weight = +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat))) * float(dot(load_old_norm(p10_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > -.1);
@@ -112,30 +149,45 @@ float weight = (
     p11_weight
 );
 vec3 old_color = ((
-    p00*p00_weight+
-    p10*p10_weight+
-    p01*p01_weight+
-    p11*p11_weight
+    p00_color*p00_weight+
+    p10_color*p10_weight+
+    p01_color*p01_weight+
+    p11_color*p11_weight
+))/(weight);
+float old_mix_ratio = ((
+    p00_mix_ratio*p00_weight+
+    p10_mix_ratio*p10_weight+
+    p01_mix_ratio*p01_weight+
+    p11_mix_ratio*p11_weight
 ))/(weight);
 
     // float color_diff = distance(old_color, new_color);
 
-    float mix_ratio = clamp(imageLoad(mix_ratio_image, pix).r,0,1);
+    // float mix_ratio;
+    float mix_ratio = clamp(imageLoad(new_mix_ratio_image, pix).r,0,1);
+    float rough = 1.0 - GetMat(mat).smoothness;
+
     float target_mix_ratio = 0.99;
+    // float target_mix_ratio = clamp((0.99 + rough) / 2.0, 0.98, 0.99);
+    
+    // float mix_ratio_reactivness = sqrt(1.0-mix_ratio/1.1);
     float mix_ratio_reactivness = 0.5;
     // float mix_ratio = 0.;
 
+
     vec3 final_color;
     if(weight == 0) {
-        mix_ratio = 0;
+        mix_ratio = 0.5;
         final_color = new_color;
     } else {
-        mix_ratio = mix(mix_ratio, target_mix_ratio, mix_ratio_reactivness);
-        // mix_ratio = 0.98;
-        // final_color = new_color;
-        final_color = mix(new_color, old_color, mix_ratio);
+          mix_ratio = mix(old_mix_ratio, target_mix_ratio, mix_ratio_reactivness);
+        final_color = mix(new_color, old_color, mix_ratio); //NEVER MOVE IT OR WILL GET BLACK TRAILS
     }
-    imageStore(mix_ratio_image, pix, vec4(mix_ratio));
+
+    // store
+    imageStore(new_mix_ratio_image, pix, vec4(mix_ratio));
+    // imageStore(old_mix_ratio_image, pix, vec4(mix_ratio));
 
     imageStore(new_frame, pix, vec4(final_color,1));
+    // imageStore(new_frame, pix, vec4(vec3(mix_ratio),1));
 }

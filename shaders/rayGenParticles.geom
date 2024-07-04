@@ -75,7 +75,8 @@ void main() {
         // gl_Position.z = -.999;
         // gl_Position.z = +.999;
         
-        old_uv = gs_in[0].old_uv + shift_on_screen.xy*0.5;
+        old_uv = gs_in[0].old_uv;
+        // old_uv = vec2(0);
         mat = gs_in[0].mat;
 
         EmitVertex();

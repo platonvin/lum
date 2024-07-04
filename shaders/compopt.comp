@@ -347,7 +347,7 @@ Material GetMat(in int voxel){
     mat.transparancy = 0;
 
     // mat.smoothness = 0.5;
-    // mat.smoothness = 1;
+    // mat.smoothness = 0;
     // if(voxel < 30) 
     // mat.color.rgb = vec3(0.9);
     // mat.color.rgb = clamp(mat.color.rgb,0.2,1);
@@ -972,7 +972,7 @@ void main(void){
 
     // cameraPos    = PushConstants.camera_pos.xyz;
     // cameraRayDir = PushConstants.camera_direction.xyz;
-    globalLightDir = normalize(vec3(1, 1, -0.5));
+    globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
 
     // globalLightDir = normalize(vec3(1, 1, -1.6));
     // globalLightDir = rotateAxis(globalLightDir, vec3(0,0,1), PushConstants.timeSeed.x / 100.0);
@@ -998,18 +998,10 @@ void main(void){
     // randvec = Random3D();
     // randvec = Random3D();
 
-    const float depth = load_depth(pix);
-    Material material = GetMat(load_mat(pix));
-    vec3 direction = PushConstants.camera_direction.xyz;
-    vec3 normal = load_norm(pix);
 
-        const vec2 view_size = vec2(view_width, view_height);
-        const vec2 clip_pos_scaled = (2.0*view_size)*(pos)-view_size;
+    // const vec2 view_size = vec2(view_width, view_height);
+    // const vec2 clip_pos_scaled = (2.0*view_size)*(pos)-view_size;
     
-    vec3 origin = get_origin_from_depth(depth, pos);
-
-    vec3 accumulated_light      = vec3(0); 
-    vec3 accumulated_reflection = vec3(1);
 
     // imageStore(frame, pix, vec4(vec3(GetMat(GetVoxel(ivec3(origin + Random3D()*1.0))).color), 1));
     // imageStore(frame, pix, vec4(vec3(), 1));
@@ -1018,27 +1010,6 @@ void main(void){
     // imageStore(frame, pix, vec4(abs(load_norm(pix)), 1));
     // origin += normal*.05;
 
-    ProcessHit(origin, direction,
-        0, normal, material,
-        accumulated_light, accumulated_reflection);
-
-    float fraction = 0.0;
-    bool ssr = false;
-    ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
-    origin += fraction*direction;
-    if(ssr) {
-        ProcessHit(origin, direction,
-            0, normal, material,
-            accumulated_light, accumulated_reflection);
-    }
-
-    ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
-    origin += fraction*direction;
-    if(ssr) {
-        ProcessHit(origin, direction,
-            0, normal, material,
-            accumulated_light, accumulated_reflection);
-    }
 
     warp_id = pix / 8;
     if(subgroupElect()){
@@ -1049,40 +1020,82 @@ void main(void){
     // vec4 c = imageLoad(step_count, warp_id);
 
 
-    fraction = 0;
-    bool hit = true;
+    // const float depth = load_depth(pix);
+    // Material material = GetMat(load_mat(pix));
+    // vec3 direction = PushConstants.camera_direction.xyz;
+    // vec3 origin = get_origin_from_depth(depth, pos);
+
+    // vec3 accumulated_light      = vec3(0); 
+    // vec3 accumulated_reflection = vec3(1);
+
+    const float stored_depth = load_depth(pix);
+    const bool stored_hit = true;
+    const Material stored_mat = GetMat(load_mat(pix));
+    const vec3 stored_accumulated_reflection = vec3(1);
+    const vec3 stored_accumulated_light = vec3(0);
+    const vec3 stored_direction = PushConstants.camera_direction.xyz;
+    const vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
+    vec3 stored_normal = load_norm(pix);
+    // fraction = 0;
     // int iterations_left;
 
     //actually its has to be <= 4 cause that is how i store extra steps. TODO for highly reflective
     vec3 multipass_color = vec3(0);
-    vec3 stored_accumulated_reflection = accumulated_reflection;
-    vec3 stored_accumulated_light = accumulated_light;
-    vec3 stored_direction = direction;
-    vec3 stored_origin = origin;
 
     #define MULTIPASS 1
     for(int pass = 0; (pass < MULTIPASS); pass++){
-        accumulated_reflection = stored_accumulated_reflection;
-        accumulated_light = stored_accumulated_light;
-        direction = stored_direction;
-        // origin = stored_origin + sin(Random3D());
-        origin = stored_origin;
-        for (int i = 0; (i < 1); i++)
+        vec3 accumulated_reflection = stored_accumulated_reflection;
+        vec3 accumulated_light = stored_accumulated_light;
+        vec3 direction = stored_direction;
+        vec3 origin = stored_origin;
+        // origin = stored_origin + sin(RandomNoise())*vertiline*0.25 + sin(RandomNoise())*horizline*0.25;
+        vec3 normal = stored_normal;
+        bool hit = true;
+        Material material = stored_mat;
+
+        ProcessHit(origin, direction,
+            0, normal, material,
+            accumulated_light, accumulated_reflection);
+        
+            float fraction = 0.0;
+            bool ssr = false;
+            ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
+            origin += fraction*direction;
+            if(ssr) {
+                ProcessHit(origin, direction,
+                    0, normal, material,
+                    accumulated_light, accumulated_reflection);
+            }
+
+            ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
+            origin += fraction*direction;
+            if(ssr) {
+                ProcessHit(origin, direction,
+                    0, normal, material,
+                    accumulated_light, accumulated_reflection);
+            }
+        // vec3 dir_before_hit;
+        for (int i = 0; (i < 3); i++)
         {
             hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0, i);
             // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
-
+            // dir_before_hit = direction;
             if(!hit) break;
             ProcessHit(origin, direction, 
                 fraction, normal, material, 
                 accumulated_light, accumulated_reflection);
-
+            
             if(length(accumulated_reflection) < 0.1 || length(accumulated_light) > sqrt(2.0)) break;
         }
         float global_light_participance = -dot(direction, globalLightDir);
+        // vec3 tmp = vec3(0);
         if (global_light_participance > 0.8) {
-            accumulated_light += (vec3(.9,.9,.6)*5.0) * accumulated_reflection * global_light_participance;
+            accumulated_light += (vec3(.9,.9,.6)*5.0) * accumulated_reflection * global_light_participance / 2.0;
         }
+        float _global_light_participance = (1.0-material.smoothness) * abs(dot(normal, globalLightDir)) * 0.5;
+        accumulated_light += (vec3(.9,.9,.6)*5.0) * accumulated_reflection * _global_light_participance / 2.0;
+        // accumulated_light += (vec3(.9,.9,.6)*0.5) * accumulated_reflection;
+
         multipass_color += accumulated_light / float(MULTIPASS);
     }
 
