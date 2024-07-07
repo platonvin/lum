@@ -21,12 +21,14 @@ void main() {
     // vec2 vxx = (fragUV / 2 + vec2(0.5)).xx; 
     // vec2 uv = fragUV / 2 + vec2(0.5);
     // uv.x = (vxx.yy).y;
-    vec4 sampledColor = texture(ui_elem_texture, fragUV); 
+    // vec2 size = textureSize(ui_elem_texture, 0);
+    vec2 final_uv = vec2(fragUV.x, fragUV.y);
+    vec4 sampledColor = texture(ui_elem_texture, final_uv); 
     // vec3 final_color = decode_color(texture(ui_elem_texture, uv).rgb);
 
     //as stated in rmlui docs
-    vec4 final_color = sampledColor;
-        final_color *= fragColor;
+    vec4 final_color  = sampledColor;
+         final_color *= fragColor;
     
     outColor = final_color;
     // outColor = vec4(uv, 0.0, 1.0);

@@ -165,29 +165,38 @@ float old_mix_ratio = ((
 
     // float mix_ratio;
     float mix_ratio = clamp(imageLoad(new_mix_ratio_image, pix).r,0,1);
-    float rough = 1.0 - GetMat(mat).smoothness;
+    float roughness = 1.0 - GetMat(mat).smoothness;
 
-    float target_mix_ratio = 0.99;
-    // float target_mix_ratio = clamp((0.99 + rough) / 2.0, 0.98, 0.99);
+    // float target_mix_ratio = 0.995;
+    float target_mix_ratio = clamp((0.995 + roughness) / 2.0, 0.975, 0.995);
     
     // float mix_ratio_reactivness = sqrt(1.0-mix_ratio/1.1);
-    float mix_ratio_reactivness = 0.5;
+    float mix_ratio_reactivness = 0.2;
     // float mix_ratio = 0.;
 
 
     vec3 final_color;
     if(weight == 0) {
-        mix_ratio = 0.5;
+        mix_ratio = 0.1;
         final_color = new_color;
     } else {
           mix_ratio = mix(old_mix_ratio, target_mix_ratio, mix_ratio_reactivness);
         final_color = mix(new_color, old_color, mix_ratio); //NEVER MOVE IT OR WILL GET BLACK TRAILS
     }
 
+        // final_color = new_color;
     // store
     imageStore(new_mix_ratio_image, pix, vec4(mix_ratio));
     // imageStore(old_mix_ratio_image, pix, vec4(mix_ratio));
 
+    float max_component = max(final_color.x, max(final_color.y, final_color.z));
+    vec3 normalized_color;
+    if(max_component > 1.0){
+        normalized_color = final_color / max_component;
+        final_color = normalized_color;
+    }
+
+    
     imageStore(new_frame, pix, vec4(final_color,1));
     // imageStore(new_frame, pix, vec4(vec3(mix_ratio),1));
 }

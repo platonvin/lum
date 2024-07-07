@@ -188,11 +188,13 @@ float luminance(vec3 color){
     float atrous_weight_1[3] = {1.0/4.0, 2.0/4.0, 1.0/4.0};
 // #endif
 
-const float view_width  = 1920.0 / 10.0; //in block_diags
-const float view_height = 1080.0 / 10.0; //in blocks
+const float view_width  = 1920.0/ 5.0; //in voxels
+const float view_height = 1080.0/ 5.0; //in voxels
 vec3 get_relative_origin_from_depth(float depth, vec2 pix_shift){
     const vec2 view_size = vec2(view_width, view_height);
-    const vec2 shift_scaled = pix_shift*view_size;
+    const vec2 shift_scaled = (pix_shift/vec2(size))*view_size;
+    // const vec2 shift_scaled = (pix_shift/vec2(view_size))*vec2(size);
+    // const vec2 shift_scaled = 
     
     vec3 origin = 
         (vec3(1,0,0)*shift_scaled.x) + 
@@ -206,7 +208,8 @@ float calculate_weight_atrous(
     vec3 normal, vec3 normal_center,
     int mat, int mat_center,
     float depth, float depth_center,
-    int x, int y
+    int x, int y,
+    int real_x, int real_y
     ,float roughness
 ){
     float weight;
@@ -219,9 +222,10 @@ float calculate_weight_atrous(
     // phiDepth = _phiDepth;
     // phiDepth = 1.5;
     // phiDepth = 12;
-    // phiIllum = 5.0;
+    // phiIllum = 2.0;
     // phiIllum    = clamp((roughness),0,1)*5.0;
-    phiWorldPos = 40.0 * roughness;
+    // phiWorldPos = 3.0;
+    phiWorldPos = 1.0 * clamp(roughness,0.3,1);
     
     float weightPos;
          if(radius == 1){
@@ -235,20 +239,18 @@ float calculate_weight_atrous(
     }
     // phiDepth *= weightPos;
     const float weightNormal = float(dot(normal_center, normal) > .9);
-    const float weightWorldPos = (phiWorldPos==0)? 0.0 : distance(
-        get_relative_origin_from_depth(depth_center, vec2(0,0)),
-        get_relative_origin_from_depth(depth       , vec2(x,y))) / phiWorldPos;
-
+    // const float weightWorldPos = (phiWorldPos==0)? 0.0 : distance(
+    //     get_relative_origin_from_depth(depth_center, vec2(0,0)),
+    //     get_relative_origin_from_depth(depth       , vec2(real_x,real_y))) / phiWorldPos;
+    float fx = float(real_x); float fy = float(real_y);
+    float fd = (depth-depth_center);
+    const float weightWorldPos = (phiWorldPos==0)? 0.0 : sqrt((fx*fx + fy*fy)/25.0 + fd*fd) / phiWorldPos;
     const float weightZ      = (phiDepth == 0) ? 0.0f : (abs(depth_center - depth) / phiDepth);
     // const float weightZ      = (phiDepth == 0) ? 1.0f : float(abs(depth_center - depth) < phiDepth);
     const float weightLillum = (phiIllum == 0) ? 0.0f : abs(luminance(color_center) - luminance(color)) / phiIllum;
     // const float weightLillum = (phiIllum == 0) ? 0.0f : abs(distance(GetMat(mat_center).color, GetMat(mat).color)) / phiIllum;
-    // const float weightLillum = (phiIllum == 0) ? 0.0f : abs(distance(color_center, color)) / phiIllum;
-    // const float weigth_mat = (mat == mat_center) ? 1.0 : 0.0;
     const float weigth_mat = (mat == mat_center) ? 1.0: 0.0;
-    // const float weight_color
 
-    // weight = exp(0.0 - weightLillum) * weightZ* weightPos * weightNormal * weigth_mat;
     weight = exp(0.0 - weightLillum - weightZ - weightWorldPos)* weightPos * weightNormal * weigth_mat;
 
     return weight;
@@ -289,7 +291,8 @@ vec3 denoise_atrous(ivec2 center_pix){
                 norm, norm_center,
                 mat, mat_center,
                 depth, depth_center,
-                xx, yy
+                xx, yy,
+                pix.x-center_pix.x, pix.y-center_pix.y
                 ,center_rough
             );
 
@@ -314,11 +317,11 @@ void main(void){
     if(any(greaterThanEqual(pix, size))) return;
 
     // ratio = vec2(imageSize(matNorm))/vec2(size);
-    float mix_ratio = texture(mixing_ratio_image, ((vec2(pix)+0.5) / vec2(size))/1.0).x;
+    // float mix_ratio = texture(mixing_ratio_image, ((vec2(pix)+0.5) / vec2(size))/1.0).x;
     // vec3 color = denoise(pix);
     // if(PushConstants.iteration == 0){imageStore(denoised_frame, pix, imageLoad(raytraced_frame, pix));}
-    float total_mix_ratio = subgroupAdd(mix_ratio) / float(gl_SubgroupSize);
-    const float target_mix_ratio = 0.965;
+    // float total_mix_ratio = subgroupAdd(mix_ratio) / float(gl_SubgroupSize);
+    // const float target_mix_ratio = 0.98;
         // imageStore(denoised_frame, pix, vec4(1));
     // subgroupm
     // bool b = (total_mix_ratio > target_mix_ratio) && (PushConstants.radius == 1);
@@ -331,15 +334,6 @@ void main(void){
     color = denoise_atrous(pix);
     // color = clamp(decode_color(imageLoad(denoised_frame, pix).xyz), 0,10);
     // imageStore(raytraced_frame, pix, vec4(color,1));
-
-    // if(PushConstants.iteration == 6){
-    //     float max_component = max(color.x, max(color.y, color.z));
-    //     vec3 normalized_color;
-    //     if(max_component > 1.0){
-    //         normalized_color = color / max_component;
-    //         color = normalized_color;
-    //     }
-    // }
 
     imageStore(denoised_frame, pix, vec4(encode_color(color),1));
     // color.r =0;

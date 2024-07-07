@@ -1,48 +1,30 @@
 #include "ui.hpp"
 #include <RmlUi/Core/SystemInterface.h>
 
-#define GLFW_HAS_EXTRA_CURSORS (GLFW_VERSION_MAJOR >= 3 && GLFW_VERSION_MINOR >= 4)
-
-SystemInterface_GLFW::SystemInterface_GLFW()
-{
+SystemInterface_GLFW::SystemInterface_GLFW(){
 	cursor_pointer = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
 	cursor_cross = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 	cursor_text = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
-#if GLFW_HAS_EXTRA_CURSORS
-	cursor_move = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
-	cursor_resize = glfwCreateStandardCursor(GLFW_RESIZE_NWSE_CURSOR);
-	cursor_unavailable = glfwCreateStandardCursor(GLFW_NOT_ALLOWED_CURSOR);
-#else
 	cursor_move = cursor_pointer;
 	cursor_resize = cursor_pointer;
 	cursor_unavailable = nullptr;
-#endif
 }
 
-SystemInterface_GLFW::~SystemInterface_GLFW()
-{
+SystemInterface_GLFW::~SystemInterface_GLFW(){
 	glfwDestroyCursor(cursor_pointer);
 	glfwDestroyCursor(cursor_cross);
 	glfwDestroyCursor(cursor_text);
-#if GLFW_HAS_EXTRA_CURSORS
-	glfwDestroyCursor(cursor_move);
-	glfwDestroyCursor(cursor_resize);
-	glfwDestroyCursor(cursor_unavailable);
-#endif
 }
 
-void SystemInterface_GLFW::SetWindow(GLFWwindow* in_window)
-{
+void SystemInterface_GLFW::SetWindow(GLFWwindow* in_window){
 	window = in_window;
 }
 
-double SystemInterface_GLFW::GetElapsedTime()
-{
+double SystemInterface_GLFW::GetElapsedTime(){
 	return glfwGetTime();
 }
 
-void SystemInterface_GLFW::SetMouseCursor(const Rml::String& cursor_name)
-{
+void SystemInterface_GLFW::SetMouseCursor(const Rml::String& cursor_name){
 	GLFWcursor* cursor = nullptr;
 
 	if (cursor_name.empty() || cursor_name == "arrow")
@@ -66,20 +48,17 @@ void SystemInterface_GLFW::SetMouseCursor(const Rml::String& cursor_name)
 		glfwSetCursor(window, cursor);
 }
 
-void SystemInterface_GLFW::SetClipboardText(const Rml::String& text_utf8)
-{
+void SystemInterface_GLFW::SetClipboardText(const Rml::String& text_utf8){
 	if (window)
 		glfwSetClipboardString(window, text_utf8.c_str());
 }
 
-void SystemInterface_GLFW::GetClipboardText(Rml::String& text)
-{
+void SystemInterface_GLFW::GetClipboardText(Rml::String& text){
 	if (window)
 		text = Rml::String(glfwGetClipboardString(window));
 }
 
-bool RmlGLFW::ProcessKeyCallback(Rml::Context* context, int key, int action, int mods)
-{
+bool RmlGLFW::ProcessKeyCallback(Rml::Context* context, int key, int action, int mods){
 	if (!context)
 		return true;
 
@@ -98,8 +77,7 @@ bool RmlGLFW::ProcessKeyCallback(Rml::Context* context, int key, int action, int
 
 	return result;
 }
-bool RmlGLFW::ProcessCharCallback(Rml::Context* context, unsigned int codepoint)
-{
+bool RmlGLFW::ProcessCharCallback(Rml::Context* context, unsigned int codepoint){
 	if (!context)
 		return true;
 
@@ -107,8 +85,7 @@ bool RmlGLFW::ProcessCharCallback(Rml::Context* context, unsigned int codepoint)
 	return result;
 }
 
-bool RmlGLFW::ProcessCursorEnterCallback(Rml::Context* context, int entered)
-{
+bool RmlGLFW::ProcessCursorEnterCallback(Rml::Context* context, int entered){
 	if (!context)
 		return true;
 
@@ -118,8 +95,7 @@ bool RmlGLFW::ProcessCursorEnterCallback(Rml::Context* context, int entered)
 	return result;
 }
 
-bool RmlGLFW::ProcessCursorPosCallback(Rml::Context* context, GLFWwindow* window, double xpos, double ypos, int mods)
-{
+bool RmlGLFW::ProcessCursorPosCallback(Rml::Context* context, GLFWwindow* window, double xpos, double ypos, int mods){
 	if (!context)
 		return true;
 
@@ -127,6 +103,7 @@ bool RmlGLFW::ProcessCursorPosCallback(Rml::Context* context, GLFWwindow* window
 	using Vector2d = Rml::Vector2<double>;
 
 	Vector2i window_size, framebuffer_size;
+	//this things are almost free
 	glfwGetWindowSize(window, &window_size.x, &window_size.y);
 	glfwGetFramebufferSize(window, &framebuffer_size.x, &framebuffer_size.y);
 
@@ -138,8 +115,7 @@ bool RmlGLFW::ProcessCursorPosCallback(Rml::Context* context, GLFWwindow* window
 	return result;
 }
 
-bool RmlGLFW::ProcessMouseButtonCallback(Rml::Context* context, int button, int action, int mods)
-{
+bool RmlGLFW::ProcessMouseButtonCallback(Rml::Context* context, int button, int action, int mods){
 	if (!context)
 		return true;
 
@@ -153,8 +129,7 @@ bool RmlGLFW::ProcessMouseButtonCallback(Rml::Context* context, int button, int 
 	return result;
 }
 
-bool RmlGLFW::ProcessScrollCallback(Rml::Context* context, double yoffset, int mods)
-{
+bool RmlGLFW::ProcessScrollCallback(Rml::Context* context, double yoffset, int mods){
 	if (!context)
 		return true;
 
@@ -162,14 +137,12 @@ bool RmlGLFW::ProcessScrollCallback(Rml::Context* context, double yoffset, int m
 	return result;
 }
 
-void RmlGLFW::ProcessFramebufferSizeCallback(Rml::Context* context, int width, int height)
-{
+void RmlGLFW::ProcessFramebufferSizeCallback(Rml::Context* context, int width, int height){
 	if (context)
 		context->SetDimensions(Rml::Vector2i(width, height));
 }
 
-void RmlGLFW::ProcessContentScaleCallback(Rml::Context* context, float xscale)
-{
+void RmlGLFW::ProcessContentScaleCallback(Rml::Context* context, float xscale){
 	if (context)
 		context->SetDensityIndependentPixelRatio(xscale);
 }
@@ -196,9 +169,7 @@ int RmlGLFW::ConvertKeyModifiers(int glfw_mods)
 	return key_modifier_state;
 }
 
-Rml::Input::KeyIdentifier RmlGLFW::ConvertKey(int glfw_key)
-{
-	// clang-format off
+Rml::Input::KeyIdentifier RmlGLFW::ConvertKey(int glfw_key){
 	switch (glfw_key)
 	{
 	case GLFW_KEY_A:             return Rml::Input::KI_A;
@@ -319,23 +290,32 @@ Rml::Input::KeyIdentifier RmlGLFW::ConvertKey(int glfw_key)
 	case GLFW_KEY_KP_EQUAL:      return Rml::Input::KI_OEM_NEC_EQUAL;
 	default: break;
 	}
-	// clang-format on
 
 	return Rml::Input::KI_UNKNOWN;
 }
 
-// bool     LogMessage(Rml::Log::Type type, const Rml::String& message)
-// bool Ui::LogMessage(Rml::Log::Type typ, const Rml::String& message){
-// 	// cout << message;
+static Renderer* _renderer;
+int   pre_counter_diff = 0;
+int  post_counter_diff = 0;
+int final_counter_diff = 0;
 
-// 	return true;
-// }
-static bool b1_down;
-static void set_buttons_callback(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
-	// if (bloo) bloo = false;
-	// else bloo = true;
-	b1_down = true;
-	printl(b1_down);
+static void _callback_pre_denoiser_decrease(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	pre_counter_diff--;	
+}
+static void _callback_pre_denoiser_increase(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	pre_counter_diff++;
+}
+static void _callback_post_denoiser_decrease(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	post_counter_diff--;
+}
+static void _callback_post_denoiser_increase(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	post_counter_diff++;
+}
+static void _callback_final_denoiser_decrease(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	final_counter_diff--;
+}
+static void _callback_final_denoiser_increase(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	final_counter_diff++;	
 }
 
 bool Ui::SetupDataBinding(Rml::Context* context, Rml::DataModelHandle& my_model){
@@ -344,9 +324,16 @@ bool Ui::SetupDataBinding(Rml::Context* context, Rml::DataModelHandle& my_model)
 		return false;
 	
 	// constructor.Bind("button1", &data_bound.if_pressed);
-	constructor.BindEventCallback("button1", set_buttons_callback);
-	// constructor.BindEventCallback("launch_weapons", &InvadersData::LaunchWeapons, &invaders_data);
+	constructor.BindEventCallback("pre_denoiser_decrease"  ,   _callback_pre_denoiser_decrease);
+	constructor.BindEventCallback("pre_denoiser_increase"  ,   _callback_pre_denoiser_increase);
+	constructor.BindEventCallback("post_denoiser_decrease" ,  _callback_post_denoiser_decrease);
+	constructor.BindEventCallback("post_denoiser_increase" ,  _callback_post_denoiser_increase);
+	constructor.BindEventCallback("final_denoiser_decrease", _callback_final_denoiser_decrease);
+	constructor.BindEventCallback("final_denoiser_increase", _callback_final_denoiser_increase);
 
+	constructor.Bind("pre_counter", &_renderer->pre_denoiser_count);
+	constructor.Bind("post_counter", &_renderer->post_denoiser_count);
+	constructor.Bind("final_counter", &_renderer->final_denoiser_count);
 	my_model = constructor.GetModelHandle();
 	
 
@@ -371,6 +358,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 }
 
 void Ui::setup(){
+	_renderer = renderer;
+	
 	sysInterface.SetWindow(renderer->window.pointer);
     Rml::SetRenderInterface(renderer->UiRenderInterface);
     Rml::SetSystemInterface(&sysInterface);
@@ -381,10 +370,7 @@ void Ui::setup(){
     context = Rml::CreateContext("main", Rml::Vector2i(renderer->swapChainExtent.width, renderer->swapChainExtent.height));
 
     Rml::Debugger::Initialise(context);
-
     Rml::LoadFontFace("assets/LatoLatin-Regular.ttf");
-
-	Rml::DataModelHandle my_model;
 	SetupDataBinding(context, my_model);
 
 	document = context->LoadDocument("assets/simple.rml");
@@ -393,21 +379,17 @@ void Ui::setup(){
 		println
 	}
 
-	// my_model.
-
 	document->Show();
 
 	glfwSetMouseButtonCallback(renderer->window.pointer, mouse_button_callback);
 }
 
 void Ui::update(){
-// println
 	if(renderer->UiRenderInterface->default_image == NULL){
-		byte def_img_src[4] = {(byte)1,(byte)1,(byte)1,(byte)1};
+		byte def_img_src[4] = {(byte)255,(byte)255,(byte)255,(byte)255};
 		bool res = renderer->UiRenderInterface->GenerateTexture((Rml::TextureHandle&)(renderer->UiRenderInterface->default_image), (Rml::byte*)&def_img_src, (Rml::Vector2i){1,1});
 		assert(res);
 	}
-	b1_down = false;
 	double xpos, ypos;
 	glfwGetCursorPos(renderer->window.pointer, &xpos, &ypos);
 	context->ProcessMouseMove(int(floor(xpos)), int(floor(ypos)), 0);
@@ -420,14 +402,27 @@ void Ui::update(){
 		context->ProcessMouseButtonUp(mouse_up_state, 0);
 		mouse_up_state = -1;
 	}
-	data_bound.if_pressed = b1_down;
+	
+	// my_model.DirtyVariable("pre_counter");
 
-	// if (Rml::Element* el = document->GetElementById("button1"))
-			// el.get;
-// println
+	if(  pre_counter_diff != 0){
+		renderer->pre_denoiser_count += pre_counter_diff;
+		my_model.DirtyVariable("pre_counter");
+		pre_counter_diff = 0;
+	}
+	if( post_counter_diff != 0){
+		renderer->post_denoiser_count += post_counter_diff;
+		my_model.DirtyVariable("post_counter");
+		post_counter_diff = 0;
+	}
+	if(final_counter_diff != 0){
+		renderer->final_denoiser_count += final_counter_diff;
+		my_model.DirtyVariable("final_counter");
+		final_counter_diff = 0;
+	}
+	
+
 	context->Update();
-// println
-    // render_interface.RenderGeometry;
 }
 
 void Ui::draw(){

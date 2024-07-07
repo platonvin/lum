@@ -121,6 +121,23 @@ struct ogt_mesh_vertex
 #endif
     uint32_t palette_index;
 };
+}
+
+#include <glm/glm.hpp>
+namespace ogt{
+struct ogt_int_mesh_vertex
+{
+    glm::uvec3  pos;
+    glm::ivec3  normal;
+    uint32_t palette_index;
+};
+struct ogt_int_mesh 
+{
+    uint32_t         vertex_count;	// number of vertices
+    uint32_t         index_count;	// number of indices
+    ogt_int_mesh_vertex* vertices;		// array of int vertices
+    uint32_t*        indices;		// array of indices
+};
 
 // a mesh that contains an indexed triangle list of vertices
 struct ogt_mesh 
@@ -163,6 +180,10 @@ ogt_mesh* ogt_mesh_from_paletted_voxels_greedy(const ogt_voxel_meshify_context* 
 // will be tessellated only to the degree that is necessary to there are tessellations at color discontinuities.
 // This will mostly be water-tight, except for a very small number of cases.
 ogt_mesh* ogt_mesh_from_paletted_voxels_polygon(const ogt_voxel_meshify_context* ctx, const uint8_t* voxels, uint32_t size_x, uint32_t size_y, uint32_t size_z, const ogt_mesh_rgba* palette);
+
+ogt_int_mesh* my_int_mesh_from_paletted_voxels(const ogt_voxel_meshify_context* ctx, const uint8_t* voxels, uint32_t size_x, uint32_t size_y, uint32_t size_z);
+// ogt_mesh* my_int_mesh_from_paletted_voxels(const ogt_voxel_meshify_context* ctx, const uint8_t* voxels, uint32_t size_x, uint32_t size_y, uint32_t size_z);
+void my_int_mesh_optimize(const ogt_voxel_meshify_context* ctx, ogt_int_mesh* mesh);
 
 // ogt_mesh_remove_duplicate_vertices will in-place remove identical vertices and remap indices to produce an identical mesh.
 // Use this after a call to ogt_mesh_from_paletted_voxels_* functions to remove duplicate vertices with the same attributes.

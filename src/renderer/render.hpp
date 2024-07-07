@@ -20,7 +20,6 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
-// #include <cassert>
 #include <glm/detail/qualifier.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_projection.hpp>
@@ -30,19 +29,14 @@
 #include <glm/trigonometric.hpp>
 #include <stdio.h>
 #include <io.h>
-// #include <vulkan/vulkan_core.h>
-#include <set> 
-#include <limits>
-#include <fstream>
+#include <limits.h>
+#include <stdio.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
-// #include <RmlUi/Debugger.h>
-// #include <RmlUi/../../Backends/RmlUi_Backend.h>
-// #include <RmlUi/Core/RenderInterface.h>
 
 #include <defines.hpp>
 
@@ -130,11 +124,22 @@ typedef struct Material {
     f32 rough;
 } Material;
 typedef u8 Voxel;
-typedef struct Vertex {
-    vec3 pos;
-    vec3 norm;
+typedef struct VoxelVertex {
+    vec<3, unsigned char, defaultp> pos;
+    vec<3,   signed char, defaultp> norm;
     MatID_t matID;
-} Vertex;
+
+    // vec3 pos;
+    // vec3 norm;
+    // MatID_t matID;
+
+} VoxelVertex;
+typedef struct PackedVoxelVertex {
+    vec<3, unsigned char, defaultp> pos;
+    unsigned char norm;
+    MatID_t matID;
+} PackedVoxelVertex;
+
 typedef struct Particle {
     vec3 pos;
     vec3 vel;
@@ -150,6 +155,9 @@ typedef struct Image {
     VkImageView view;
     VmaAllocation alloc;
 } Image;
+enum MeshVertexTypes {
+    // MESH_VERTEX_TYPE_
+};
 
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
@@ -177,15 +185,15 @@ typedef struct UiMesh {
     Image* image;
 } UiMesh;
 typedef struct UiMeshDeletion {
-    UiMesh* mesh;
+    UiMesh mesh;
     int life_counter;
 } UiMeshDeletion;
 typedef struct UiImageDeletion {
-    Image* image;
+    Image image;
     int life_counter;
 } UiImageDeletion;
 typedef struct UiBufferDeletion {
-    Buffer* buffer;
+    Buffer buffer;
     int life_counter;
 } UiBufferDeletion;
 
@@ -280,7 +288,7 @@ public:
     void load_mesh(Mesh* mesh, Voxel* voxel_mem, int x_size, int y_size, int z_size, bool _make_vertices=true);
     void free_mesh(Mesh* mesh);
     void make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size);
-    void load_vertices(Mesh* mesh, Vertex* vertices);
+    void load_vertices(Mesh* mesh, VoxelVertex* vertices);
     // void extrude_palette(Material* material_palette);
     void load_block(Block** block, const char* vox_file);
     void free_block(Block** block);
@@ -294,6 +302,10 @@ public:
     MyRenderInterface* UiRenderInterface;
     int static_block_palette_size;
     ivec3 world_size;
+    
+    int   pre_denoiser_count = 0;
+    int  post_denoiser_count = 0;
+    int final_denoiser_count = 0;
 private:
     bool has_palette = false;
     vec2 _ratio;
@@ -308,7 +320,7 @@ public:
 
     bool is_resized = false;
 
-    dvec3     camera_pos = vec3(60, 0, 128);
+    dvec3     camera_pos = vec3(60, 0, 194);
     dvec3 old_camera_pos = camera_pos;
     dvec3     camera_dir = normalize(vec3(0.6, 1.0, -0.8));
     dvec3 old_camera_dir = normalize(vec3(0.6, 1.0, -0.8));
@@ -348,8 +360,9 @@ public:
         void   present();
     void end_Frame();
 
-    tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(Vertex* vertices, u32 vcount, u32* indices, u32 icount); 
-    tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(vector<Vertex> vertices, vector<u32> indices); 
+    template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(Vertex_T* vertices, u32 vcount, u32* indices, u32 icount); 
+    template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(vector<Vertex_T> vertices, vector<u32> indices); 
+
     vector<Image>  create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size);
     void update_Block_Palette(Block** blockPalette);
     void update_Material_Palette(Material* materialPalette);
@@ -420,10 +433,10 @@ private:
     void delete_Images(Image* images);
     void create_Image_Storages(vector<Image>* images, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
-    uvec3 size);
+    uvec3 size, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
     void create_Image_Storages(Image* image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
-    uvec3 size);
+    uvec3 size, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
 // #ifdef STENCIL 
     void create_Image_Storages_DepthStencil(vector<VkImage>* images, vector<VmaAllocation>* allocs, vector<VkImageView>* depthViews, vector<VkImageView>* stencilViews,
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
@@ -575,23 +588,23 @@ public:
             //    Image oldUv_downscaled; //dont need it
             Image mix_ratio;
     #else
-        vector<Image> lowres_frame;
+        vector<Image> lowres_frames;
         vector<Image> lowres_sunlight;
-               Image highres_frame;
+        vector<Image>  highres_frames;
         #ifdef STENCIL
         vector<VkImage> depthStencilImages; //used for depth testing
         vector<VmaAllocation> depthStencilAllocs; //used for depth testing
         vector<VkImageView>   depthViews; //used for depth testing
         vector<VkImageView> stencilViews; //used for depth testing
         #else
-               Image  depthBuffer; //used for depth testing
-        vector<Image> depthBuffer_downscaled; //used for depth testing
+        vector<Image>  depthBuffers_highres; //used for depth testing
+        vector<Image> depthBuffers_lowres; //used for depth testing
         // vector<Image> depthBuffer; //used for depth testing
         #endif
-               Image  matNorm;
-        vector<Image> matNorm_downscaled; //render always to one, other stored downscaled
-               Image oldUv;
-               Image oldUv_downscaled;
+        vector<Image> matNorm_highres;
+        vector<Image> matNorm_lowres; //render always to one, other stored downscaled
+               Image oldUv_highres;
+               Image oldUv_lowres;
                //    Image oldUv_downscaled; //dont need it
         vector<Image> mix_ratio;
     #endif
@@ -599,6 +612,7 @@ public:
     vector<Image> swapchain_images;
     VkSampler  nearestSampler;
     VkSampler  linearSampler;
+    VkSampler  uiSampler;
 
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
@@ -608,7 +622,7 @@ public:
            Image                world; //can i really use just one?
 
     vector<Image> origin_block_palette;
-           Image        block_palette;
+        //    Image        block_palette;
     vector<Image> material_palette;
     
     vector<Buffer>         uniform;
@@ -781,3 +795,63 @@ public:
     // bool has_scissors = true;
     VkRect2D last_scissors = {{0,0}, {1,1}};
 };
+
+//TODO: need to find memory, verify flags
+template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> Renderer::create_RayGen_VertexBuffers(vector<Vertex_T> vertices, vector<u32> indices){
+    return create_RayGen_VertexBuffers<Vertex_T>(vertices.data(), vertices.size(), indices.data(), indices.size());
+}
+
+template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> Renderer::create_RayGen_VertexBuffers(Vertex_T* vertices, u32 vcount, u32* indices, u32 icount){
+    VkDeviceSize bufferSizeV = sizeof(Vertex_T)*vcount;
+    VkDeviceSize bufferSizeI = sizeof(u32   )*icount;
+
+    vector<Buffer> vertexes (MAX_FRAMES_IN_FLIGHT);
+    vector<Buffer>  indexes (MAX_FRAMES_IN_FLIGHT);
+
+    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingBufferInfo.size = bufferSizeV;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBuffer stagingBufferV = {};
+    VmaAllocation stagingAllocationV = {};
+    VkBuffer stagingBufferI = {};
+    VmaAllocation stagingAllocationI = {};
+    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferV, &stagingAllocationV, NULL);
+    stagingBufferInfo.size = bufferSizeI;
+    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferI, &stagingAllocationI, NULL);
+
+    void* data;
+assert (VMAllocator);
+assert (stagingAllocationV);
+assert (&data);
+    vmaMapMemory(VMAllocator, stagingAllocationV, &data);
+        memcpy(data, vertices, bufferSizeV);
+    vmaUnmapMemory(VMAllocator, stagingAllocationV);
+
+    vmaMapMemory(VMAllocator, stagingAllocationI, &data);
+        memcpy(data, indices, bufferSizeI);
+    vmaUnmapMemory(VMAllocator, stagingAllocationI);
+
+    for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
+        VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+            bufferInfo.size = bufferSizeV;
+            bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        VmaAllocationCreateInfo allocInfo = {};
+            allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &vertexes[i].buffer, &vertexes[i].alloc, NULL);
+            bufferInfo.size = bufferSizeI;
+            bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &indexes[i].buffer, &indexes[i].alloc, NULL);
+               
+        copy_Buffer(stagingBufferV, vertexes[i].buffer, bufferSizeV);
+        copy_Buffer(stagingBufferI,  indexes[i].buffer, bufferSizeI);
+    }
+
+    vmaDestroyBuffer(VMAllocator, stagingBufferV, stagingAllocationV);
+    vmaDestroyBuffer(VMAllocator, stagingBufferI, stagingAllocationI);
+
+    return {vertexes, indexes};
+}

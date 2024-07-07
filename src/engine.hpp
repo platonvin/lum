@@ -13,8 +13,8 @@ struct block_render_request{
 
 class Engine {
 public:
-    Renderer render;
-    Ui ui;
+    Renderer render = {};
+    Ui ui = {};
 
     //cpu culled sorted array of blocks to raygen as example. You egnine responsible for doing this, bot renderer
     vector<block_render_request> que;
@@ -27,6 +27,7 @@ public:
     void update_system();
     void handle_input();
     void update_visual(); //renderer and ui intersect for perfomance reasons
+    void process_physics();
     void process_animations();
     void cull_meshes();
     void draw();

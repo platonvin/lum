@@ -2,8 +2,8 @@
 
 precision highp float;
 
-layout(location = 0) in vec3 posIn;
-layout(location = 1) in vec3 normIn;
+layout(location = 0) in uvec3 posIn;
+layout(location = 1) in ivec3 normIn;
 layout(location = 2) in uint MatIDIn;
 
 // layout(location = 0)      out float depth;
@@ -44,9 +44,12 @@ vec3 qtransform( vec4 q, vec3 v ){
 } 
 
 void main() {
-    vec4 world_pos     = vec4(qtransform(pco.rot    , posIn) + pco.shift.xyz ,1);
+    vec3 fpos = vec3(posIn);
+    vec3 fnorm = vec3(normIn);
+
+    vec4 world_pos     = vec4(qtransform(pco.rot    , fpos) + pco.shift.xyz ,1);
     // vec4 world_pos     = vec4(posIn + pco.shift.xyz ,1);
-    vec4 world_pos_old = vec4(qtransform(pco.old_rot, posIn) + pco.old_shift.xyz ,1);
+    vec4 world_pos_old = vec4(qtransform(pco.old_rot, fpos) + pco.old_shift.xyz ,1);
     // vec4 world_pos_old = vec4(posIn + pco.old_shift.xyz ,1);
 
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
@@ -68,7 +71,7 @@ void main() {
 
     uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     
-    norm = (qtransform(pco.rot,normIn));
+    norm = (qtransform(pco.rot,fnorm));
     // norm = normalize(cross(dFdx(world_pos.xyz), dFdy(world_pos.xyz)));
     mat = uint(MatIDIn);
 

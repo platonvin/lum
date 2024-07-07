@@ -1,15 +1,35 @@
 <rml>
     <head>
-        <title>Simple UI</title>
+        <title>Parameter Controls</title>
         <link type="text/css" href="simple.rcss" />
     </head>
     <body>
-        <div id="container">
-            <h1>Simple UI Example</h1>
-            <div data-model="my_model">
-                <button data-event-click="button1">Button 1</button>
+        <div id="container", data-model="my_model">
+            <h1>Parameter Controls</h1>
+            <div class="parameter">
+                <p>Pre-Denoiser Steps</p>
+                <div class="controls">
+                    <button data-event-click="pre_denoiser_decrease">-</button>
+                    <span>{{pre_counter}}</span>
+                    <button data-event-click="pre_denoiser_increase">+</button>
+                </div>
             </div>
-            <button id="button2">Button 2</button>
+            <div class="parameter">
+                <p>Post-Denoiser Steps</p>
+                <div class="controls">
+                    <button data-event-click="post_denoiser_decrease">-</button>
+                    <span>{{post_counter}}</span>
+                    <button data-event-click="post_denoiser_increase">+</button>
+                </div>
+            </div>
+            <div class="parameter">
+                <p>Final Denoiser Steps</p>
+                <div class="controls">
+                    <button data-event-click="final_denoiser_decrease">-</button>
+                    <span>{{final_counter}}</span>
+                    <button data-event-click="final_denoiser_increase">+</button>
+                </div>
+            </div>
         </div>
     </body>
 </rml>

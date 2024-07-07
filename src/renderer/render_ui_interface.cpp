@@ -16,7 +16,6 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
                         int num_indices,
                         Rml::TextureHandle texture,
                         const Rml::Vector2f& translation){
-println
     UiMesh ui_mesh = {};
     VkDeviceSize bufferSizeV = sizeof(Rml::Vertex)*num_vertices;
     VkDeviceSize bufferSizeI = sizeof(int        )*num_indices;
@@ -54,9 +53,13 @@ println
         Image* texture_image = (Image*)texture;
         VkDescriptorImageInfo
             textureInfo = {};
-            textureInfo.imageView = texture_image->view; //CHANGE ME
+            if(texture_image != NULL) {
+                textureInfo.imageView = texture_image->view; //CHANGE ME
+            } else {
+                textureInfo.imageView = default_image->view; //CHANGE ME
+            }
             textureInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            textureInfo.sampler = render->linearSampler;
+            textureInfo.sampler = render->uiSampler;
         VkWriteDescriptorSet 
             textureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             textureWrite.dstSet = NULL;
@@ -73,19 +76,22 @@ println
     
     vkCmdDrawIndexed(renderCommandBuffer, ui_mesh.icount, 1, 0, 0, 0);
 
-    UiMesh* mesh_ptr_for_deletion = new UiMesh;
-    (*mesh_ptr_for_deletion) = ui_mesh;
+    // UiMesh* mesh_ptr_for_deletion = new UiMesh;
+    // (*mesh_ptr_for_deletion) = ui_mesh;
 
-    UiMeshDeletion deletion = {mesh_ptr_for_deletion, MAX_FRAMES_IN_FLIGHT};
+    UiMeshDeletion deletion = {ui_mesh, MAX_FRAMES_IN_FLIGHT};
     render->ui_mesh_deletion_queue.push_back(deletion);
 }
                         
 // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
 Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry(Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture){
-// println
     UiMesh* ui_mesh = new UiMesh;
         ui_mesh->image = (Image*)texture;
         ui_mesh->icount = num_indices;
+
+    // for(int i=0; i < num_vertices; i++){
+    //     printf("%3d tex: x%6f y%6f\n", i, vertices[i].tex_coord.x, vertices[i].tex_coord.y);
+    // }
 
     VkDeviceSize bufferSizeV = sizeof(Rml::Vertex)*num_vertices;
     VkDeviceSize bufferSizeI = sizeof(int        )*num_indices;
@@ -132,23 +138,14 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry(Rml::Vertex* vert
         staging_copy.size = bufferSizeI;
     vkCmdCopyBuffer(copyCommandBuffer, stagingBufferI, ui_mesh->indexes.buffer, 1, &staging_copy);
 
-    Buffer* buffer_to_deleteV = new Buffer;
-        buffer_to_deleteV->buffer = stagingBufferV;
-        buffer_to_deleteV->alloc = stagingAllocationV;
-    UiBufferDeletion deletion = {buffer_to_deleteV, MAX_FRAMES_IN_FLIGHT};
-    render->ui_buffer_deletion_queue.push_back(deletion);
-    Buffer* buffer_to_deleteI = new Buffer;
-        buffer_to_deleteI->buffer = stagingBufferI;
-        buffer_to_deleteI->alloc = stagingAllocationI;
-                     deletion = {buffer_to_deleteI, MAX_FRAMES_IN_FLIGHT};
-    render->ui_buffer_deletion_queue.push_back(deletion);
+    render->ui_buffer_deletion_queue.push_back({{stagingBufferV, stagingAllocationV}, MAX_FRAMES_IN_FLIGHT});
+    render->ui_buffer_deletion_queue.push_back({{stagingBufferI, stagingAllocationI}, MAX_FRAMES_IN_FLIGHT});
 
     return Rml::CompiledGeometryHandle(ui_mesh);
 }
 
 // Called by RmlUi when it wants to render application-compiled geometry.
 void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation){
-// println
     VkCommandBuffer &renderCommandBuffer = render->renderGraphicalCommandBuffers[render->currentFrame];
     UiMesh* ui_mesh = (UiMesh*)geometry;
 
@@ -162,7 +159,6 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
 
     Image* texture_image = ui_mesh->image;
 // printl(texture_image);
-// println
         VkDescriptorImageInfo
             textureInfo = {};
             //if image is 0, then we just vind 1x1x1 white image
@@ -172,7 +168,7 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
                 textureInfo.imageView = default_image->view; //CHANGE ME
             }
             textureInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            textureInfo.sampler = render->linearSampler;
+            textureInfo.sampler = render->uiSampler;
         VkWriteDescriptorSet 
             textureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             textureWrite.dstSet = NULL;
@@ -182,24 +178,18 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
             textureWrite.descriptorCount = 1;
             textureWrite.pImageInfo = &textureInfo;
         vector<VkWriteDescriptorSet> descriptorWrites = {textureWrite};
-// println
     vkCmdPushDescriptorSetKHR(renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->graphicsLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-// println
     vkCmdBindVertexBuffers(renderCommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(renderCommandBuffer, ui_mesh->indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
     
-// println
     vkCmdDrawIndexed(renderCommandBuffer, ui_mesh->icount, 1, 0, 0, 0);
-// println
 }
 
 // Called by RmlUi when it wants to release application-compiled geometry.
 void MyRenderInterface::ReleaseCompiledGeometry(Rml::CompiledGeometryHandle geometry){
-// println
     //we cant immediately relese it because previous frames use buffers for rendering (exept when 1 fif)
     //so we add it to deletion queue
-    UiMeshDeletion deletion = {(UiMesh*)geometry, MAX_FRAMES_IN_FLIGHT};
-    render->ui_mesh_deletion_queue.push_back(deletion);
+    render->ui_mesh_deletion_queue.push_back({*((UiMesh*)geometry), MAX_FRAMES_IN_FLIGHT});
 }
 
 // Called by RmlUi when it wants to enable or disable scissoring to clip content.
@@ -219,7 +209,6 @@ void MyRenderInterface::EnableScissorRegion(bool enable){
 
 // Called by RmlUi when it wants to change the scissor region.
 void MyRenderInterface::SetScissorRegion(int x, int y, int width, int height){
-// println
     VkCommandBuffer &renderCommandBuffer = render->renderGraphicalCommandBuffers[render->currentFrame];
     last_scissors = {};
         last_scissors.offset = {std::clamp(x,0,int(render->swapChainExtent.width -1)),
@@ -253,7 +242,6 @@ char* readFileBuffer(const char* path, size_t* size);
 bool MyRenderInterface::LoadTexture(Rml::TextureHandle& texture_handle,
                         Rml::Vector2i& texture_dimensions,
                         const Rml::String& source){
-// println
     size_t bsize;
     Rml::byte* bytes = (Rml::byte*) readFileBuffer(source.c_str(), &bsize);    
 
@@ -319,9 +307,9 @@ bool MyRenderInterface::LoadTexture(Rml::TextureHandle& texture_handle,
 bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
                             const Rml::byte* source,
                             const Rml::Vector2i& source_dimensions){
-// println
     Image* texture_image = new Image;
     VkDeviceSize bufferSize = (sizeof(byte)*4)*source_dimensions.x * source_dimensions.y;
+    assert(bufferSize != 0);
     // if(bufferSize == 0) return false;
                                 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -394,7 +382,6 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
     
 
     VkCommandBuffer &copyCommandBuffer = render->copyGraphicalCommandBuffers[render->currentFrame];
-// println
     render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, &barrier);
 
     VkBufferImageCopy staging_copy = {};
@@ -409,12 +396,7 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier);
 
-    Buffer* buffer_to_delete = new Buffer;
-    buffer_to_delete->buffer = stagingBuffer;
-    buffer_to_delete->alloc = stagingAllocation;
-    UiBufferDeletion deletion = {(Buffer*)buffer_to_delete, MAX_FRAMES_IN_FLIGHT};
-    render->ui_buffer_deletion_queue.push_back(deletion);
-    //instead of vmaDestroyBuffer(render->VMAllocator, stagingBuffer, stagingAllocation);
+    render->ui_buffer_deletion_queue.push_back({{stagingBuffer, stagingAllocation}, MAX_FRAMES_IN_FLIGHT});
 
     texture_handle = Rml::TextureHandle(texture_image);
     return true;
@@ -422,17 +404,12 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
 
 // Called by RmlUi when a loaded texture is no longer required.
 void MyRenderInterface::ReleaseTexture(Rml::TextureHandle texture_handle){
-// println
-    UiImageDeletion deletion = {(Image*)texture_handle, MAX_FRAMES_IN_FLIGHT};
-    render->ui_image_deletion_queue.push_back(deletion);
+    render->ui_image_deletion_queue.push_back({*((Image*)texture_handle), MAX_FRAMES_IN_FLIGHT});
 }
 
 // Called by RmlUi when it wants the renderer to use a new transform matrix.
 // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
 // an identity matrix or otherwise omit the multiplication with the transform.
 void MyRenderInterface::SetTransform(const Rml::Matrix4f* transform){
-println
-    cout << "lol";
-    //hope it works
     current_transform = (*(mat4*)(transform));
 }

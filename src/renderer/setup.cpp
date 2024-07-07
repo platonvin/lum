@@ -1,4 +1,6 @@
 #include "render.hpp" 
+#include <set>
+#include <fstream>
 
 using namespace std;
 using namespace glm;
@@ -131,7 +133,7 @@ void Renderer::create_RenderPass_Graphical(){
         dependency.dstSubpass = 0;
         dependency.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
         dependency.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-        dependency.dstStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
         dependency.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 
     
@@ -473,23 +475,35 @@ void Renderer::create_RayGen_Pipeline(){
 
     VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.stride = sizeof(VoxelVertex);
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+        attributeDescriptions[0].format = VK_FORMAT_R8G8B8_UINT;
+        attributeDescriptions[0].offset = offsetof(VoxelVertex, pos);
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, norm);
+        attributeDescriptions[1].format = VK_FORMAT_R8G8B8_SINT;
+        attributeDescriptions[1].offset = offsetof(VoxelVertex, norm);
         attributeDescriptions[2].binding = 0;
         attributeDescriptions[2].location = 2;
         attributeDescriptions[2].format = VK_FORMAT_R8_UINT;
-        attributeDescriptions[2].offset = offsetof(Vertex, matID);
-
+        attributeDescriptions[2].offset = offsetof(VoxelVertex, matID);
+    // vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+    //     attributeDescriptions[0].binding = 0;
+    //     attributeDescriptions[0].location = 0;
+    //     attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+    //     attributeDescriptions[0].offset = offsetof(VoxelVertex, pos);
+    //     attributeDescriptions[1].binding = 0;
+    //     attributeDescriptions[1].location = 1;
+    //     attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    //     attributeDescriptions[1].offset = offsetof(VoxelVertex, norm);
+    //     attributeDescriptions[2].binding = 0;
+    //     attributeDescriptions[2].location = 2;
+    //     attributeDescriptions[2].format = VK_FORMAT_R8_UINT;
+    //     attributeDescriptions[2].offset = offsetof(VoxelVertex, matID);
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertexInputInfo.vertexBindingDescriptionCount = 1;

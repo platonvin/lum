@@ -67,9 +67,6 @@ Rml::Input::KeyIdentifier ConvertKey(int glfw_key);
 int ConvertKeyModifiers(int glfw_mods);
 
 } // namespace RmlGLFW
-struct MyData {
-	bool if_pressed = false;
-};
 
 class Ui{
 public:
@@ -83,7 +80,8 @@ public:
     Rml::Context* context;
 	Rml::ElementDocument* document;
 
-	struct MyData data_bound;
+	Rml::DataModelHandle my_model;
+
 	bool SetupDataBinding(Rml::Context* context, Rml::DataModelHandle& my_model);
 	// void set_buttons_callback(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&);
 };

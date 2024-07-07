@@ -21,7 +21,8 @@ void Renderer::update_Block_Palette(Block** blockPalette){
         #else
         blockPaletteLinear.set({0});
         #endif
-    for(i32 N=0; N<BLOCK_PALETTE_SIZE; N++){
+    // printl(static_block_palette_size)
+    for(i32 N=0; N<static_block_palette_size; N++){
         for(i32 x=0; x<BLOCK_SIZE; x++){
         for(i32 y=0; y<BLOCK_SIZE; y++){
         for(i32 z=0; z<BLOCK_SIZE; z++){
@@ -39,6 +40,7 @@ void Renderer::update_Block_Palette(Block** blockPalette){
                 }
             }
     }}}}
+// println
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSize;
         stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -269,13 +271,43 @@ void Renderer::free_mesh(Mesh* mesh){
     }
 }
 
+// #define 
+static unsigned char pack_normal(vec<3, unsigned char, defaultp> normal){
+
+}
 void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
     ogt::ogt_voxel_meshify_context ctx = {};
-    ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
-    ogt::ogt_mesh_remove_duplicate_vertices(&ctx, ogt_mesh);
+    // ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
+    // ogt::ogt_mesh_remove_duplicate_vertices(&ctx, ogt_mesh);
+    ogt::ogt_int_mesh* ogt_mesh =  ogt::my_int_mesh_from_paletted_voxels(&ctx, (const u8*)Voxels, x_size, y_size, z_size);
+    ogt::my_int_mesh_optimize(&ctx, ogt_mesh);
 
+// println
+    vector<VoxelVertex> verts(ogt_mesh->vertex_count);
+    for(int i=0; i<ogt_mesh->vertex_count; i++){
+        verts[i].pos  = uvec3(ogt_mesh->vertices[i].pos);
+        verts[i].norm = ivec3(ogt_mesh->vertices[i].normal);
+        verts[i].matID = (MatID_t)ogt_mesh->vertices[i].palette_index;
+
+        assert(verts[i].norm != (vec<3, signed char, defaultp>)(0));
+        if(length(vec3(verts[i].norm)) != 1.0f){
+            // printl(verts[i].norm.x);
+            printl((int)verts[i].norm.x);
+            printl((int)verts[i].norm.y);
+            printl((int)verts[i].norm.z);
+            printl(ogt_mesh->vertices[i].normal.x);
+            printl(ogt_mesh->vertices[i].normal.y);
+            printl(ogt_mesh->vertices[i].normal.z);
+            abort();
+        }
+    }
+    tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers<VoxelVertex>(verts.data(), ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
+    // tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers<VoxelVertex>((VoxelVertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
+// println
+
+    mesh->icount = ogt_mesh->index_count;
     mesh->shift = vec3(0);
     mesh->rot = quat_identity<float, defaultp>();
-    tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers((Vertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
-    mesh->icount = ogt_mesh->index_count;
+    // ogt::ogt_mesh_destroy(&ctx, int_mesh);
+    ogt::ogt_mesh_destroy(&ctx, (ogt::ogt_mesh*)ogt_mesh);
 }

@@ -55,13 +55,15 @@ Mesh tank_rf_leg = {};
 Mesh tank_lf_leg = {};
 Mesh tank_rb_leg = {};
 Mesh tank_lb_leg = {};
-vec2 points[4] = {}; // that each leg follows
-vec2 interpolated_points[4] = {}; // that each leg follows
-vec2 target_points[4]; // that each leg follows
+vec2 physical_points[4] = {}; // that each leg follows
+vec2 interpolated_leg_points[4] = {}; // that each leg follows
+vec2 target_leg_points[4]; // that each leg follows
+float physical_body_height;
+float interpolated_body_height;
 Block** block_palette = {};
 
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 10, 8128, vec2(2.0), false, false);
+    render.init(48, 48, 16, 10, 8128, vec2(1.5), false, false);
     vkDeviceWaitIdle(render.device);
 
     render.load_scene("assets/scene");
@@ -94,8 +96,11 @@ void Engine::setup_graphics(){
     render.load_block(&block_palette[9], "assets/lamp.vox");
 
 
+// println
     render.update_Block_Palette(block_palette);
+// println
     render.update_Material_Palette(render.mat_palette);
+// println
     vkDeviceWaitIdle(render.device);
 }
 void Engine::setup_ui(){
@@ -121,18 +126,20 @@ void Engine::handle_input(){
     set_key(GLFW_KEY_S, render.camera_pos += vec3(0,-1.4,0));
     set_key(GLFW_KEY_A, render.camera_pos += vec3(  -1.4,0,0));
     set_key(GLFW_KEY_D, render.camera_pos += vec3(  +1.4,0,0));
-    set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
-    set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
+    // set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
+    // set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
     set_key(GLFW_KEY_COMMA  , render.camera_dir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
     set_key(GLFW_KEY_PERIOD , render.camera_dir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
 
     vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
     vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
     // render.particles[0].vel = vec3(0);
-    set_key(GLFW_KEY_LEFT      , tank_body.shift -=   tank_direction_right*1.4f);
-    set_key(GLFW_KEY_RIGHT     , tank_body.shift +=   tank_direction_right*1.4f);
-    set_key(GLFW_KEY_UP        , tank_body.shift += tank_direction_forward*1.4f);
-    set_key(GLFW_KEY_DOWN      , tank_body.shift -= tank_direction_forward*1.4f);
+    float tank_speed = 0.3;
+    set_key(GLFW_KEY_LEFT_SHIFT, tank_speed = 0.7);
+    set_key(GLFW_KEY_LEFT      , tank_body.shift -=   tank_direction_right*tank_speed);
+    set_key(GLFW_KEY_RIGHT     , tank_body.shift +=   tank_direction_right*tank_speed);
+    set_key(GLFW_KEY_UP        , tank_body.shift += tank_direction_forward*tank_speed);
+    set_key(GLFW_KEY_DOWN      , tank_body.shift -= tank_direction_forward*tank_speed);
     set_key(GLFW_KEY_LEFT_CONTROL  , tank_body.shift.z += 1.0f);
     set_key(GLFW_KEY_LEFT_ALT      , tank_body.shift.z -= 1.0f);
 
@@ -144,7 +151,7 @@ void Engine::handle_input(){
 
     if(glfwGetKey(render.window.pointer, GLFW_KEY_PAGE_UP) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
-        tank_body.rot *= quat(vec3(0,0,+.05));
+        tank_body.rot *= quat(vec3(0,0,+.02));
         quat new_rot = tank_body.rot;
 
         vec3 old_center = old_rot * vec3(tank_body.size)/2.f;
@@ -156,7 +163,7 @@ void Engine::handle_input(){
     }
     if(glfwGetKey(render.window.pointer, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
-        tank_body.rot *= quat(vec3(0,0,-.05));
+        tank_body.rot *= quat(vec3(0,0,-.02));
         quat new_rot = tank_body.rot;
 
         vec3 old_center = old_rot * vec3(tank_body.size)/2.f;
@@ -167,6 +174,34 @@ void Engine::handle_input(){
         tank_body.shift -= difference;
     }
     tank_body.rot = normalize(tank_body.rot);
+}
+
+void Engine::process_physics(){
+     vec3 tank_body_center = tank_body.rot * vec3(8.5,12.5, 0) + tank_body.shift;
+    ivec2 tank_body_center_in_blocks = ivec2(tank_body_center) / 16;
+    int block_under_body = int(tank_body_center.z) / 16;
+
+    if(any(lessThan(tank_body_center_in_blocks, ivec2(0)))) return;
+    if(any(greaterThanEqual(tank_body_center_in_blocks, ivec2(render.world_size)))) return;
+
+    int selected_block = 0;
+    
+    if(render.origin_world(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, block_under_body+1) != 0){
+        selected_block = block_under_body+1;
+    } else if(render.origin_world(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, block_under_body) != 0){
+        selected_block = block_under_body;
+    }else if(render.origin_world(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, block_under_body-1) != 0){
+        selected_block = block_under_body-1;
+    } else {
+        for(selected_block=render.world_size.z-1; selected_block>=0; selected_block--){
+            BlockID_t blockId = render.origin_world(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, selected_block);
+
+            if (blockId != 0) break;
+        }
+    }
+
+    physical_body_height = float(selected_block)*16.0 + 16.0;
+    // tank_body.shift.z = float(selected_block)*16.0 + 16.0;
 }
 
 void Engine::process_animations(){
@@ -180,21 +215,26 @@ void Engine::process_animations(){
         // p.matID = 170;
         p.matID = 79;
     render.particles.push_back(p);
-    if(ui.data_bound.if_pressed) {
+    if(glfwGetKey(render.window.pointer, GLFW_KEY_ENTER) == GLFW_PRESS) {
             p.lifeTime = 12.0;
-            p.pos = vec3(16.5,3,9.5) + tank_head.shift;
+            p.pos = tank_head.rot*vec3(16.5,3,9.5) + tank_head.shift;
             p.matID = 249;
-            p.vel = (rnVec3(0,1)*2.f - 1.f)*.5f + vec3(0,-1,0)*100.f;
+            p.vel = (rnVec3(0,1)*2.f - 1.f)*.5f + tank_head.rot*vec3(0,-1,0)*100.f;
         render.particles.push_back(p);
 
         p.lifeTime = 2.5;
-        p.pos = vec3(16.5,3,9.5) + tank_head.shift;
+        // p.pos = vec3(16.5,3,9.5) + tank_head.shift;
         p.matID = 177;
-        for(int i=0; i< 50; i++){
-            p.vel = (rnVec3(0,1)*2.f - 1.f)*15.f;
+        for(int i=0; i< 30; i++){
+            p.vel = (rnVec3(0,1)*2.f - 1.f)*25.f;
         render.particles.push_back(p);
         }
     }
+    tank_head.rot = normalize(glm::mix(tank_head.rot, quat(vec3(0,0,pi<float>()))*tank_body.rot, 0.05f));
+    // tank_head.rot*=quat(vec3(0,0,pi<float>()));
+
+    interpolated_body_height = glm::mix(interpolated_body_height, physical_body_height, 0.05);
+    tank_body.shift.z = interpolated_body_height;
         
     //bind tank parts to body
     vec3 body_head_joint_shift = tank_body.rot * vec3(8.5,12.5, tank_body.size.z);
@@ -215,22 +255,22 @@ void Engine::process_animations(){
     tank_lf_leg.rot = quat(-vec3(0,0,pi<float>())) * tank_body.rot;
     tank_rb_leg.rot = tank_body.rot;
 
-    target_points[0] = vec2(body_rf_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-    target_points[1] = vec2(body_lb_leg_joint) + vec2(-tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-    target_points[2] = vec2(body_lf_leg_joint) + vec2(-tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-    target_points[3] = vec2(body_rb_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
+    target_leg_points[0] = vec2(body_rf_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
+    target_leg_points[1] = vec2(body_lb_leg_joint) + vec2(-tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
+    target_leg_points[2] = vec2(body_lf_leg_joint) + vec2(-tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
+    target_leg_points[3] = vec2(body_rb_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
 
     for (int i=0; i<4; i++){
-        if(distance(points[i], target_points[i]) > 6.f) {
-            points[i] = target_points[i];
+        if(distance(physical_points[i], target_leg_points[i]) > 6.f) {
+            physical_points[i] = target_leg_points[i];
         };
-        interpolated_points[i] = mix(interpolated_points[i], points[i], 0.6);
+        interpolated_leg_points[i] = mix(interpolated_leg_points[i], physical_points[i], 0.6);
     }
     
-    vec2 rf_direction = normalize(interpolated_points[0] - vec2(body_rf_leg_joint));
-    vec2 lb_direction = normalize(interpolated_points[1] - vec2(body_lb_leg_joint));
-    vec2 lf_direction = normalize(interpolated_points[2] - vec2(body_lf_leg_joint));
-    vec2 rb_direction = normalize(interpolated_points[3] - vec2(body_rb_leg_joint));
+    vec2 rf_direction = normalize(interpolated_leg_points[0] - vec2(body_rf_leg_joint));
+    vec2 lb_direction = normalize(interpolated_leg_points[1] - vec2(body_lb_leg_joint));
+    vec2 lf_direction = normalize(interpolated_leg_points[2] - vec2(body_lf_leg_joint));
+    vec2 rb_direction = normalize(interpolated_leg_points[3] - vec2(body_rb_leg_joint));
     //now legs are attached
     //to make them animated, we need to pick a point and try to follow it for while
     //we know tank direction
@@ -322,9 +362,9 @@ void Engine::draw()
                     render.mapMesh(&tank_rb_leg);
                 render.endMap();
                 render.raytrace();
-                render.denoise(3, 2, DENOISE_TARGET_LOWRES);
+                render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
                 render.accumulate();
-                render.denoise(7, 2, DENOISE_TARGET_LOWRES);
+                render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(5, 2, DENOISE_TARGET_LOWRES);
@@ -333,7 +373,7 @@ void Engine::draw()
                     // render.denoise(5, 1, DENOISE_TARGET_LOWRES);
                     render.upscale();
                 }
-                render.denoise(2, 1, DENOISE_TARGET_HIGHRES);
+                render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
         render.endCompute();
@@ -347,13 +387,16 @@ void Engine::draw()
 }
 
 void Engine::setup(){
+println
     setup_graphics();
     setup_ui();
+println
 }
 
 void Engine::update(){
     update_system();
     handle_input();
+    process_physics();
     process_animations();
     cull_meshes();
     draw();

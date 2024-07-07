@@ -2,14 +2,12 @@
 
 #libs are -lglfw3 -lglew32s -lopengl32 -lgdi32 -lccd -lenet64 -lws2_32 -lwinmm
 # G++ = C:\msys64\mingw64\bin\g++ exe
-RML_UI = C:/prog/vcpkg/installed/x64-mingw-static
-VCPKG = C:/prog/vcpkg/installed/x64-mingw-static
 
-I = -I./src -I${VULKAN_SDK}/Include -I./common -I$(RML_UI)/Include
-L = -L${VULKAN_SDK}/Lib -L$(VCPKG)/lib
-F = -pipe -fno-exceptions -O1
+I = -I./src -I${VULKAN_SDK}/Include -I./common -I${VCPKG_ROOT}/installed/x64-mingw-static/Include
+L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
+F = -pipe -fno-exceptions -Os
 D = -DNDEBUG
-SA = -Os --target-env=vulkan1.1
+SA = -O --target-env=vulkan1.1
 A = $(I) $(F) $(args)
 
 objs := \
@@ -22,6 +20,7 @@ objs := \
 	obj/ui.o\
 	obj/ogt_vox.o\
 	obj/ogt_voxel_meshify.o\
+	obj/meshopt.o\
 	# obj/visible_world.o\
 
 srcs := \
@@ -34,11 +33,13 @@ srcs := \
 	src/renderer/ui.cpp\
 	common/ogt_vox.cpp\
 	common/ogt_voxel_meshify.cpp\
+	common/meshopt.cpp\
 
 headers:= \
 	src/renderer/render.hpp\
 	src/renderer/ui.hpp\
 	common/ogt_vox.hpp\
+	common/meshopt.hpp\
 	common/ogt_voxel_meshify.hpp\
 	# src/renderer/visible_world.hpp\
 
@@ -67,8 +68,10 @@ measure: client
 
 obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
 	g++ common/ogt_vox.cpp -O2 -c -o obj/ogt_vox.o $(F) $(I) $(args)
-obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp
+obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp common/meshopt.hpp
 	g++ common/ogt_voxel_meshify.cpp -O2 -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
+obj/meshopt.o: common/meshopt.cpp common/meshopt.hpp
+	g++ common/meshopt.cpp -O2 -c -o obj/meshopt.o $(F) $(I) $(args)
 obj/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.hpp src/renderer/ui.hpp
 	g++ src/engine.cpp -c -o obj/engine.o $(F) $(I) $(args)
 obj/render.o: src/renderer/render.cpp src/renderer/render.hpp
@@ -87,7 +90,7 @@ obj/main.o: src/main.cpp $(headers)
 client: $(objs) $(_shaders)
 	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 $(args)
 client_opt:
-	g++ $(srcs) $(I) $(L) $(D) -ftree-parallelize-loops=4 -fopenmp -lglfw3 -lvolk -lRmlCore -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -Os -pipe -fno-exceptions -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
+	g++ $(srcs) $(I) $(L) $(D) -lglfw3 -lvolk -lRmlCore -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -Os -pipe -fno-exceptions -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
 
 shaders/compiled/vert.spv: shaders/vert.vert
 	glslc shaders/vert.vert -o shaders/compiled/vert.spv $(SA)
@@ -114,8 +117,6 @@ shaders/compiled/dfy.spv: shaders/dfy.comp
 	glslc shaders/dfy.comp -o shaders/compiled/dfy.spv $(SA)
 shaders/compiled/dfz.spv: shaders/dfz.comp
 	glslc shaders/dfz.comp -o shaders/compiled/dfz.spv $(SA)
-# shaders/compiled/comp.spv: shaders/comp.comp
-# 	glslc shaders/comp.comp -o shaders/compiled/comp.spv $(SA)
 shaders/compiled/comp.spv: shaders/compopt.comp
 	glslc shaders/compopt.comp -o shaders/compiled/comp.spv $(SA)
 shaders/compiled/denoise.spv: shaders/denoise.comp
@@ -137,7 +138,7 @@ fun:
 	@echo fun was never an option
 opt: client_opt
 # client.exe
-clean: #for fixing buld bugs :)
+clean: #for fixing build bugs :)
 	-del "obj\*.o" 
 	-del "shaders\compiled\*.spv" 
 test: test.cpp
