@@ -85,12 +85,16 @@ float random_0to1(vec3 f) {
 
 vec2 random_storage;
 float Random1D(){
-    float res = sin(sin(dot(random_storage, vec2(12.9898, 78.233))) * 43758.5453);
-
+    // float res = sin((dot(random_storage, vec2(12.9898, 78.233))) * 43758.5453);
+    // random_storage.x = random_storage.y;
+    // random_storage.y = res;
+    
+    float res = fract(sin(dot(random_storage, vec2(12.9898,78.233))) * 43758.5453123);
     random_storage.x = random_storage.y;
     random_storage.y = res;
-    
-    return res;
+
+    // return sin(sin(res*780.233)*43758.5453);
+    return (res);
 }
 
 vec2 Random2D(){
@@ -290,7 +294,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
     if(subgroupElect()){
         int difference = max_steps - average_counter;
         float ratio = float(average_counter) / float(max_steps); 
-        int proportional_steps = int(float(max_steps) * 0.3);
+        int proportional_steps = int(float(max_steps) * 0.5);
         // ratio *= 0.95;
 
         int high = 28;
@@ -770,9 +774,13 @@ void main(void){
     if (pix.x >= size.x || pix.y >= size.y) {return;}
     const vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
 
-    random_storage = vec2(float(PushConstants.timeSeed), pos.x*pos.y);
-
+    random_storage = vec2(float(PushConstants.timeSeed)*pos.x, pos.x*pos.y);
+// #define DYNAMIC_STEP_COUNTER
+    #ifdef DYNAMIC_STEP_COUNTER
     step_counts = imageLoad(step_count, warp_id);
+    #else
+    step_counts = ivec4(256);
+    #endif
     //unnecessary - already in reasonable range
     // if(subgroupElect()){
     //     if(PushConstants.timeSeed.x < 2) {imageStore(step_count, warp_id, uvec4(256));}
@@ -853,5 +861,8 @@ void main(void){
     
     imageStore(frame, pix, vec4(encode_color(color), 1));
 
+    #ifdef DYNAMIC_STEP_COUNTER
     imageStore(step_count, warp_id, step_counts);
+    #else
+    #endif
 }

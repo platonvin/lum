@@ -279,7 +279,7 @@ class MyRenderInterface;
 
 class Renderer {
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int _static_block_palette_size=128, int max_particle_count=1024, vec2 ratio = vec2(2.0), bool vsync=true, bool fullscreen = false);
+    void init(int x_size=8, int y_size=8, int z_size=8, int _static_block_palette_size=128, int max_particle_count=1024, float ratio = 1.5f, bool vsync=true, bool fullscreen = false);
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -306,9 +306,10 @@ public:
     int   pre_denoiser_count = 0;
     int  post_denoiser_count = 0;
     int final_denoiser_count = 0;
+    float _ratio;
+    // float fratio;
 private:
     bool has_palette = false;
-    vec2 _ratio;
     int _max_particle_count;
     vector<VkImageCopy> copy_queue = {};
 public:

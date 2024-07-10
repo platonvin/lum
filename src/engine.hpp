@@ -1,3 +1,5 @@
+#pragma once
+
 #include <algorithm>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/scalar_constants.hpp>

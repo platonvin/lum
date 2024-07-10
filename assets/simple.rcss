@@ -90,6 +90,18 @@ button {
     cursor: pointer;
 }
 
+input{
+    width: 40dp;
+    height: 40dp;
+    /* margin: 1dp 10dp;
+    padding: 1dp 20dp; */
+    /* background-color: #858686; */
+    decorator: gradient( horizontal #d62626 #ffc0a7 );
+    border: 2dp #3b3b3b;
+    border-radius: 6px; /* Rounded edges */
+    cursor: pointer;
+}
+
 button:hover {
     background-color: #c0c0c0;
 }

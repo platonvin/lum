@@ -62,15 +62,20 @@ float physical_body_height;
 float interpolated_body_height;
 Block** block_palette = {};
 
+static double curr_time = 0;
+static double prev_time = 0;
+static double delt_time = 0;
+static double block_placement_delay = 0;
+
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 10, 8128, vec2(1.5), false, false);
+    render.init(48, 48, 16, 15, 8128, float(1.5), false, false);
     vkDeviceWaitIdle(render.device);
 
     render.load_scene("assets/scene");
-
+    // render.origin_world.set(0);
     // Mesh tank_head = {};
         render.load_mesh(&tank_body, "assets/tank_body.vox");
-        tank_body.shift += vec3(34.1,30.1,38.1);
+        tank_body.shift += vec3(13.1,14.1,3.1)*16.0f;
         render.load_mesh(&tank_head, "assets/tank_head.vox");
 
         render.load_mesh(&tank_rf_leg, "assets/tank_rf_lb_leg.vox");
@@ -86,14 +91,17 @@ void Engine::setup_graphics(){
     render.load_block(&block_palette[1], "assets/dirt.vox");
     render.load_block(&block_palette[2], "assets/grass.vox");
     render.load_block(&block_palette[3], "assets/grassNdirt.vox");
-    render.load_block(&block_palette[4], "assets/bush.vox");
-    // render->load_block(&block_palette[4], "assets/leaves.vox");
-    render.load_block(&block_palette[5], "assets/iron.vox");
-    // render.load_block(&block_palette[5], "assets/stone_brick.vox");
-    render.load_block(&block_palette[6], "assets/stone_brick_cracked.vox");
-    render.load_block(&block_palette[7], "assets/stone_pack.vox");
-    render.load_block(&block_palette[8], "assets/stone_dirt.vox");
-    render.load_block(&block_palette[9], "assets/lamp.vox");
+    render.load_block(&block_palette[4], "assets/stone_dirt.vox");
+    render.load_block(&block_palette[5], "assets/bush.vox");
+    render.load_block(&block_palette[6], "assets/leaves.vox");
+    render.load_block(&block_palette[7], "assets/iron.vox");
+    render.load_block(&block_palette[8], "assets/lamp.vox");
+    render.load_block(&block_palette[9], "assets/stone_brick.vox");
+    render.load_block(&block_palette[10], "assets/stone_brick_cracked.vox");
+    render.load_block(&block_palette[11], "assets/stone_pack.vox");
+    render.load_block(&block_palette[12], "assets/bark.vox");
+    render.load_block(&block_palette[13], "assets/wood.vox");
+    render.load_block(&block_palette[14], "assets/planks.vox");
 
 
 // println
@@ -120,12 +128,15 @@ void Engine::update_system(){
 
 void Engine::handle_input(){
     should_close |= (glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
-
+    
     #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
-    set_key(GLFW_KEY_W, render.camera_pos += vec3(0,+1.4,0));
-    set_key(GLFW_KEY_S, render.camera_pos += vec3(0,-1.4,0));
-    set_key(GLFW_KEY_A, render.camera_pos += vec3(  -1.4,0,0));
-    set_key(GLFW_KEY_D, render.camera_pos += vec3(  +1.4,0,0));
+    set_key(GLFW_KEY_W, render.camera_pos += dvec3(dvec2(render.camera_dir),0) * 1.4);
+    set_key(GLFW_KEY_S, render.camera_pos -= dvec3(dvec2(render.camera_dir),0) * 1.4);
+
+    dvec3 camera_direction_to_right = dquat(dvec3(0.0, 0.0, pi<double>()/2.0)) * render.camera_dir;
+
+    set_key(GLFW_KEY_A, render.camera_pos += dvec3(dvec2(camera_direction_to_right),0) * 1.4);
+    set_key(GLFW_KEY_D, render.camera_pos -= dvec3(dvec2(camera_direction_to_right),0) * 1.4);
     // set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
     // set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
     set_key(GLFW_KEY_COMMA  , render.camera_dir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
@@ -134,24 +145,35 @@ void Engine::handle_input(){
     vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
     vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
     // render.particles[0].vel = vec3(0);
-    float tank_speed = 0.3;
-    set_key(GLFW_KEY_LEFT_SHIFT, tank_speed = 0.7);
-    set_key(GLFW_KEY_LEFT      , tank_body.shift -=   tank_direction_right*tank_speed);
-    set_key(GLFW_KEY_RIGHT     , tank_body.shift +=   tank_direction_right*tank_speed);
+    float tank_speed = 50.0 * delt_time;
+
+    // set_key(GLFW_KEY_LEFT_SHIFT, tank_speed = 1.5);
+    // set_key(GLFW_KEY_LEFT      , tank_body.shift -=   tank_direction_right*tank_speed);
+    // set_key(GLFW_KEY_RIGHT     , tank_body.shift +=   tank_direction_right*tank_speed);
     set_key(GLFW_KEY_UP        , tank_body.shift += tank_direction_forward*tank_speed);
     set_key(GLFW_KEY_DOWN      , tank_body.shift -= tank_direction_forward*tank_speed);
-    set_key(GLFW_KEY_LEFT_CONTROL  , tank_body.shift.z += 1.0f);
-    set_key(GLFW_KEY_LEFT_ALT      , tank_body.shift.z -= 1.0f);
+    // set_key(GLFW_KEY_LEFT_CONTROL  , tank_body.shift.z += tank_speed);
+    // set_key(GLFW_KEY_LEFT_ALT      , tank_body.shift.z -= tank_speed);
 
     ivec3 block_to_set = ivec3(vec3(tank_body.shift) + tank_body.rot*(vec3(tank_body.size)/2.0f))/16;
     block_to_set = clamp(block_to_set, ivec3(0), render.world_size-1);
-    for(int i=0; i<10; i++){
-    set_key(GLFW_KEY_0+i, render.origin_world(block_to_set.x, block_to_set.y, block_to_set.z) = 0+i);
-    }
 
-    if(glfwGetKey(render.window.pointer, GLFW_KEY_PAGE_UP) == GLFW_PRESS){
+    // if(block_placement_delay < 0){
+        for(int i=1; i<10; i++){
+            set_key(GLFW_KEY_0+i, render.origin_world(block_to_set.x, block_to_set.y, block_to_set.z) = 0+i);
+        }
+        for(int i=0; i<5; i++){
+            set_key(GLFW_KEY_F1+i, render.origin_world(block_to_set.x, block_to_set.y, block_to_set.z) = 10+i);
+        }    
+        set_key(GLFW_KEY_0, render.origin_world(block_to_set.x, block_to_set.y, block_to_set.z-1) = 0);
+        block_placement_delay = 0.1;
+    // } else {
+    //     block_placement_delay -= delt_time;
+    // }
+
+    if(glfwGetKey(render.window.pointer, GLFW_KEY_LEFT) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
-        tank_body.rot *= quat(vec3(0,0,+.02));
+        tank_body.rot *= quat(vec3(0,0,+.03 * 50.0*delt_time));
         quat new_rot = tank_body.rot;
 
         vec3 old_center = old_rot * vec3(tank_body.size)/2.f;
@@ -161,9 +183,9 @@ void Engine::handle_input(){
 
         tank_body.shift -= difference;
     }
-    if(glfwGetKey(render.window.pointer, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS){
+    if(glfwGetKey(render.window.pointer, GLFW_KEY_RIGHT) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
-        tank_body.rot *= quat(vec3(0,0,-.02));
+        tank_body.rot *= quat(vec3(0,0,-.03 * 50.0*delt_time));
         quat new_rot = tank_body.rot;
 
         vec3 old_center = old_rot * vec3(tank_body.size)/2.f;
@@ -210,7 +232,7 @@ void Engine::process_animations(){
 
     Particle p = {};
         p.lifeTime = 10.0 * (float(rand()) / float(RAND_MAX));
-        p.pos = vec3(17,42,27) + tank_head.shift;
+        p.pos = tank_head.rot*vec3(17,42,27) + tank_head.shift;
         p.vel = (rnVec3(0,1)*2.f - 1.f)*0.1f;
         // p.matID = 170;
         p.matID = 79;
@@ -224,7 +246,7 @@ void Engine::process_animations(){
 
         p.lifeTime = 2.5;
         // p.pos = vec3(16.5,3,9.5) + tank_head.shift;
-        p.matID = 177;
+        p.matID = 19;
         for(int i=0; i< 30; i++){
             p.vel = (rnVec3(0,1)*2.f - 1.f)*25.f;
         render.particles.push_back(p);
@@ -394,6 +416,11 @@ println
 }
 
 void Engine::update(){
+    prev_time = curr_time;
+    curr_time = glfwGetTime();
+    delt_time = curr_time-prev_time;
+    render.delta_time = delt_time;
+
     update_system();
     handle_input();
     process_physics();

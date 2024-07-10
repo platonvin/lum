@@ -9,13 +9,14 @@ using namespace glm;
 
 tuple<int, int> get_block_xy(int N);
 
-void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palette_size, int max_particle_count, vec2 ratio, bool vsync, bool fullscreen){
+void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palette_size, int max_particle_count, float ratio, bool vsync, bool fullscreen){
     world_size = ivec3(x_size, y_size, z_size);
      origin_world.allocate(world_size);
     current_world.allocate(world_size);
     _ratio = ratio;
+    // fratio = _rat
     _max_particle_count = max_particle_count;
-    is_scaled = (ratio != vec2(1));
+    is_scaled = (ratio != float(1));
     is_vsync = vsync;
     is_fullscreen = fullscreen;
     static_block_palette_size = _static_block_palette_size;
@@ -332,8 +333,8 @@ void Renderer::create_Swapchain(){
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
     
-    raytraceExtent.width  = swapChainExtent.width  / _ratio.x;
-    raytraceExtent.height = swapChainExtent.height / _ratio.y;
+    raytraceExtent.width  = swapChainExtent.width  / _ratio;
+    raytraceExtent.height = swapChainExtent.height / _ratio;
 }
 
 void Renderer::cleanup_SwapchainDependent(){
@@ -645,7 +646,7 @@ void Renderer::updateParticles(){
         
         if(should_keep){
             particles[write_index] = particles[i];
-            delta_time = 1/75.0;
+            // delta_time = 1/75.0;
             particles[write_index].pos += particles[write_index].vel * float(delta_time);
             particles[write_index].lifeTime -= delta_time;
             

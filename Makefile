@@ -5,10 +5,9 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common -I${VCPKG_ROOT}/installed/x64-mingw-static/Include
 L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
-F = -pipe -fno-exceptions -Os
-D = -DNDEBUG
+debug_Flags = -pipe -fno-exceptions -Os
+release_Flags = -pipe -fno-exceptions -Os -DNDEBUG
 SA = -O --target-env=vulkan1.1
-A = $(I) $(F) $(args)
 
 objs := \
 	obj/main.o\
@@ -21,7 +20,6 @@ objs := \
 	obj/ogt_vox.o\
 	obj/ogt_voxel_meshify.o\
 	obj/meshopt.o\
-	# obj/visible_world.o\
 
 srcs := \
 	src/main.cpp\
@@ -41,7 +39,7 @@ headers:= \
 	common/ogt_vox.hpp\
 	common/meshopt.hpp\
 	common/ogt_voxel_meshify.hpp\
-	# src/renderer/visible_world.hpp\
+	common/engine.hpp\
 
 _shaders:= \
 	shaders/compiled/vert.spv\
@@ -62,33 +60,34 @@ _shaders:= \
 	shaders/compiled/upscale.spv\
 
 # flags = 
-all: client
+all: Flags=$(release_Flags)
+all: clean build
 	@echo compiled
-measure: client
+measure: build
 
 obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
-	g++ common/ogt_vox.cpp -O2 -c -o obj/ogt_vox.o $(F) $(I) $(args)
+	g++ common/ogt_vox.cpp -O2 -c -o obj/ogt_vox.o $(Flags) $(I) $(args)
 obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp common/meshopt.hpp
-	g++ common/ogt_voxel_meshify.cpp -O2 -c -o obj/ogt_voxel_meshify.o $(F) $(I) $(args)
+	g++ common/ogt_voxel_meshify.cpp -O2 -c -o obj/ogt_voxel_meshify.o $(Flags) $(I) $(args)
 obj/meshopt.o: common/meshopt.cpp common/meshopt.hpp
-	g++ common/meshopt.cpp -O2 -c -o obj/meshopt.o $(F) $(I) $(args)
+	g++ common/meshopt.cpp -O2 -c -o obj/meshopt.o $(Flags) $(I) $(args)
 obj/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.hpp src/renderer/ui.hpp
-	g++ src/engine.cpp -c -o obj/engine.o $(F) $(I) $(args)
+	g++ src/engine.cpp -c -o obj/engine.o $(Flags) $(I) $(args)
 obj/render.o: src/renderer/render.cpp src/renderer/render.hpp
-	g++ src/renderer/render.cpp -c -o obj/render.o $(F) $(I) $(args)
+	g++ src/renderer/render.cpp -c -o obj/render.o $(Flags) $(I) $(args)
 obj/setup.o: src/renderer/setup.cpp src/renderer/render.hpp
-	g++ src/renderer/setup.cpp -c -o obj/setup.o $(F) $(I) $(args)
+	g++ src/renderer/setup.cpp -c -o obj/setup.o $(Flags) $(I) $(args)
 obj/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp
-	g++ src/renderer/load_stuff.cpp -c -o obj/load_stuff.o $(F) $(I) $(args)
+	g++ src/renderer/load_stuff.cpp -c -o obj/load_stuff.o $(Flags) $(I) $(args)
 obj/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp
-	g++ src/renderer/render_ui_interface.cpp -c -o obj/render_ui_interface.o $(F) $(I) $(args)
+	g++ src/renderer/render_ui_interface.cpp -c -o obj/render_ui_interface.o $(Flags) $(I) $(args)
 obj/ui.o: src/renderer/ui.cpp src/renderer/render.hpp src/renderer/ui.hpp
-	g++ src/renderer/ui.cpp -c -o obj/ui.o $(F) $(I) $(args)
-obj/main.o: src/main.cpp $(headers)
-	g++ src/main.cpp -c -o obj/main.o $(F) -pipe -fno-exceptions -O3 $(I) $(args)
+	g++ src/renderer/ui.cpp -c -o obj/ui.o $(Flags) $(I) $(args)
+obj/main.o: src/main.cpp src/engine.hpp
+	g++ src/main.cpp -c -o obj/main.o $(Flags) -pipe -fno-exceptions $(I) $(args)
 
-client: $(objs) $(_shaders)
-	g++ $(objs) -o client.exe $(F) $(I) $(L) -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 $(args)
+build: $(objs) $(_shaders)
+	g++ $(objs) -o client.exe $(Flags) $(I) $(L) -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 $(args)
 client_opt:
 	g++ $(srcs) $(I) $(L) $(D) -lglfw3 -lvolk -lRmlCore -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -Os -pipe -fno-exceptions -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
 
@@ -129,7 +128,13 @@ shaders/compiled/accumulate.spv: shaders/accumulate.comp
 init:
 	mkdir obj
 	mkdir shaders\compiled
-run: client
+
+debug: Flags=$(debug_Flags)
+# clean once before usage
+debug: build
+	client.exe
+release: Flags=$(release_Flags)
+release: build
 	client.exe
 # debug: client
 # 	F += -DNDEBUG
@@ -138,7 +143,7 @@ fun:
 	@echo fun was never an option
 opt: client_opt
 # client.exe
-clean: #for fixing build bugs :)
+clean:
 	-del "obj\*.o" 
 	-del "shaders\compiled\*.spv" 
 test: test.cpp

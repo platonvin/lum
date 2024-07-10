@@ -30,6 +30,14 @@
                     <button data-event-click="final_denoiser_increase">+</button>
                 </div>
             </div>
+            <div class="parameter">
+                <p>Upscaling ratio</p>
+                <div class="controls">
+                    <button data-event-click="upscaling_ratio_decrease">-</button>
+                    <span>{{upscaling_ratio}}</span>
+                    <button data-event-click="upscaling_ratio_increase">+</button>
+                </div>
+            </div>
         </div>
     </body>
 </rml>

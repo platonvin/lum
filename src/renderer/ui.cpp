@@ -298,6 +298,7 @@ static Renderer* _renderer;
 int   pre_counter_diff = 0;
 int  post_counter_diff = 0;
 int final_counter_diff = 0;
+float upscale_counter_diff = 0;
 
 static void _callback_pre_denoiser_decrease(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
 	pre_counter_diff--;	
@@ -317,6 +318,14 @@ static void _callback_final_denoiser_decrease(Rml::DataModelHandle, Rml::Event&,
 static void _callback_final_denoiser_increase(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
 	final_counter_diff++;	
 }
+static void _callback_upscale_decrease(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	upscale_counter_diff -= 0.05;
+}
+static void _callback_upscale_increase(Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&){
+	upscale_counter_diff += 0.05;	
+}
+
+static float temp = 109090.4;
 
 bool Ui::SetupDataBinding(Rml::Context* context, Rml::DataModelHandle& my_model){
 	Rml::DataModelConstructor constructor = context->CreateDataModel("my_model");
@@ -330,10 +339,14 @@ bool Ui::SetupDataBinding(Rml::Context* context, Rml::DataModelHandle& my_model)
 	constructor.BindEventCallback("post_denoiser_increase" ,  _callback_post_denoiser_increase);
 	constructor.BindEventCallback("final_denoiser_decrease", _callback_final_denoiser_decrease);
 	constructor.BindEventCallback("final_denoiser_increase", _callback_final_denoiser_increase);
+	
+	constructor.BindEventCallback("upscaling_ratio_decrease", _callback_upscale_decrease);
+	constructor.BindEventCallback("upscaling_ratio_increase", _callback_upscale_increase);
 
 	constructor.Bind("pre_counter", &_renderer->pre_denoiser_count);
 	constructor.Bind("post_counter", &_renderer->post_denoiser_count);
 	constructor.Bind("final_counter", &_renderer->final_denoiser_count);
+	constructor.Bind("upscaling_ratio", &_renderer->_ratio);
 	my_model = constructor.GetModelHandle();
 	
 
@@ -395,10 +408,12 @@ void Ui::update(){
 	context->ProcessMouseMove(int(floor(xpos)), int(floor(ypos)), 0);
 	
 	if(mouse_down_state != -1){
+		// printl(mouse_down_state)
 		context->ProcessMouseButtonDown(mouse_down_state, 0);
 		mouse_down_state = -1;
 	}
 	if(mouse_up_state != -1){
+		// printl(mouse_up_state)
 		context->ProcessMouseButtonUp(mouse_up_state, 0);
 		mouse_up_state = -1;
 	}
@@ -420,7 +435,14 @@ void Ui::update(){
 		my_model.DirtyVariable("final_counter");
 		final_counter_diff = 0;
 	}
-	
+	if(upscale_counter_diff != 0){
+		renderer->_ratio += upscale_counter_diff;
+		renderer->_ratio = glm::clamp(renderer->_ratio, 1.0f, 3.0f);
+		renderer->is_resized = true;
+
+		my_model.DirtyVariable("upscaling_ratio");
+		upscale_counter_diff = 0;
+	}
 
 	context->Update();
 }
