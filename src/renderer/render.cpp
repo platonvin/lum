@@ -1,3 +1,4 @@
+// #include "vulkan/vulkan_core.h"
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #include "render.hpp" 
@@ -39,14 +40,19 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
     create_Logical_Device();
 
     create_Allocator();
-    
-    create_Swapchain();
+
+    create_Swapchain(); //should be before anything related to its size and format
     create_Swapchain_Image_Views();
 
     create_RenderPass_Graphical();
     create_RenderPass_RayGen();
     create_RenderPass_RayGen_Particles();
 
+    create_samplers();
+
+    printl(VK_FORMAT_UNDEFINED)
+    printl(swapChainImageFormat)
+    
     create_Command_Pool();
     create_Command_Buffers(&graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
@@ -61,9 +67,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
     VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyGraphicalCommandBuffers.data())); 
     renderGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderGraphicalCommandBuffers.data())); 
-
-    create_samplers();
-
+    
     create_SwapchainDependent();
 
     create_Buffer_Storages(&staging_world,
@@ -377,7 +381,7 @@ void Renderer::create_SwapchainDependent(){
             create_Image_Storages(&oldUv_lowres,
                 VK_IMAGE_TYPE_2D,
                 OLD_UV_FORMAT,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT,
@@ -388,7 +392,7 @@ void Renderer::create_SwapchainDependent(){
             create_Image_Storages(&lowres_frames,
                 VK_IMAGE_TYPE_2D,
                 RAYTRACED_IMAGE_FORMAT,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT,
@@ -399,7 +403,7 @@ void Renderer::create_SwapchainDependent(){
             create_Image_Storages(&matNorm_lowres,
                 VK_IMAGE_TYPE_2D,
                 VK_FORMAT_R8G8B8A8_SNORM,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT,
@@ -423,7 +427,7 @@ void Renderer::create_SwapchainDependent(){
             create_Image_Storages(&oldUv_highres,
                 VK_IMAGE_TYPE_2D,
                 OLD_UV_FORMAT,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT,
@@ -437,7 +441,7 @@ void Renderer::create_SwapchainDependent(){
                 VK_IMAGE_TYPE_2D,
                 // VK_FORMAT_R8G8B8A8_UNORM, //cause errors do not accumulate and we can save on memory bandwith
                 RAYTRACED_IMAGE_FORMAT,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT,
@@ -580,9 +584,27 @@ void Renderer::recreate_SwapchainDependent(){
     
     vkDeviceWaitIdle(device);
     cleanup_SwapchainDependent();
+    vkDeviceWaitIdle(device);
 
     create_Swapchain();
     create_Swapchain_Image_Views();
+
+    vkDestroyCommandPool(device, commandPool, NULL);
+
+    create_Command_Pool();
+    create_Command_Buffers(&graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = commandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+        allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+    copyGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyGraphicalCommandBuffers.data())); 
+    renderGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderGraphicalCommandBuffers.data())); 
 
     create_SwapchainDependent();
 
@@ -593,6 +615,10 @@ void Renderer::recreate_SwapchainDependent(){
     }
     setup_Accumulate_Descriptors();
     setup_RayGen_Descriptors();
+    setup_RayGen_Particles_Descriptors();
+
+    
+    vkDeviceWaitIdle(device);
 } 
 
 void Renderer::create_Swapchain_Image_Views(){
@@ -1417,13 +1443,14 @@ void Renderer::start_ui(){
     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         // cout << KRED"failed to present swap chain image!\n" KEND;
-        recreate_SwapchainDependent();
-        return; // can be avoided, but it is just 1 frame 
+        // recreate_SwapchainDependent();
+        is_resized = true;
+        // return; // can be avoided, but it is just 1 frame 
     } else if ((result != VK_SUCCESS)) {
         printf(KRED "failed to acquire swap chain image!\n" KEND);
         exit(result);
     }
-    
+
     vkWaitForFences(device, 1, &graphicalInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
     vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
 
@@ -1445,8 +1472,8 @@ void Renderer::start_ui(){
 
         cmd_buf_inheritance_info.renderPass = NULL;
         cmd_buf_inheritance_info.framebuffer = NULL;
-        beginInfo.flags = 0;
-        beginInfo.pInheritanceInfo = &cmd_buf_inheritance_info;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = &cmd_buf_inheritance_info;
     VK_CHECK(vkBeginCommandBuffer(copyGraphicalCommandBuffers[currentFrame], &beginInfo));
         cmd_buf_inheritance_info.renderPass = graphicalRenderPass;
         cmd_buf_inheritance_info.framebuffer = swapChainFramebuffers[imageIndex];
@@ -1467,7 +1494,7 @@ void Renderer::start_ui(){
     UiRenderInterface->last_scissors.offset = {0,0};
     UiRenderInterface->last_scissors.extent = swapChainExtent;
     vkCmdSetScissor(renderGraphicalCommandBuffers[currentFrame], 0, 1, &UiRenderInterface->last_scissors);
-    
+
 }
 
 void Renderer::draw_ui(){
@@ -1801,7 +1828,7 @@ void Renderer::create_Image_Storages(Image* image,
     VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &image->view));
 
     transition_Image_Layout_Singletime(image->image, format, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pipeStage,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
         0, access);
 }
 

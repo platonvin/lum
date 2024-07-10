@@ -103,12 +103,8 @@ void Engine::setup_graphics(){
     render.load_block(&block_palette[13], "assets/wood.vox");
     render.load_block(&block_palette[14], "assets/planks.vox");
 
-
-// println
     render.update_Block_Palette(block_palette);
-// println
     render.update_Material_Palette(render.mat_palette);
-// println
     vkDeviceWaitIdle(render.device);
 }
 void Engine::setup_ui(){
@@ -409,10 +405,8 @@ void Engine::draw()
 }
 
 void Engine::setup(){
-println
     setup_graphics();
     setup_ui();
-println
 }
 
 void Engine::update(){
