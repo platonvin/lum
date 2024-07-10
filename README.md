@@ -2,7 +2,7 @@
 **Lum** is a demo of a voxel engine featuring raytraced lighting with high perfomance. Targets tiled minecraft-dungeons-style blocky graphics with isometric view (but can be used differently)
 
 ## Features
-- Raytraced (actually, path marched) Light
+- **Raytraced** (actually, path marched) **Light**
     - **Precise voxel raytracer**: Pure compute shaders without using the *VK_KHR_ray_tracing* extension
     - **Variance-guided temporal accumulation**: Considers normal and material information for improved quality
     - **`A-trous edge-preserving spatial denoiser**: Takes normal, material and depth information into account
@@ -53,7 +53,7 @@
   2. **G-buffer downscaling**
        - When upscaling is used, downscales images for raytracer, accumulator, and denoiser 
   3. **Block allocation**
-       - Scene is tiled, and air blocks are all "0", so to translate mesh in scene temporary blocks are allocated and "pointers" to them are written to scene
+       - Scene is tiled, and air blocks are all "0", so to translate mesh in scene temporary blocks are allocated and "pointers" to them are written to the scene
   4. **Mesh translation**
        - Translates all meshes to "world space" from their "model space"
   5. **Raytracer pass**
@@ -61,15 +61,15 @@
   6. **Optional pre-accumulator denoiser pass**
        - Denoises raytraced image
   7. **Accumulator**
-       - Mixes pixels with matching ones from previous frames using motion vectors
+       - Mixes pixels with matching ones from previous frames using motion vectors guided by G-buffer
   8. **Optional post-accumulator denoiser pass**
        - Denoises accumulated image
   9. **Upscaler**
-       - Uses G-buffer guided texture filtering to reconsturct highres image
+       - Uses G-buffer guided texture filtering to reconstruct highres image
   10. **Optional post-upscaler denoiser pass**
        - Denoises upscaled image
   11. **Ui and presentation**
-       - Renders Ui to copy of final image and presents it
+       - Renders Ui to copy of the final image and presents it
 
 ### Demo controls
 - denoiser and upscaler setting in ui

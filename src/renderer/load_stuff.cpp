@@ -272,9 +272,9 @@ void Renderer::free_mesh(Mesh* mesh){
 }
 
 // #define 
-static unsigned char pack_normal(vec<3, unsigned char, defaultp> normal){
+// static unsigned char pack_normal(vec<3, unsigned char, defaultp> normal){
 
-}
+// }
 void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
     ogt::ogt_voxel_meshify_context ctx = {};
     // ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
