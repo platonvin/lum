@@ -46,6 +46,8 @@
   - Run:\
 `$ ./client.exe`   
 
+Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for windows
+
 ## Engine Overview
 ### Stages
   1. **Ray generation**
@@ -80,3 +82,5 @@
 - 1-9 and F1-F5 to place matching blocks (btw world is saved to a file)
 - "<" and ">" to rotate camera
 - Esc to close demo
+
+2 Post-Denoiser steps, 1 Final denoiser step and x1.5 upscale ration recommended 
