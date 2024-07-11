@@ -1,6 +1,9 @@
 # Lum
 **Lum** is a demo of a voxel engine featuring raytraced lighting with high perfomance. Targets tiled minecraft-dungeons-style blocky graphics with isometric view (but can be used differently)
 
+##### Screenshot
+![alt text](screenshot_1.png)
+
 ## Features
 - **Raytraced** (actually, path marched) **Light**
     - **Precise voxel raytracer**: Pure compute shaders without using the *VK_KHR_ray_tracing* extension
