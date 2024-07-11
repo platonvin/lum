@@ -144,9 +144,16 @@ fun:
 opt: client_opt
 # client.exe
 clean:
-	-del "obj\*.o" 
-	-del "shaders\compiled\*.spv" 
+	del "obj\*.o" 
+	del "shaders\compiled\*.spv" 
 test: test.cpp
 	g++ test.cpp -o test
 	test
-#FUCK CMAKE
+pack:
+	mkdir "package"
+	mkdir "package/shaders/compiled"
+	mkdir "package/assets"
+	copy "client.exe" "package/client.exe"
+	copy "shaders/compiled" "package/shaders/compiled"
+	copy "assets" "package/assets"
+	powershell Compress-Archive -Update package package.zip

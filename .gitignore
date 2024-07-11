@@ -24,3 +24,5 @@ nv_traces
 amd_traces
 intel_traces
 temp.*
+package
+package.zip
