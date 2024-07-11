@@ -1,7 +1,7 @@
 #version 450 core
 
 //version with world from model
-
+#define varp lowp
 precision highp int;
 precision highp float;
 

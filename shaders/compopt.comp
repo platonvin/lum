@@ -2,14 +2,13 @@
 
 precision highp int;
 precision highp float;
-
+#define varp lowp
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
 layout(push_constant) uniform constants{
-    vec3 camera_pos;
-     int timeSeed;
-
-     vec4 camera_direction;
+    varp vec3 camera_pos;
+    varp  int timeSeed;
+    varp  vec4 camera_direction;
 } PushConstants;
 
 layout(set = 0, binding = 0, rgba8_snorm) uniform image2D     matNorm;
@@ -20,34 +19,34 @@ layout(set = 0, binding = 4, r32f       ) uniform image2D voxelPalette;
 layout(set = 0, binding = 5, rgba8ui    ) uniform uimage2D step_count;
 layout(set = 0, binding = 6, rgba16     ) uniform image2D frame;
 
-vec3 globalLightDir;
-vec3 cameraRayDirPlane;
-vec3 horizline;
-vec3 vertiline;
+varp vec3 globalLightDir;
+varp vec3 cameraRayDirPlane;
+varp vec3 horizline;
+varp vec3 vertiline;
 
-const int BLOCK_PALETTE_SIZE_X = 64;
-const int MAX_DEPTH = 4;
-const int NUM_SAMPLES = 1;
-const float PI = 3.1415926535;
-const float FAR_DISTANCE = 100000.0;
-const float nIN = 1.0;
-const float nOUT = 1.0;
+const varp int BLOCK_PALETTE_SIZE_X = 64;
+const varp int MAX_DEPTH = 4;
+const varp int NUM_SAMPLES = 1;
+const varp float PI = 3.1415926535;
+const varp float FAR_DISTANCE = 100000.0;
+const varp float nIN = 1.0;
+const varp float nOUT = 1.0;
 
-const ivec3 world_size = ivec3(48,48,16);
+const varp ivec3 world_size = ivec3(48,48,16);
 
-const float view_width  = 1920.0 / 10.0; //in block_diags
-const float view_height = 1080.0 / 10.0; //in blocks
+const varp float view_width  = 1920.0 / 10.0; //in block_diags
+const varp float view_height = 1080.0 / 10.0; //in blocks
 
-ivec2 size;
-ivec2 warp_id;
-ivec2 pix;
-uvec4 step_counts;
+varp  ivec2 size;
+varp  ivec2 warp_id;
+highp ivec2 pix;
+varp  uvec4 step_counts;
 
 struct Material{
-    vec3 color;
-    float emmitance;
-    float roughness;
-    float transparancy;
+    varp vec3 color;
+    varp float emmitance;
+    varp float roughness;
+    varp float transparancy;
 };
 
 uint hash3(uint x, uint y, uint z) {
@@ -84,7 +83,7 @@ float random_0to1(vec3 f) {
 }
 
 vec2 random_storage;
-float Random1D(){
+varp float Random1D(){
     // float res = sin((dot(random_storage, vec2(12.9898, 78.233))) * 43758.5453);
     // random_storage.x = random_storage.y;
     // random_storage.y = res;
@@ -100,71 +99,71 @@ float Random1D(){
 vec2 Random2D(){
     return (vec2(Random1D(), Random1D()));
 }
-vec3 Random3D() {
+varp vec3 Random3D() {
     return vec3(Random1D(), Random1D(), Random1D());
 }
 
-vec3 randomSpherePoint(vec3 rand) {
-    float ang1 = (rand.x + 1.0) * PI; // [-1..1) -> [0..2*PI)
-    float u = rand.y; // [-1..1), cos and acos(2v-1) cancel each other out, so we arrive at [-1..1)
-    float u2 = u * u;
-    float sqrt1MinusU2 = sqrt(1.0 - u2);
-    float x = sqrt1MinusU2 * cos(ang1);
-    float y = sqrt1MinusU2 * sin(ang1);
-    float z = u;
+varp vec3 randomSpherePoint(varp vec3 rand) {
+    varp float ang1 = (rand.x + 1.0) * PI; // [-1..1) -> [0..2*PI)
+    varp float u = rand.y; // [-1..1), cos and acos(2v-1) cancel each other out, so we arrive at [-1..1)
+    varp float u2 = u * u;
+    varp float sqrt1MinusU2 = sqrt(1.0 - u2);
+    varp float x = sqrt1MinusU2 * cos(ang1);
+    varp float y = sqrt1MinusU2 * sin(ang1);
+    varp float z = u;
     return vec3(x, y, z);
 }
 
-vec3 NormalOrientedHemispherePoint(vec3 rand, vec3 n){
-    vec3 v = randomSpherePoint(rand);
+varp vec3 NormalOrientedHemispherePoint(varp vec3 rand, varp vec3 n){
+    varp vec3 v = randomSpherePoint(rand);
     return v * sign(dot(v, n));
 }
 
-vec3 randomCosineWeightedHemispherePoint(vec3 rand, vec3 n) {
-    float r = rand.x * 0.5 + 0.5; // [-1..1) -> [0..1)
-    float angle = PI*rand.y + PI; // [-1..1] -> [0..2*PI)
-    float sr = sqrt(r);
-    vec2 p = vec2(sr * cos(angle), sr * sin(angle));
-    vec3 ph = vec3(p.xy, sqrt(1.0 - p*p));
-    vec3 tangent = normalize(rand);
-    vec3 bitangent = cross(tangent, n);
+varp vec3 randomCosineWeightedHemispherePoint(varp vec3 rand, varp vec3 n) {
+    varp float r = rand.x * 0.5 + 0.5; // [-1..1) -> [0..1)
+    varp float angle = PI*rand.y + PI; // [-1..1] -> [0..2*PI)
+    varp float sr = sqrt(r);
+    varp vec2 p = vec2(sr * cos(angle), sr * sin(angle));
+    varp vec3 ph = vec3(p.xy, sqrt(1.0 - p*p));
+    varp vec3 tangent = normalize(rand);
+    varp vec3 bitangent = cross(tangent, n);
     tangent = cross(bitangent, n);
     
     return tangent * ph.x + bitangent * ph.y + n * ph.z;
     }
-vec3 get_origin_from_depth(float depth, vec2 uv_pos){
-    const vec2 view_size = vec2(view_width, view_height);
-    const vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
+varp vec3 get_origin_from_depth(varp float depth, varp vec2 uv_pos){
+    const varp vec2 view_size = vec2(view_width, view_height);
+    const varp vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
     
-    vec3 origin = PushConstants.camera_pos.xyz + 
+    varp vec3 origin = PushConstants.camera_pos.xyz + 
         (horizline*clip_pos_scaled.x) + 
         (vertiline*clip_pos_scaled.y) +
         (PushConstants.camera_direction.xyz*depth);
     return origin;
 }
 
-int GetBlock(in ivec3 block_pos){
-    int block;
+varp int GetBlock(in varp  ivec3 block_pos){
+    varp int block;
     block = int((imageLoad(blocks, block_pos).r));
     return block;
 }
 
-ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
-    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
-    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+varp ivec3 voxel_in_palette(varp ivec3 relative_voxel_pos, varp int block_id) {
+    varp int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    varp int block_y = block_id / BLOCK_PALETTE_SIZE_X;
 
     return relative_voxel_pos + ivec3(16*block_x, 16*block_y, 0);
 }
-int GetVoxel(in ivec3 pos){
-    int voxel;
+varp int GetVoxel(in varp ivec3 pos){
+    varp int voxel;
 
     // if(((pos.x + pos.y)%2)==0) return 2;
     // if(((pos.x + pos.y)%5)==0) return 5;
     // if(((pos.x + pos.y)%7)==1) return 7;
     // if(((pos.x + pos.y)%9)==0) return 9;
 
-    ivec3 block_pos = pos / 16;
-    ivec3 relative_voxel_pos = pos % 16;
+    varp ivec3 block_pos = pos / 16;
+    varp ivec3 relative_voxel_pos = pos % 16;
 
     // if(((block_pos.x + block_pos.y)%2)==0) return 1;
     // if(((block_pos.x + block_pos.y)%5)==0) return 2;
@@ -172,24 +171,23 @@ int GetVoxel(in ivec3 pos){
     // if(((block_pos.x + block_pos.y)%9)==0) return 4;
     // if(((block_pos.x + block_pos.y)%13)==0) return 5;
 
-    int block_id = GetBlock(block_pos);
-    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+    varp int block_id = GetBlock(block_pos);
+    varp ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
     voxel = int(imageLoad(blockPalette, voxel_pos).r);
 
     return voxel;
 }
-void SetVoxel(in ivec3 pos, in uint voxel){
-    
-    ivec3 block_pos = pos / 16;
-    ivec3 relative_voxel_pos = pos % 16;
+void SetVoxel(in varp ivec3 pos, in varp uint voxel){
+    varp ivec3 block_pos = pos / 16;
+    varp ivec3 relative_voxel_pos = pos % 16;
 
-    int block_id = GetBlock(block_pos);
-    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+    varp int block_id = GetBlock(block_pos);
+    varp ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
     
     imageStore(blockPalette, voxel_pos, uvec4(voxel));
 }
 
-Material GetMat(in int voxel){
+Material GetMat(in varp int voxel){
     Material mat;
 
     mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
@@ -209,8 +207,8 @@ Material GetMat(in int voxel){
 return mat;
 }
 
-bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOrigin, in vec3 rayDirection){
-    vec3 effective_origin = rayOrigin;
+bool initTvals(out varp vec3 tMax, out varp vec3 tDelta, out varp ivec3 blockPos, in varp vec3 rayOrigin, in varp vec3 rayDirection){
+    varp vec3 effective_origin = rayOrigin;
 
 
     // blockPos = ivec3(block_corner1)*16; //round origin to block pos
@@ -222,8 +220,8 @@ bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOr
     // block_corner1 /= rayDirection; //now corners are in relative direction vectors
     // block_corner2 /= rayDirection;
 
-    vec3 block_corner1 = (floor(effective_origin) - effective_origin)/rayDirection; //now corners are relative vectors
-    vec3 block_corner2 = (floor(effective_origin) - effective_origin)/rayDirection  + 1.0/rayDirection;
+    varp vec3 block_corner1 = (floor(effective_origin) - effective_origin)/rayDirection; //now corners are relative vectors
+    varp vec3 block_corner2 = (floor(effective_origin) - effective_origin)/rayDirection  + 1.0/rayDirection;
     tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
     tMax.y = max(block_corner1.y, block_corner2.y);
     tMax.z = max(block_corner1.z, block_corner2.z);
@@ -235,29 +233,30 @@ bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOr
 }
 
 //is actually precise
-bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction, out vec3 normal, out Material material, float ignored_voxel, in int current_reflection){
+bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection, 
+        out varp float fraction, out varp vec3 normal, out Material material, varp float ignored_voxel, in varp int current_reflection){
     bool block_hit = false;
 
-    ivec3 steps;
+    varp ivec3 steps;
     steps = ivec3(greaterThan(rayDirection, vec3(0)));
     steps = 2 * steps + (-1);
 
-    vec3 fsteps = vec3(steps);
+    varp vec3 fsteps = vec3(steps);
 
-    vec3 tMax = vec3(0);
-    vec3 tDelta = vec3(0);
-    ivec3 voxel_pos = ivec3(0);
-    float block_fraction = 0.0;
+    varp vec3 tMax = vec3(0);
+    varp vec3 tDelta = vec3(0);
+    varp ivec3 voxel_pos = ivec3(0);
+    varp float block_fraction = 0.0;
 
-    ivec3 fcurrentStepDiretion = ivec3(0);
+    varp ivec3 fcurrentStepDiretion = ivec3(0);
 
     initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
     
-    int current_voxel = GetVoxel(voxel_pos);
+    varp int current_voxel = GetVoxel(voxel_pos);
 
-    int max_steps = int(step_counts[current_reflection]);
+    varp int max_steps = int(step_counts[current_reflection]);
     
-    int iterations = 0;
+    varp int iterations = 0;
     while (true) {
 
         bool xLy = tMax.x <= tMax.y;
@@ -289,18 +288,18 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
         }
     }
 
-    int used_counter = iterations;
-    int average_counter = subgroupAdd(used_counter) / int(gl_SubgroupSize);
+    varp int used_counter = iterations;
+    varp int average_counter = subgroupAdd(used_counter) / int(gl_SubgroupSize);
     if(subgroupElect()){
-        int difference = max_steps - average_counter;
-        float ratio = float(average_counter) / float(max_steps); 
-        int proportional_steps = int(float(max_steps) * 0.5);
+        varp int difference = max_steps - average_counter;
+        varp float ratio = float(average_counter) / float(max_steps); 
+        varp int proportional_steps = int(float(max_steps) * 0.5);
         // ratio *= 0.95;
 
-        int high = 28;
-        int low = 17;
-        int border = 65;
-        int difference_to_cmp = proportional_steps + 30;
+        varp int high = 28;
+        varp int low = 17;
+        varp int border = 65;
+        varp int difference_to_cmp = proportional_steps + 30;
         
         if(difference < difference_to_cmp-5){
         // if(
@@ -323,7 +322,7 @@ bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, out float fraction
     }
 
     normal = -(fsteps * fcurrentStepDiretion);
-    vec3 tFinal = tMax - tDelta;
+    varp vec3 tFinal = tMax - tDelta;
     // block_fraction += dot(tFinal, fcurrentStepDiretion);
     block_fraction = dot(tFinal, fcurrentStepDiretion);
 
@@ -571,20 +570,20 @@ bool IsRefracted(in vec3 rayDirection, in vec3 normal, in float transparancy){
     return (transparancy > rand) && (fresnel < rand); // && transparancy == 0.0;
 }
 
-void ProcessHit(inout vec3 origin, inout vec3 direction, 
-                in float fraction, in vec3 normal, in Material material, 
-                inout vec3 accumulated_light, inout vec3 accumulated_reflection){
+void ProcessHit(inout varp vec3 origin, inout varp vec3 direction, 
+                in varp float fraction, in varp vec3 normal, in Material material, 
+                inout varp vec3 accumulated_light, inout varp vec3 accumulated_reflection){
 
-            vec3 new_origin = origin + (fraction * direction);
+            varp vec3 new_origin = origin + (fraction * direction);
 
-            vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random3D(), normal);
+            varp vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random3D(), normal);
             // vec3 hemisphereDistributedDirection = randomCosineWeightedHemispherePoint((Random3D()), normal);
             // vec3 randomVec = normalize(2.0 * Random3D() - 1.0);
             // vec3 tangent = cross(randomVec, normal);
             // vec3 bitangent = cross(normal, tangent);
             // mat3 transform = mat3(tangent, bitangent, normal);
 
-            vec3 new_direction = hemisphereDistributedDirection;
+            varp vec3 new_direction = hemisphereDistributedDirection;
 
             bool refracted = IsRefracted(direction, normal, material.transparancy);
             refracted = false;//TODO:
@@ -597,7 +596,7 @@ void ProcessHit(inout vec3 origin, inout vec3 direction,
             }
             else
             {
-                vec3 idealReflection = reflect(direction, normal);
+                varp vec3 idealReflection = reflect(direction, normal);
                 new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
                 new_origin += normal * 0.001;
                 accumulated_reflection *= material.color;
@@ -650,23 +649,23 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
 }
 
 
-vec3 load_norm(ivec2 pixel){
-    vec3 norm = (imageLoad(matNorm, pixel).gba);
+varp vec3 load_norm(highp ivec2 pixel){
+    varp vec3 norm = (imageLoad(matNorm, pixel).gba);
     return norm;
 }
-int load_mat(ivec2 pixel){
-    int mat = int(round(imageLoad(matNorm, pixel).x*127.0))+127;
+varp int load_mat(highp ivec2 pixel){
+    varp int mat = int(round(imageLoad(matNorm, pixel).x*127.0))+127;
     return mat;
 }
-float load_depth(ivec2 pixel){
-    vec2 uv = (vec2(pixel)+0.5)/vec2(size);
-    float depth_encoded = texture(depthBuffer, uv).x;
+varp float load_depth(highp ivec2 pixel){
+    varp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
+    highp float depth_encoded = texture(depthBuffer, uv).x;
     return (1.0-depth_encoded)*1000.0;
 }
 
-bool ssr_intersects(in float test_depth, in vec2 pix, inout bool smooth_intersection){
-    float depth = load_depth(ivec2(pix));
-    float diff = test_depth - depth;
+bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smooth_intersection){
+    varp float depth = load_depth(ivec2(pix));
+    varp float diff = test_depth - depth;
     bool ssr = false;
     smooth_intersection = false;
     // if(diff >= 0.03)    {ssr = true;}
@@ -679,9 +678,9 @@ bool ssr_intersects(in float test_depth, in vec2 pix, inout bool smooth_intersec
     return ssr;
     // return false;
 }
-bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out float fraction, out vec3 normal, out Material material){
+bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in varp vec2 start_pix, out varp float fraction, out varp vec3 normal, out Material material){
 
-    int counter=0;
+    varp int counter=0;
     //vertical component of direction relative to camera plane
 
     //for every 1 parrallel to camera plane this much depth
@@ -694,17 +693,17 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out floa
     // float div = 10.0;
         
     bool smooth_intersection = false;
-    float fraction_step = .15;
+    varp float fraction_step = .15;
     
     fraction = 0.0;
     fraction = fraction_step;
 
-    vec2 ssr_pix = start_pix;
-    float depth = 0;
+    varp vec2 ssr_pix = start_pix;
+    varp float depth = 0;
     while(true){
         //TODO turn into cached step 
-        vec3 new_origin = origin + direction*fraction;
-        vec3 relative_pos = new_origin - PushConstants.camera_pos.xyz;
+        varp vec3 new_origin = origin + direction*fraction;
+        varp vec3 relative_pos = new_origin - PushConstants.camera_pos.xyz;
         depth = dot(relative_pos, PushConstants.camera_direction.xyz);
         ssr_pix.x = ((dot(relative_pos, horizline)/(view_width *2.0)) +0.5)*float(size.x);
         ssr_pix.y = ((dot(relative_pos, vertiline)/(view_height*2.0)) +0.5)*float(size.y);
@@ -741,16 +740,16 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, in vec2 start_pix, out floa
 
 //     weight
 // }
-float luminance(vec3 color){
-    vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
+varp float luminance(varp vec3 color){
+    varp vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
     return dot(color, luminance_const);
 }
 
-const float COLOR_ENCODE_VALUE = 5.0;
-vec3 decode_color(vec3 encoded_color){
+const varp float COLOR_ENCODE_VALUE = 5.0;
+varp vec3 decode_color(varp vec3 encoded_color){
     return clamp(encoded_color,0,1)*vec3(COLOR_ENCODE_VALUE);
 }
-vec3 encode_color(vec3 color){
+varp vec3 encode_color(varp vec3 color){
     return clamp(color/vec3(COLOR_ENCODE_VALUE), 0,1);
 }
 
@@ -772,7 +771,7 @@ void main(void){
     pix = ivec2(gl_GlobalInvocationID.xy);
     warp_id = ivec2(gl_WorkGroupID.xy);
     if (pix.x >= size.x || pix.y >= size.y) {return;}
-    const vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
+    const varp vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
 
     random_storage = vec2(float(PushConstants.timeSeed)*pos.x, pos.x*pos.y);
 // #define DYNAMIC_STEP_COUNTER
@@ -786,28 +785,28 @@ void main(void){
     //     if(PushConstants.timeSeed.x < 2) {imageStore(step_count, warp_id, uvec4(256));}
     // }
 
-    const    float stored_depth = load_depth(pix);
-    const     bool stored_hit = true;
-    const Material stored_mat = GetMat(load_mat(pix));
-    const     vec3 stored_accumulated_reflection = vec3(1);
-    const     vec3 stored_accumulated_light = vec3(0);
-    const     vec3 stored_direction = PushConstants.camera_direction.xyz;
-    const     vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
-    const     vec3 stored_normal = load_norm(pix);
+    const varp     float stored_depth = load_depth(pix);
+    const           bool stored_hit = true;
+    const       Material stored_mat = GetMat(load_mat(pix));
+    const varp      vec3 stored_accumulated_reflection = vec3(1);
+    const varp      vec3 stored_accumulated_light = vec3(0);
+    const varp      vec3 stored_direction = PushConstants.camera_direction.xyz;
+    const varp      vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
+    const varp      vec3 stored_normal = load_norm(pix);
     // fraction = 0;
     // int iterations_left;
 
     //actually its has to be <= 4 cause that is how i store extra steps. TODO for highly reflective
-    vec3 multipass_color = vec3(0);
+    varp vec3 multipass_color = vec3(0);
 
     const int MULTIPASS = 1;
     for(int pass = 0; (pass < MULTIPASS); pass++){
-        vec3 accumulated_reflection = stored_accumulated_reflection;
-        vec3 accumulated_light = stored_accumulated_light;
-        vec3 direction = stored_direction;
-        vec3 origin = stored_origin;
+        varp vec3 accumulated_reflection = stored_accumulated_reflection;
+        varp vec3 accumulated_light = stored_accumulated_light;
+        varp vec3 direction = stored_direction;
+        varp vec3 origin = stored_origin;
         // origin = stored_origin + sin(RandomNoise())*vertiline*0.25 + sin(RandomNoise())*horizline*0.25;
-        vec3 normal = stored_normal;
+        varp vec3 normal = stored_normal;
         bool hit = true;
         Material material = stored_mat;
 
@@ -815,7 +814,7 @@ void main(void){
             0, normal, material,
             accumulated_light, accumulated_reflection);
         
-            float fraction = 0.0;
+            varp float fraction = 0.0;
             bool ssr = false;
             ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
             origin += fraction*direction;
@@ -845,19 +844,19 @@ void main(void){
             
             if(length(accumulated_reflection) < 0.1 || length(accumulated_light) > sqrt(2.0)) break;
         }
-        float global_light_participance = -dot(direction, globalLightDir);
+        varp float global_light_participance = -dot(direction, globalLightDir);
         // vec3 tmp = vec3(0);
         if (global_light_participance > 0.9) {
             accumulated_light += (vec3(.9,.9,.6)*3.0) * accumulated_reflection * global_light_participance / 2.0;
         }
-        float ndot = (dot(normal, globalLightDir));
-        float _global_light_participance = (ndot>0)? material.roughness * ndot * 0.5 : 0.0;
+        varp float ndot = (dot(normal, globalLightDir));
+        varp float _global_light_participance = (ndot>0)? material.roughness * ndot * 0.5 : 0.0;
         accumulated_light += (vec3(.9,.9,.6)*3.0) * accumulated_reflection * _global_light_participance / 2.0;
 
-        multipass_color += accumulated_light / float(MULTIPASS);
+        multipass_color += accumulated_light;
     }
 
-    vec3 color = multipass_color;   
+    varp vec3 color = multipass_color / float(MULTIPASS);   
     
     imageStore(frame, pix, vec4(encode_color(color), 1));
 

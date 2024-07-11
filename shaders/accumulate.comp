@@ -1,5 +1,6 @@
 #version 450
 
+#define varp lowp
 precision highp float;
 precision highp int;
 
@@ -19,12 +20,12 @@ layout(set = 0, binding = 9, r32f       ) uniform image2D voxelPalette;
 
 
 struct Material{
-    vec3 color; //for each color
-    float emmitance;
-    float smoothness;
-    float transparancy;
+    varp vec3 color; //for each color
+    varp float emmitance;
+    varp float smoothness;
+    varp float transparancy;
 };
-Material GetMat(in int voxel){
+Material GetMat(in varp int voxel){
     Material mat;
 
     mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
@@ -44,28 +45,28 @@ Material GetMat(in int voxel){
 return mat;
 }
 
-vec3 load_new_norm(ivec2 pixel){
+varp vec3 load_new_norm(ivec2 pixel){
     vec3 norm = (imageLoad(new_matNorm, pixel).gba);
     return norm;
 }
-vec3 load_old_norm(ivec2 pixel){
+varp vec3 load_old_norm(ivec2 pixel){
     vec3 norm = (imageLoad(old_matNorm, pixel).gba);
     return norm;
 }
-int load_new_mat(ivec2 pixel){
-    int mat = int(round(imageLoad(new_matNorm, pixel).x*127.0))+127;
+varp int load_new_mat(ivec2 pixel){
+    varp int mat = int(round(imageLoad(new_matNorm, pixel).x*127.0))+127;
     return mat;
 }
-int load_old_mat(ivec2 pixel){
-    int mat = int(round(imageLoad(old_matNorm, pixel).x*127.0))+127;
+varp int load_old_mat(ivec2 pixel){
+    varp int mat = int(round(imageLoad(old_matNorm, pixel).x*127.0))+127;
     return mat;
 }
 
-const float COLOR_ENCODE_VALUE = 5.0;
-vec3 decode_color(vec3 encoded_color){
+const varp float COLOR_ENCODE_VALUE = 5.0;
+varp vec3 decode_color(varp vec3 encoded_color){
     return clamp(encoded_color,0,1)*vec3(COLOR_ENCODE_VALUE);
 }
-vec3 encode_color(vec3 color){
+varp vec3 encode_color(varp vec3 color){
     return clamp(color/vec3(COLOR_ENCODE_VALUE), 0,1);
 }
 
@@ -76,19 +77,19 @@ void main(){
         
     if(any(greaterThanEqual(pix, size))) return;
         
-    const  vec2 pos = vec2(pix) + 0.5;
-    vec3 new_color = decode_color(imageLoad(new_frame, pix).xyz);
+    const vec2 pos = vec2(pix) + 0.5;
+    varp vec3 new_color = decode_color(imageLoad(new_frame, pix).xyz);
 
-    vec2 uv_shift = imageLoad(uvShift_image, pix).xy;
-    vec2 old_pos = pos + uv_shift*vec2(size);
+    varp vec2 uv_shift = imageLoad(uvShift_image, pix).xy;
+         vec2 old_pos = pos + uv_shift*vec2(size);
     // vec2 old_pos = pos;
 
     // vec3 old_color = imageLoad(old_frame, ivec2(old_pos)).xyz;
     // vec3 final_color = mix(new_color, old_color, 0.99);
     // vec3 final_color = new_color;
 
-vec2 half_texel_size = vec2(0.5);
-vec2 sampled_quad_center =  (round(vec2(old_pos)));
+     vec2 half_texel_size = vec2(0.5);
+     vec2 sampled_quad_center =  (round(vec2(old_pos)));
 
 vec2 p00_center = sampled_quad_center + vec2(-half_texel_size.x, -half_texel_size.y);
 vec2 p10_center = sampled_quad_center + vec2(+half_texel_size.x, -half_texel_size.y);
@@ -100,24 +101,24 @@ ivec2 p10_pix = clamp(ivec2(p10_center),ivec2(0), size-1);
 ivec2 p01_pix = clamp(ivec2(p01_center),ivec2(0), size-1);
 ivec2 p11_pix = clamp(ivec2(p11_center),ivec2(0), size-1); 
 
-vec3 p00_color = (imageLoad(old_frame, p00_pix).rgb);
-vec3 p10_color = (imageLoad(old_frame, p10_pix).rgb);
-vec3 p01_color = (imageLoad(old_frame, p01_pix).rgb);
-vec3 p11_color = (imageLoad(old_frame, p11_pix).rgb);
+varp vec3 p00_color = (imageLoad(old_frame, p00_pix).rgb);
+varp vec3 p10_color = (imageLoad(old_frame, p10_pix).rgb);
+varp vec3 p01_color = (imageLoad(old_frame, p01_pix).rgb);
+varp vec3 p11_color = (imageLoad(old_frame, p11_pix).rgb);
 
-float p00_mix_ratio = clamp(texture(old_mix_ratio_image, p00_center/size).r, 0.0,0.99);
-float p10_mix_ratio = clamp(texture(old_mix_ratio_image, p10_center/size).r, 0.0,0.99);
-float p01_mix_ratio = clamp(texture(old_mix_ratio_image, p01_center/size).r, 0.0,0.99);
-float p11_mix_ratio = clamp(texture(old_mix_ratio_image, p11_center/size).r, 0.0,0.99);
+varp float p00_mix_ratio = clamp(texture(old_mix_ratio_image, p00_center/size).r, 0.0,0.99);
+varp float p10_mix_ratio = clamp(texture(old_mix_ratio_image, p10_center/size).r, 0.0,0.99);
+varp float p01_mix_ratio = clamp(texture(old_mix_ratio_image, p01_center/size).r, 0.0,0.99);
+varp float p11_mix_ratio = clamp(texture(old_mix_ratio_image, p11_center/size).r, 0.0,0.99);
 
-int mat = load_new_mat(pix);
-int p00_mat = load_old_mat(p00_pix);
-int p10_mat = load_old_mat(p10_pix);
-int p01_mat = load_old_mat(p01_pix);
-int p11_mat = load_old_mat(p11_pix);
+varp int mat = load_new_mat(pix);
+varp int p00_mat = load_old_mat(p00_pix);
+varp int p10_mat = load_old_mat(p10_pix);
+varp int p01_mat = load_old_mat(p01_pix);
+varp int p11_mat = load_old_mat(p11_pix);
 
-float x_mix = old_pos.x - p00_center.x;
-float y_mix = old_pos.y - p00_center.y;
+varp float x_mix = old_pos.x - p00_center.x;
+varp float y_mix = old_pos.y - p00_center.y;
 
 // float p00_weight = distance(old_uv, p00_center);
 // float p10_weight = distance(old_uv, p10_center);
@@ -130,10 +131,10 @@ float y_mix = old_pos.y - p00_center.y;
 // float p01_depth_distance = abs(texelFetch(old_depth, p01_pix, 0).x - new_depth) + 0.001 / 2000.0;
 // float p11_depth_distance = abs(texelFetch(old_depth, p11_pix, 0).x - new_depth) + 0.001 / 2000.0;
 
-float p00_weight = +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat))) * float(dot(load_old_norm(p00_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > -.1);
-float p10_weight = +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat))) * float(dot(load_old_norm(p10_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > -.1);
-float p01_weight = +(1.0-x_mix)*(    y_mix) * (float((p01_mat==mat))) * float(dot(load_old_norm(p01_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > -.1);
-float p11_weight = +(    x_mix)*(    y_mix) * (float((p11_mat==mat))) * float(dot(load_old_norm(p11_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > -.1);
+varp float p00_weight = +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat))) * float(dot(load_old_norm(p00_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > -.1);
+varp float p10_weight = +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat))) * float(dot(load_old_norm(p10_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > -.1);
+varp float p01_weight = +(1.0-x_mix)*(    y_mix) * (float((p01_mat==mat))) * float(dot(load_old_norm(p01_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > -.1);
+varp float p11_weight = +(    x_mix)*(    y_mix) * (float((p11_mat==mat))) * float(dot(load_old_norm(p11_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > -.1);
 // p00_weight += 1e-8;
 // p11_weight += 1e-8;
 
@@ -142,19 +143,19 @@ float p11_weight = +(    x_mix)*(    y_mix) * (float((p11_mat==mat))) * float(do
 // p01_weight *=  (1.0/p01_depth_distance);
 // p00_weight *=  (1.0/p11_depth_distance);
 
-float weight = (
+varp float weight = (
     p00_weight+
     p10_weight+
     p01_weight+
     p11_weight
 );
-vec3 old_color = ((
+varp vec3 old_color = ((
     p00_color*p00_weight+
     p10_color*p10_weight+
     p01_color*p01_weight+
     p11_color*p11_weight
 ))/(weight);
-float old_mix_ratio = ((
+varp float old_mix_ratio = ((
     p00_mix_ratio*p00_weight+
     p10_mix_ratio*p10_weight+
     p01_mix_ratio*p01_weight+
@@ -164,18 +165,18 @@ float old_mix_ratio = ((
     // float color_diff = distance(old_color, new_color);
 
     // float mix_ratio;
-    float mix_ratio = clamp(imageLoad(new_mix_ratio_image, pix).r,0,1);
-    float roughness = 1.0 - GetMat(mat).smoothness;
+    varp float mix_ratio = clamp(imageLoad(new_mix_ratio_image, pix).r,0,1);
+    varp float roughness = 1.0 - GetMat(mat).smoothness;
 
     // float target_mix_ratio = 0.995;
-    float target_mix_ratio = clamp((0.995 + roughness) / 2.0, 0.975, 0.995);
+    varp float target_mix_ratio = clamp((0.995 + roughness) / 2.0, 0.975, 0.995);
     
     // float mix_ratio_reactivness = sqrt(1.0-mix_ratio/1.1);
-    float mix_ratio_reactivness = 0.35;
+    varp float mix_ratio_reactivness = 0.35;
     // float mix_ratio = 0.;
 
 
-    vec3 final_color;
+    varp vec3 final_color;
     if(weight == 0) {
         mix_ratio = 0.1;
         final_color = new_color;
@@ -189,8 +190,8 @@ float old_mix_ratio = ((
     imageStore(new_mix_ratio_image, pix, vec4(mix_ratio));
     // imageStore(old_mix_ratio_image, pix, vec4(mix_ratio));
 
-    float max_component = max(final_color.x, max(final_color.y, final_color.z));
-    vec3 normalized_color;
+    varp float max_component = max(final_color.x, max(final_color.y, final_color.z));
+    varp vec3 normalized_color;
     if(max_component > 1.0){
         normalized_color = final_color / max_component;
         final_color = normalized_color;

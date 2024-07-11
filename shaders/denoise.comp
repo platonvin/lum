@@ -1,7 +1,8 @@
 #version 450 core
 
-precision highp float;
-precision highp int;
+#define varp lowp
+precision varp float;
+precision varp int;
 
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_KHR_shader_subgroup_shuffle : enable

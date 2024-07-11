@@ -1,27 +1,29 @@
 #version 450
 
-precision highp float;
+#define varp lowp
+precision varp int;
+precision varp float;
 
-layout(location = 0) in uvec3 posIn;
-layout(location = 1) in ivec3 normIn;
-layout(location = 2) in uint MatIDIn;
+layout(location = 0) in varp uvec3 posIn;
+layout(location = 1) in varp ivec3 normIn;
+layout(location = 2) in varp uint MatIDIn;
 
 // layout(location = 0)      out float depth;
-layout(location = 0)      out vec2 uv_shift;
-layout(location = 1) flat out vec3 norm;
-layout(location = 2) flat out uint mat;
+layout(location = 0)      out varp vec2 uv_shift;
+layout(location = 1) flat out varp vec3 norm;
+layout(location = 2) flat out varp uint mat;
 // layout(location = 3)      out float depth;
 
-const vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
-const vec3 cameraPos = vec3(60, 0, 50);
+const varp vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
+const varp vec3 cameraPos = vec3(60, 0, 50);
 // vec3 cameraRayDir = normalize(vec3(-1, 0, .1));
 // vec3 cameraRayDir = normalize(vec3(12, 21, 7));
 // vec3 cameraRayDir = normalize(vec3(1, 1, 0));
-const vec3 globalLightDir = normalize(vec3(0.5, 1, -0.5));
+const varp vec3 globalLightDir = normalize(vec3(0.5, 1, -0.5));
 // vec3 globalLightDir = cameraRayDir;
-const vec3 cameraRayDirPlane = normalize(vec3(cameraRayDir.xy, 0));
-const vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
-const vec3 vertiline = normalize(cross(cameraRayDir, horizline));
+const varp vec3 cameraRayDirPlane = normalize(vec3(cameraRayDir.xy, 0));
+const varp vec3 horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
+const varp vec3 vertiline = normalize(cross(cameraRayDir, horizline));
 
 // vec3 cameraPos = vec3(-13, -22, -8)*1.5/16.0;
 
