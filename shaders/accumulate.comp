@@ -1,6 +1,7 @@
 #version 450
 
-#define varp lowp
+#define varp highp
+
 precision highp float;
 precision highp int;
 
@@ -17,6 +18,7 @@ layout(set = 0, binding = 6       ) uniform sampler2D old_mix_ratio_image;
 layout(set = 0, binding = 7       ) uniform sampler2D old_depth;
 layout(set = 0, binding = 8       ) uniform sampler2D new_depth;
 layout(set = 0, binding = 9, r32f       ) uniform image2D voxelPalette;
+
 
 
 struct Material{

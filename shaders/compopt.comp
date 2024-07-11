@@ -2,8 +2,9 @@
 
 precision highp int;
 precision highp float;
-#define varp lowp
 #extension GL_KHR_shader_subgroup_arithmetic : enable
+
+#define varp highp
 
 layout(push_constant) uniform constants{
     varp vec3 camera_pos;
@@ -19,14 +20,16 @@ layout(set = 0, binding = 4, r32f       ) uniform image2D voxelPalette;
 layout(set = 0, binding = 5, rgba8ui    ) uniform uimage2D step_count;
 layout(set = 0, binding = 6, rgba16     ) uniform image2D frame;
 
+layout(constant_id = 1) const int MAX_DEPTH = 3;
+layout(constant_id = 2) const int NUM_SAMPLES = 1;
+layout(constant_id = 3) const int BLOCK_PALETTE_SIZE_X = 64;
+layout(constant_id = 4) const int size_height = (0);
+
 varp vec3 globalLightDir;
 varp vec3 cameraRayDirPlane;
 varp vec3 horizline;
 varp vec3 vertiline;
 
-const varp int BLOCK_PALETTE_SIZE_X = 64;
-const varp int MAX_DEPTH = 4;
-const varp int NUM_SAMPLES = 1;
 const varp float PI = 3.1415926535;
 const varp float FAR_DISTANCE = 100000.0;
 const varp float nIN = 1.0;
@@ -657,14 +660,14 @@ varp int load_mat(highp ivec2 pixel){
     varp int mat = int(round(imageLoad(matNorm, pixel).x*127.0))+127;
     return mat;
 }
-varp float load_depth(highp ivec2 pixel){
-    varp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
+highp float load_depth(highp ivec2 pixel){
+    highp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
     highp float depth_encoded = texture(depthBuffer, uv).x;
     return (1.0-depth_encoded)*1000.0;
 }
 
 bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smooth_intersection){
-    varp float depth = load_depth(ivec2(pix));
+    highp float depth = load_depth(ivec2(pix));
     varp float diff = test_depth - depth;
     bool ssr = false;
     smooth_intersection = false;
@@ -678,9 +681,9 @@ bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smoot
     return ssr;
     // return false;
 }
-bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in varp vec2 start_pix, out varp float fraction, out varp vec3 normal, out Material material){
+bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 start_pix, out highp float fraction, out varp vec3 normal, out Material material){
 
-    varp int counter=0;
+    // varp int counter=0;
     //vertical component of direction relative to camera plane
 
     //for every 1 parrallel to camera plane this much depth
@@ -693,17 +696,17 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in varp vec2 star
     // float div = 10.0;
         
     bool smooth_intersection = false;
-    varp float fraction_step = .15;
+    highp float fraction_step = .15;
     
     fraction = 0.0;
     fraction = fraction_step;
 
-    varp vec2 ssr_pix = start_pix;
-    varp float depth = 0;
+    highp vec2 ssr_pix = start_pix;
+    highp float depth = 0;
     while(true){
         //TODO turn into cached step 
-        varp vec3 new_origin = origin + direction*fraction;
-        varp vec3 relative_pos = new_origin - PushConstants.camera_pos.xyz;
+        highp vec3 new_origin = origin + direction*fraction;
+        highp vec3 relative_pos = new_origin - PushConstants.camera_pos.xyz;
         depth = dot(relative_pos, PushConstants.camera_direction.xyz);
         ssr_pix.x = ((dot(relative_pos, horizline)/(view_width *2.0)) +0.5)*float(size.x);
         ssr_pix.y = ((dot(relative_pos, vertiline)/(view_height*2.0)) +0.5)*float(size.y);
@@ -790,8 +793,8 @@ void main(void){
     const       Material stored_mat = GetMat(load_mat(pix));
     const varp      vec3 stored_accumulated_reflection = vec3(1);
     const varp      vec3 stored_accumulated_light = vec3(0);
-    const varp      vec3 stored_direction = PushConstants.camera_direction.xyz;
-    const varp      vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
+    const highp      vec3 stored_direction = PushConstants.camera_direction.xyz;
+    const highp      vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
     const varp      vec3 stored_normal = load_norm(pix);
     // fraction = 0;
     // int iterations_left;
@@ -799,12 +802,11 @@ void main(void){
     //actually its has to be <= 4 cause that is how i store extra steps. TODO for highly reflective
     varp vec3 multipass_color = vec3(0);
 
-    const int MULTIPASS = 1;
-    for(int pass = 0; (pass < MULTIPASS); pass++){
+    for(int pass = 0; (pass < NUM_SAMPLES); pass++){
         varp vec3 accumulated_reflection = stored_accumulated_reflection;
         varp vec3 accumulated_light = stored_accumulated_light;
-        varp vec3 direction = stored_direction;
-        varp vec3 origin = stored_origin;
+        highp vec3 direction = stored_direction;
+        highp vec3 origin = stored_origin;
         // origin = stored_origin + sin(RandomNoise())*vertiline*0.25 + sin(RandomNoise())*horizline*0.25;
         varp vec3 normal = stored_normal;
         bool hit = true;
@@ -832,7 +834,7 @@ void main(void){
                     accumulated_light, accumulated_reflection);
             }
         // vec3 dir_before_hit;
-        for (int i = 0; (i < 3); i++)
+        for (int i = 0; (i < MAX_DEPTH); i++)
         {
             hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0, i);
             // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
@@ -856,7 +858,7 @@ void main(void){
         multipass_color += accumulated_light;
     }
 
-    varp vec3 color = multipass_color / float(MULTIPASS);   
+    varp vec3 color = multipass_color / float(NUM_SAMPLES);   
     
     imageStore(frame, pix, vec4(encode_color(color), 1));
 

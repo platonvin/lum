@@ -1,6 +1,7 @@
 #version 450
 
-#define varp lowp
+#define varp highp
+
 precision varp int;
 precision varp float;
 
