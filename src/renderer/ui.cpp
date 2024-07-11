@@ -389,8 +389,7 @@ void Ui::setup(){
 	document = context->LoadDocument("assets/simple.rml");
 	if (!document){
 		Rml::Shutdown();
-		println
-	}
+			}
 
 	document->Show();
 
@@ -459,6 +458,5 @@ void Ui::cleanup(){
 	// Rml::ReleaseMemoryPools();
 	Rml::Shutdown();
 	renderer->UiRenderInterface->ReleaseTexture((Rml::TextureHandle)renderer->UiRenderInterface->default_image);
-	println
-	// context.
+		// context.
 }

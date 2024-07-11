@@ -62,7 +62,7 @@ assert(blockPaletteLinear.data()!=NULL);
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, origin_block_palette[i].image, uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, &origin_block_palette[i], uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16));
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
@@ -89,7 +89,7 @@ void Renderer::update_Material_Palette(Material* materialPalette){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, material_palette[i].image, uvec3(6,256,1), VK_IMAGE_LAYOUT_GENERAL);
+        copy_Buffer(stagingBuffer, &material_palette[i], uvec3(6,256,1));
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);

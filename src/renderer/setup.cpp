@@ -116,12 +116,12 @@ void Renderer::create_RenderPass_Graphical(){
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; //final frame copied into swapchain image
+        colorAttachment.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; //to present
 
     VkAttachmentReference colorAttachmentRef = {};
         colorAttachmentRef.attachment = 0;
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //for drawing
 
     VkSubpassDescription subpass = {};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -158,7 +158,7 @@ void Renderer::create_RenderPass_RayGen(){
         caMatNorm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caMatNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         caMatNorm.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        caMatNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+        caMatNorm.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //for blit if scaled or 
     VkAttachmentDescription caOldUv = {};
         caOldUv.format = OLD_UV_FORMAT;
         caOldUv.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -167,7 +167,7 @@ void Renderer::create_RenderPass_RayGen(){
         caOldUv.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caOldUv.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         caOldUv.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        caOldUv.finalLayout = VK_IMAGE_LAYOUT_GENERAL; 
+        caOldUv.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
     VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = DEPTH_FORMAT;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -176,20 +176,20 @@ void Renderer::create_RenderPass_RayGen(){
         depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = DEPTH_LAYOUT;
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         // depthAttachment.
     VkAttachmentReference MatNormRef = {};
         MatNormRef.attachment = 0;
-        MatNormRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+        MatNormRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkAttachmentReference oldUvRef = {};
         oldUvRef.attachment = 1;
-        oldUvRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+        oldUvRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     // VkAttachmentReference depthRef = {};
     //     depthRef.attachment = 2;
     //     depthRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentReference depthAttachmentRef = {};
         depthAttachmentRef.attachment = 2;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     vector<VkAttachmentDescription> attachments = {caMatNorm, caOldUv, /*caDepth,*/ depthAttachment};
 
@@ -230,8 +230,8 @@ void Renderer::create_RenderPass_RayGen_Particles(){
         caMatNorm.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         caMatNorm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caMatNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        caMatNorm.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-        caMatNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+        caMatNorm.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        caMatNorm.finalLayout = is_scaled? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription caOldUv = {};
         caOldUv.format = OLD_UV_FORMAT;
         caOldUv.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -239,8 +239,8 @@ void Renderer::create_RenderPass_RayGen_Particles(){
         caOldUv.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         caOldUv.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caOldUv.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        caOldUv.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-        caOldUv.finalLayout = VK_IMAGE_LAYOUT_GENERAL; 
+        caOldUv.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        caOldUv.finalLayout = is_scaled? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL; 
     VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = DEPTH_FORMAT;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -248,21 +248,21 @@ void Renderer::create_RenderPass_RayGen_Particles(){
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-        depthAttachment.finalLayout = DEPTH_LAYOUT;
+        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachment.finalLayout = is_scaled? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
         // depthAttachment.
     VkAttachmentReference MatNormRef = {};
         MatNormRef.attachment = 0;
-        MatNormRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+        MatNormRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     VkAttachmentReference oldUvRef = {};
         oldUvRef.attachment = 1;
-        oldUvRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+        oldUvRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     // VkAttachmentReference depthRef = {};
     //     depthRef.attachment = 2;
     //     depthRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentReference depthAttachmentRef = {};
         depthAttachmentRef.attachment = 2;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     vector<VkAttachmentDescription> attachments = {caMatNorm, caOldUv, /*caDepth,*/ depthAttachment};
 

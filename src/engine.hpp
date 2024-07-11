@@ -15,7 +15,7 @@ struct block_render_request{
 
 class Engine {
 public:
-    Renderer render = {};
+    Renderer render = Renderer();
     Ui ui = {};
 
     //cpu culled sorted array of blocks to raygen as example. You egnine responsible for doing this, bot renderer

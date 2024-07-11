@@ -5,7 +5,7 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common -I${VCPKG_ROOT}/installed/x64-mingw-static/Include
 L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
-debug_Flags = -pipe -fno-exceptions -Os
+debug_Flags = -pipe -fno-exceptions -O1
 release_Flags = -pipe -fno-exceptions -Os -DNDEBUG
 SA = -O --target-env=vulkan1.1
 

@@ -69,6 +69,7 @@ static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
     render.init(48, 48, 16, 15, 8128, float(1.5), false, false);
+// println
     vkDeviceWaitIdle(render.device);
 
     render.load_scene("assets/scene");
@@ -83,11 +84,13 @@ void Engine::setup_graphics(){
 
         render.load_mesh(&tank_lf_leg, "assets/tank_lf_rb_leg.vox");
         render.load_mesh(&tank_rb_leg, "assets/tank_lf_rb_leg.vox");
+// println
 
     //TEMP: emtpy palette just to make things run. No static block atm
     block_palette = (Block**)calloc(render.static_block_palette_size, sizeof(Block*));
     
     //block_palette[0] is "air"
+// println
     render.load_block(&block_palette[1], "assets/dirt.vox");
     render.load_block(&block_palette[2], "assets/grass.vox");
     render.load_block(&block_palette[3], "assets/grassNdirt.vox");
@@ -102,15 +105,20 @@ void Engine::setup_graphics(){
     render.load_block(&block_palette[12], "assets/bark.vox");
     render.load_block(&block_palette[13], "assets/wood.vox");
     render.load_block(&block_palette[14], "assets/planks.vox");
+// println
 
     render.update_Block_Palette(block_palette);
+// println
     render.update_Material_Palette(render.mat_palette);
     vkDeviceWaitIdle(render.device);
+// println
 }
 void Engine::setup_ui(){
+// println
     ui.renderer = &render;
     ui.setup();
     vkDeviceWaitIdle(render.device);
+// println
 }
 
 void Engine::update_system(){
@@ -335,6 +343,7 @@ void Engine::cull_meshes(){
 
 void Engine::draw()
 {
+// println
     render.start_Frame();
         render.startRaygen();
             for(auto b : que){
@@ -351,12 +360,16 @@ void Engine::draw()
             
             render.RaygenMesh(&tank_rf_leg);
             render.RaygenMesh(&tank_lb_leg);
+// println
             render.RaygenMesh(&tank_lf_leg);
             render.RaygenMesh(&tank_rb_leg);
             render.rayGenMapParticles();
+// println
         render.endRaygen();
+// println
 
         render.startBlockify();
+// println
             render.blockifyMesh(&tank_body);
             render.blockifyMesh(&tank_head);
         
@@ -365,24 +378,36 @@ void Engine::draw()
             render.blockifyMesh(&tank_lf_leg);
             render.blockifyMesh(&tank_rb_leg);
         render.endBlockify();
+// println
 
         render.updateParticles();
+// println
 
         render.startCompute();
+// println
             render.execCopies();
+// println
                 render.startMap();
+// println
                     render.mapMesh(&tank_body);
                     render.mapMesh(&tank_head);
                     
                     render.mapMesh(&tank_rf_leg);
+// println
                     render.mapMesh(&tank_lb_leg);
                     render.mapMesh(&tank_lf_leg);
                     render.mapMesh(&tank_rb_leg);
+// println
                 render.endMap();
+// println
                 render.raytrace();
+// println
                 render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+// println
                 render.accumulate();
+// println
                 render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+// println
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(5, 2, DENOISE_TARGET_LOWRES);
@@ -391,15 +416,22 @@ void Engine::draw()
                     // render.denoise(5, 1, DENOISE_TARGET_LOWRES);
                     render.upscale();
                 }
+// println
                 render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
+// println
         render.endCompute();
 
+// println
         render.start_ui(); 
+// println
             ui.update();
+// println
             ui.draw();
+// println
         render.draw_ui(); 
+// println
         render.present();
     render.end_Frame();
 }
@@ -415,6 +447,7 @@ void Engine::update(){
     delt_time = curr_time-prev_time;
     render.delta_time = delt_time;
 
+// println
     update_system();
     handle_input();
     process_physics();

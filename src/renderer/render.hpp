@@ -154,6 +154,9 @@ typedef struct Image {
     VkImage image;
     VkImageView view;
     VmaAllocation alloc;
+    // VkFormat format;
+    VkImageLayout layout;
+    VkImageAspectFlags aspect;
 } Image;
 enum MeshVertexTypes {
     // MESH_VERTEX_TYPE_
@@ -372,6 +375,10 @@ public:
     void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier);
     void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkBufferMemoryBarrier* barrier);
     void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask);
+    //used as just barrier and can also transfer image layout
+    void cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout targetLayout,
+        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, 
+        Image* image);
 private:
     //including fullscreen and scaled images
     void  cleanup_SwapchainDependent();
@@ -433,10 +440,10 @@ private:
     void delete_Images(vector<Image>* images);
     void delete_Images(Image* images);
     void create_Image_Storages(vector<Image>* images, 
-    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
     uvec3 size, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
     void create_Image_Storages(Image* image, 
-    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
+    VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
     uvec3 size, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
 // #ifdef STENCIL 
     void create_Image_Storages_DepthStencil(vector<VkImage>* images, vector<VmaAllocation>* allocs, vector<VkImageView>* depthViews, vector<VkImageView>* stencilViews,
@@ -465,12 +472,11 @@ private:
 
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
     void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size); 
-    void copy_Buffer(VkBuffer srcBuffer, VkImage dstImage, uvec3 size, VkImageLayout layout);
+    void copy_Buffer(VkBuffer srcBuffer, Image* image, uvec3 size);
     u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
-    void transition_Image_Layout_Singletime(VkImage image, VkFormat format, VkImageAspectFlags aspect,VkImageLayout oldLayout, VkImageLayout newLayout,
-        VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
+    void transition_Image_Layout_Singletime(Image* image, VkImageLayout newLayout);
     void transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
     void copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst);
@@ -590,7 +596,7 @@ public:
             Image mix_ratio;
     #else
         vector<Image> lowres_frames;
-        vector<Image> lowres_sunlight;
+        // vector<Image> lowres_sunlight;
         vector<Image>  highres_frames;
         #ifdef STENCIL
         vector<VkImage> depthStencilImages; //used for depth testing
@@ -732,8 +738,8 @@ public:
 
     //wraps around MAX_FRAMES_IN_FLIGHT
     u32  currentFrame = 0;
-    u32 previousFrame = 0;
-    u32     nextFrame = 0;
+    u32 previousFrame = MAX_FRAMES_IN_FLIGHT-1;
+    u32     nextFrame = 1;
 private:
     int itime = 0;
     int palette_counter = 0;

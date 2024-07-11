@@ -18,7 +18,7 @@ layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
 layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
-const int STATIC_BLOCK_COUNT = 10; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
+const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
