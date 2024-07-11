@@ -48,17 +48,17 @@ int decode_mat(in float fmat) {
 
 layout(local_size_x=8, local_size_y=8) in;
 void main(){
-    ivec2 highres_pix = ivec2(gl_GlobalInvocationID.xy);
-    ivec2  lowres_size = imageSize( lowres_matNorm);
-    ivec2 highres_size = imageSize(highres_matNorm);
+    highp ivec2 highres_pix = ivec2(gl_GlobalInvocationID.xy);
+    highp ivec2  lowres_size = imageSize( lowres_matNorm);
+    highp ivec2 highres_size = imageSize(highres_matNorm);
 
      int highres_mat = decode_mat(imageLoad(highres_matNorm, highres_pix).x);
     vec3 highres_normal = ((imageLoad(highres_matNorm, highres_pix).yzw));
 
-    ivec2 ll_lowres_pix = ((highres_pix + ivec2(0,0))*lowres_size) / highres_size;
-    ivec2 lh_lowres_pix = ((highres_pix + ivec2(0,1))*lowres_size) / highres_size;
-    ivec2 hl_lowres_pix = ((highres_pix + ivec2(1,0))*lowres_size) / highres_size;
-    ivec2 hh_lowres_pix = ((highres_pix + ivec2(1,1))*lowres_size) / highres_size;
+    highp ivec2 ll_lowres_pix = ((highres_pix + ivec2(0,0))*lowres_size) / highres_size;
+    highp ivec2 lh_lowres_pix = ((highres_pix + ivec2(0,1))*lowres_size) / highres_size;
+    highp ivec2 hl_lowres_pix = ((highres_pix + ivec2(1,0))*lowres_size) / highres_size;
+    highp ivec2 hh_lowres_pix = ((highres_pix + ivec2(1,1))*lowres_size) / highres_size;
 
     int ll_lowres_mat = decode_mat(imageLoad(lowres_matNorm, ll_lowres_pix).x);
     int lh_lowres_mat = decode_mat(imageLoad(lowres_matNorm, lh_lowres_pix).x);
