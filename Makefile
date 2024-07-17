@@ -58,6 +58,8 @@ _shaders:= \
 	shaders/compiled/denoise.spv\
 	shaders/compiled/accumulate.spv\
 	shaders/compiled/upscale.spv\
+	shaders/compiled/radiance.spv\
+	shaders/compiled/dolight.spv\
 
 # flags = 
 all: Flags=$(release_Flags)
@@ -118,6 +120,10 @@ shaders/compiled/dfz.spv: shaders/dfz.comp
 	glslc shaders/dfz.comp -o shaders/compiled/dfz.spv $(SA)
 shaders/compiled/comp.spv: shaders/compopt.comp
 	glslc shaders/compopt.comp -o shaders/compiled/comp.spv $(SA)
+shaders/compiled/radiance.spv: shaders/updateRadianceCache.comp
+	glslc shaders/updateRadianceCache.comp -o shaders/compiled/radiance.spv $(SA)
+shaders/compiled/dolight.spv: shaders/doLight.comp
+	glslc shaders/doLight.comp -o shaders/compiled/dolight.spv $(SA)
 shaders/compiled/denoise.spv: shaders/denoise.comp
 	glslc shaders/denoise.comp -o shaders/compiled/denoise.spv $(SA)
 shaders/compiled/upscale.spv: shaders/upscale.comp

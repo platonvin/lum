@@ -80,6 +80,14 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         world_size); //TODO: dynamic
+    create_Image_Storages(&radiance_cache,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R16G16B16A16_UNORM,
+        VK_IMAGE_USAGE_STORAGE_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {RCACHE_RAYS_PER_PROBE * world_size.x, world_size.y, world_size.z}); //TODO: dynamic
     create_Image_Storages(&origin_block_palette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8_UINT,
@@ -125,6 +133,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
         vmaMapMemory(VMAllocator, staging_world[i].alloc, &staging_world_mapped[i]);
     }
     transition_Image_Layout_Singletime(&world, VK_IMAGE_LAYOUT_GENERAL);
+    transition_Image_Layout_Singletime(&radiance_cache, VK_IMAGE_LAYOUT_GENERAL);
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         transition_Image_Layout_Singletime(&origin_block_palette[i], VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&material_palette[i], VK_IMAGE_LAYOUT_GENERAL);
@@ -134,6 +143,12 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
     allocate_Descriptors();
 
     setup_Raytrace_Descriptors();
+println
+    setup_Radiance_Cache_Descriptors();
+println
+    setup_Do_Light_Descriptors();
+println
+
     setup_Denoise_Descriptors();
     if(is_scaled) {
         setup_Upscale_Descriptors();
@@ -168,6 +183,7 @@ void Renderer::cleanup(){
 	
     // delete_Images(&lowres_sunlight);
     delete_Images(&world);
+    delete_Images(&radiance_cache);
     delete_Images(&origin_block_palette);
     // delete_Images(&       block_palette);
     delete_Images(&material_palette);
@@ -199,6 +215,8 @@ void Renderer::cleanup(){
     vkDestroyDescriptorSetLayout(device,        mapDescriptorSetLayout, NULL);
     // vkDestroyDescriptorSetLayout(device,         dfDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,   raytraceDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,   updateRadianceDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device,   doLightDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,    denoiseDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,    upscaleDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,  graphicalDescriptorSetLayout, NULL);
@@ -227,6 +245,9 @@ void Renderer::cleanup(){
     // vkDestroyPipeline(device,       dfyPipeline, NULL);
     // vkDestroyPipeline(device,       dfzPipeline, NULL);
     vkDestroyPipeline(device,   raytracePipeline, NULL);
+    vkDestroyPipeline(device,   radiancePipeline, NULL);
+    vkDestroyPipeline(device,   doLightPipeline, NULL);
+
     vkDestroyPipeline(device,    denoisePipeline, NULL);
     vkDestroyPipeline(device,    upscalePipeline, NULL);
     vkDestroyPipeline(device, accumulatePipeline, NULL);
@@ -241,6 +262,9 @@ void Renderer::cleanup(){
     // vkDestroyPipelineLayout(device,       dfyLayout, NULL);
     // vkDestroyPipelineLayout(device,       dfzLayout, NULL);
     vkDestroyPipelineLayout(device,   raytraceLayout, NULL);
+    vkDestroyPipelineLayout(device,   radianceLayout, NULL);
+    vkDestroyPipelineLayout(device,   doLightLayout, NULL);
+
     vkDestroyPipelineLayout(device,    denoiseLayout, NULL);
     vkDestroyPipelineLayout(device,    upscaleLayout, NULL);
     vkDestroyPipelineLayout(device, accumulateLayout, NULL);
@@ -570,6 +594,8 @@ void Renderer::recreate_SwapchainDependent(){
 
     setup_Raytrace_Descriptors();
     setup_Denoise_Descriptors();
+    setup_Radiance_Cache_Descriptors();
+    setup_Do_Light_Descriptors();
     if(is_scaled) {
         setup_Upscale_Descriptors();
     }
@@ -1283,6 +1309,51 @@ void Renderer::raytrace(){
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
+
+    // cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout targetLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, Image *image)
+        barrier.image = is_scaled? lowres_frames[currentFrame].image : highres_frames[currentFrame].image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);    
+        barrier.image = step_count.image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
+        cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+        barrier.image = is_scaled? lowres_frames[currentFrame].image : highres_frames[currentFrame].image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+void Renderer::updadeRadiance(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, 
+        &lowres_frames[currentFrame]);
+    
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipeline);
+
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radianceLayout, 0, 1, &updateRadianceDescriptorSets[currentFrame], 0, 0);
+
+        itime++;
+        old_camera_pos = camera_pos;
+        old_camera_dir = camera_dir;
+        struct rtpc {int time;} pushconstant = {itime};
+        vkCmdPushConstants(commandBuffer, radianceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
+        
+        // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, world_size.z);
+        vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
+
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.image = is_scaled? lowres_frames[currentFrame].image : highres_frames[currentFrame].image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
@@ -1293,11 +1364,48 @@ void Renderer::raytrace(){
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
 
     // cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout targetLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, Image *image)
-    if (is_scaled) cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);    
-        barrier.image = step_count.image;
+    barrier.image = radiance_cache.image;
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
-        cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-        barrier.image = is_scaled? lowres_frames[currentFrame].image : highres_frames[currentFrame].image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+void Renderer::doLight(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+    
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, 
+        &lowres_frames[currentFrame]);
+    
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, doLightPipeline);
+
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, doLightLayout, 0, 1, &doLightDescriptorSets[currentFrame], 0, 0);
+
+        itime++;
+        old_camera_pos = camera_pos;
+        old_camera_dir = camera_dir;
+        struct rtpc {vec4 v1, v2;} pushconstant = {vec4(camera_pos,intBitsToFloat(itime)), vec4(camera_dir,0)};
+        vkCmdPushConstants(commandBuffer, doLightLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
+        
+        vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
+
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
+
+    // cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout targetLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, Image *image)
+    barrier.image = is_scaled? lowres_frames[currentFrame].image : highres_frames[currentFrame].image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
+    barrier.image = radiance_cache.image;
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 }
@@ -2021,6 +2129,26 @@ void Renderer::create_Descriptor_Set_Layouts(){
         VK_SHADER_STAGE_COMPUTE_BIT, raytraceDescriptorSetLayout, device);
 
     create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //r16i       ) uniform iimage3D blocks;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //r8ui       ) uniform uimage3D blockPalette;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //r32f       ) uniform image2D voxelPalette;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //rgba16f    ) uniform image3D radianceCache;
+        },
+        VK_SHADER_STAGE_COMPUTE_BIT, updateRadianceDescriptorSetLayout, device);
+
+    create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //rgba8_snorm) uniform   image2D matNorm;
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //  ) uniform sampler2D depthBuffer;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //r16i       ) uniform  iimage3D blocks;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //r8ui       ) uniform  uimage3D blockPalette;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //r32f       ) uniform   image2D voxelPalette;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //rgba8ui    ) uniform  uimage2D step_count;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //rgba16     ) uniform   image2D outFrame;
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //rgba16f    ) uniform   image3D radianceCache;
+        }, 
+        VK_SHADER_STAGE_COMPUTE_BIT, doLightDescriptorSetLayout, device);
+        
+    create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //mat norm
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //depth
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //raytraced
@@ -2110,7 +2238,7 @@ void Renderer::create_Descriptor_Pool(){
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = poolSizes.size();
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*8; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
+        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*10; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, NULL, &descriptorPool));
 }
 
@@ -2133,6 +2261,8 @@ void Renderer::allocate_Descriptors(){
     // allocate_Descriptors_helper( blockifyDescriptorSets,  blockifyDescriptorSetLayout, descriptorPool, device); 
     // allocate_Descriptors_helper(     copyDescriptorSets,      copyDescriptorSetLayout, descriptorPool, device); 
     // allocate_Descriptors_helper(     dfDescriptorSets,      dfDescriptorSetLayout, descriptorPool, device); 
+    allocate_Descriptors_helper(updateRadianceDescriptorSets,   updateRadianceDescriptorSetLayout, descriptorPool, device); 
+    allocate_Descriptors_helper(       doLightDescriptorSets,          doLightDescriptorSetLayout, descriptorPool, device); 
     
     //we do not allocate this because it's descriptors are managed trough push_descriptor mechanism
     // allocate_Descriptors_helper(      mapDescriptorSets,       mapDescriptorSetLayout, descriptorPool, device); 
@@ -2224,6 +2354,154 @@ void Renderer::setup_Raytrace_Descriptors(){
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
 }
+
+void Renderer::setup_Radiance_Cache_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        int previous_frame = i - 1;
+        // int previous_frame = i;
+        if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
+
+        VkDescriptorImageInfo blocksInfo = {};
+            blocksInfo.imageView = world.view;
+            blocksInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo blockPaletteInfo = {};
+            blockPaletteInfo.imageView = origin_block_palette[i].view;
+            blockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo voxelPaletteInfo = {};
+            voxelPaletteInfo.imageView = material_palette[i].view;
+            voxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo radianceCacheInfo = {};
+            radianceCacheInfo.imageView = radiance_cache.view;
+            radianceCacheInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            
+        VkWriteDescriptorSet blocksWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blocksWrite.dstSet = updateRadianceDescriptorSets[i];
+            blocksWrite.dstBinding = 0;
+            blocksWrite.dstArrayElement = 0;
+            blocksWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blocksWrite.descriptorCount = 1;
+            blocksWrite.pImageInfo = &blocksInfo;
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = updateRadianceDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 1;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &blockPaletteInfo;
+        VkWriteDescriptorSet voxelPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            voxelPaletteWrite.dstSet = updateRadianceDescriptorSets[i];
+            voxelPaletteWrite.dstBinding = 2;
+            voxelPaletteWrite.dstArrayElement = 0;
+            voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            voxelPaletteWrite.descriptorCount = 1;
+            voxelPaletteWrite.pImageInfo = &voxelPaletteInfo;
+        VkWriteDescriptorSet radianceCacheWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            radianceCacheWrite.dstSet = updateRadianceDescriptorSets[i];
+            radianceCacheWrite.dstBinding = 3;
+            radianceCacheWrite.dstArrayElement = 0;
+            radianceCacheWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            radianceCacheWrite.descriptorCount = 1;
+            radianceCacheWrite.pImageInfo = &radianceCacheInfo;
+            
+        vector<VkWriteDescriptorSet> descriptorWrites = {blocksWrite, blockPaletteWrite, voxelPaletteWrite, radianceCacheWrite};
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
+}
+
+void Renderer::setup_Do_Light_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        int previous_frame = i - 1;
+        // int previous_frame = i;
+        if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
+
+        VkDescriptorImageInfo matNormInfo = {};
+            matNormInfo.imageView = is_scaled? matNorm_lowres[i].view : matNorm_highres[i].view;
+            matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo depthInfo = {};
+            depthInfo.imageView = is_scaled? depthBuffers_lowres[i].view : depthBuffers_highres[i].view;
+            depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            depthInfo.sampler = nearestSampler;
+        VkDescriptorImageInfo inputBlockInfo = {};
+            inputBlockInfo.imageView = world.view;
+            inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputBlockPaletteInfo = {};
+            inputBlockPaletteInfo.imageView = origin_block_palette[i].view;
+            inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputVoxelPaletteInfo = {};
+            inputVoxelPaletteInfo.imageView = material_palette[i].view;
+            inputVoxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo outputFrameInfo = {};
+            outputFrameInfo.imageView = is_scaled? lowres_frames[i].view : highres_frames[i].view;
+            outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo stepCountInfo = {};
+            stepCountInfo.imageView = step_count.view;
+            stepCountInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo radianceCacheInfo = {};
+            radianceCacheInfo.imageView = radiance_cache.view;
+            radianceCacheInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        VkWriteDescriptorSet matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            matNormWrite.dstSet = doLightDescriptorSets[i];
+            matNormWrite.dstBinding = 0;
+            matNormWrite.dstArrayElement = 0;
+            matNormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            matNormWrite.descriptorCount = 1;
+            matNormWrite.pImageInfo = &matNormInfo;
+        VkWriteDescriptorSet depthWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            depthWrite.dstSet = doLightDescriptorSets[i];
+            depthWrite.dstBinding = 1;
+            depthWrite.dstArrayElement = 0;
+            depthWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            depthWrite.descriptorCount = 1;
+            depthWrite.pImageInfo = &depthInfo;
+        VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockWrite.dstSet = doLightDescriptorSets[i];
+            blockWrite.dstBinding = 2;
+            blockWrite.dstArrayElement = 0;
+            blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockWrite.descriptorCount = 1;
+            blockWrite.pImageInfo = &inputBlockInfo;
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = doLightDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 3;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
+        VkWriteDescriptorSet voxelPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            voxelPaletteWrite.dstSet = doLightDescriptorSets[i];
+            voxelPaletteWrite.dstBinding = 4;
+            voxelPaletteWrite.dstArrayElement = 0;
+            voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            voxelPaletteWrite.descriptorCount = 1;
+            voxelPaletteWrite.pImageInfo = &inputVoxelPaletteInfo;
+        VkWriteDescriptorSet stepCount = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            stepCount.dstSet = doLightDescriptorSets[i];
+            stepCount.dstBinding = 5;
+            stepCount.dstArrayElement = 0;
+            stepCount.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            stepCount.descriptorCount = 1;
+            stepCount.pImageInfo = &stepCountInfo;
+        VkWriteDescriptorSet outNewRaytracedWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            outNewRaytracedWrite.dstSet = doLightDescriptorSets[i];
+            outNewRaytracedWrite.dstBinding = 6;
+            outNewRaytracedWrite.dstArrayElement = 0;
+            outNewRaytracedWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            outNewRaytracedWrite.descriptorCount = 1;
+            outNewRaytracedWrite.pImageInfo = &outputFrameInfo;
+        VkWriteDescriptorSet radianceCacheWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            radianceCacheWrite.dstSet = doLightDescriptorSets[i];
+            radianceCacheWrite.dstBinding = 7;
+            radianceCacheWrite.dstArrayElement = 0;
+            radianceCacheWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            radianceCacheWrite.descriptorCount = 1;
+            radianceCacheWrite.pImageInfo = &radianceCacheInfo;
+                
+        vector<VkWriteDescriptorSet> descriptorWrites = {matNormWrite, depthWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, stepCount, outNewRaytracedWrite, radianceCacheWrite};
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
+}
+
 void Renderer::setup_Denoise_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         //setting up higres descriptors
@@ -2636,6 +2914,9 @@ void Renderer::create_compute_pipelines(){
     // create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
     // create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
     create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(ivec4) + sizeof(vec4)*4);
+    create_compute_pipelines_helper("shaders/compiled/radiance.spv"    , updateRadianceDescriptorSetLayout, &radianceLayout, &radiancePipeline, sizeof(int));
+    create_compute_pipelines_helper("shaders/compiled/dolight.spv"    , doLightDescriptorSetLayout, &doLightLayout, &doLightPipeline, sizeof(ivec4) + sizeof(vec4)*4);
+
     create_compute_pipelines_helper("shaders/compiled/denoise.spv" ,  denoiseDescriptorSetLayout,  &denoiseLayout,  &denoisePipeline, sizeof(int)*2);
     create_compute_pipelines_helper("shaders/compiled/accumulate.spv" ,  accumulateDescriptorSetLayout,  &accumulateLayout,  &accumulatePipeline, 0);
     // create_compute_pipelines_helper("shaders/compiled/upscale.spv"    ,  upscaleDescriptorSetLayout,  &upscaleLayout,  &upscalePipeline, 0);

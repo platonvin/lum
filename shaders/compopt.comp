@@ -600,6 +600,7 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
             else
             {
                 varp vec3 idealReflection = reflect(direction, normal);
+                material.roughness = 1.0;
                 new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
                 new_origin += normal * 0.001;
                 accumulated_reflection *= material.color;
@@ -613,37 +614,39 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
 
 }
 
-vec3 TraceRay(in vec3 rayOrigin, in vec3 rayDirection, in vec3 accumulated_light, in vec3 accumulated_reflection, in float ignored_voxel){
-    // vec3 accumulated_light = vec3(0.0);
-    // vec3 accumulated_reflection = vec3(1.0);
-
-    float fraction = 0;
+vec3 TraceRay(inout vec3 rayOrigin, inout vec3 rayDirection, inout vec3 accumulated_light, inout vec3 accumulated_reflection){
+    float fraction = 0.0;
     vec3 normal = vec3(0);
+
+    vec3 origin = rayOrigin;
+    vec3 direction = rayDirection;
+
+    vec3 light = accumulated_light;
+    vec3 reflection = accumulated_reflection;
+
     Material material;
-
-    for (int i = 0; i < MAX_DEPTH; i++)
+    for (int i = 0; (i < MAX_DEPTH); i++)
     {
-        ignored_voxel = 999.0;
-        bool hit = CastRay_precise(rayOrigin, rayDirection, fraction, normal, material, ignored_voxel, i);
-        if (hit)
-        {
-            // return vec3(material.color);
-            ProcessHit(rayOrigin, rayDirection, 
-                fraction, normal, material, 
-                accumulated_light, accumulated_reflection);
-        }
-        if(length(accumulated_reflection) < 0.01 || length(accumulated_light) > sqrt(3.0)) {break;}
-        else {
-            break;
-        }
+        bool hit = CastRay_precise(rayOrigin, rayDirection, fraction, normal, material, 9999.0, i);
+        // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
+        // dir_before_hit = direction;
+        if(!hit) break;
+        ProcessHit(rayOrigin, rayDirection, 
+            fraction, normal, material, 
+            light, reflection);
+        
+        if(length(reflection) < 0.1 || length(light) > sqrt(2.0)) break;
     }
-
-    float global_light_participance = -dot(rayDirection, globalLightDir);
-    if (global_light_participance > 0.0) {
-        accumulated_light += (vec3(.9,.9,.6)/2) * accumulated_reflection * global_light_participance;
+    varp float global_light_participance = -dot(rayDirection, globalLightDir);
+    // vec3 tmp = vec3(0);
+    if (global_light_participance > 0.9) {
+        light += (vec3(.9,.9,.6)*3.0) * reflection * global_light_participance / 2.0;
     }
+    varp float ndot = (dot(normal, globalLightDir));
+    varp float _global_light_participance = (ndot>0)? material.roughness * ndot * 0.5 : 0.0;
+    light += (vec3(.9,.9,.6)*3.0) * reflection * _global_light_participance / 2.0;
 
-    return accumulated_light;   
+    return light;
 }
 
 
@@ -735,14 +738,7 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 sta
 }
 
 
-// float weight_mix_with_old(vec2 fraction, ivec2 floored, ivec2 pos, int mat){
-//     float weight = 0;
-//     int old_mat = int(imageLoad(old_Gbuffer, floored+pos).z);
 
-//     if(old_mat != mat) return 0;
-
-//     weight
-// }
 varp float luminance(varp vec3 color){
     varp vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
     return dot(color, luminance_const);
@@ -787,21 +783,21 @@ void main(void){
     // if(subgroupElect()){
     //     if(PushConstants.timeSeed.x < 2) {imageStore(step_count, warp_id, uvec4(256));}
     // }
-
-    const varp     float stored_depth = load_depth(pix);
-    const           bool stored_hit = true;
+    varp vec3 multipass_color;
+        // const varp     float stored_depth = load_depth(pix);
+    // const           bool stored_hit = true;
     const       Material stored_mat = GetMat(load_mat(pix));
     const varp      vec3 stored_accumulated_reflection = vec3(1);
     const varp      vec3 stored_accumulated_light = vec3(0);
     const highp      vec3 stored_direction = PushConstants.camera_direction.xyz;
-    const highp      vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
+    const highp      vec3 stored_origin = get_origin_from_depth(load_depth(pix), pos);
     const varp      vec3 stored_normal = load_norm(pix);
     // fraction = 0;
     // int iterations_left;
 
     //actually its has to be <= 4 cause that is how i store extra steps. TODO for highly reflective
-    varp vec3 multipass_color = vec3(0);
-
+    multipass_color = vec3(0);
+{
     for(int pass = 0; (pass < NUM_SAMPLES); pass++){
         varp vec3 accumulated_reflection = stored_accumulated_reflection;
         varp vec3 accumulated_light = stored_accumulated_light;
@@ -833,30 +829,10 @@ void main(void){
                     0, normal, material,
                     accumulated_light, accumulated_reflection);
             }
-        // vec3 dir_before_hit;
-        for (int i = 0; (i < MAX_DEPTH); i++)
-        {
-            hit = CastRay_precise(origin, direction, fraction, normal, material, 9999.0, i);
-            // hit = CastRay_fast(origin, direction, fraction, normal, material, 9999.0, i);
-            // dir_before_hit = direction;
-            if(!hit) break;
-            ProcessHit(origin, direction, 
-                fraction, normal, material, 
-                accumulated_light, accumulated_reflection);
-            
-            if(length(accumulated_reflection) < 0.1 || length(accumulated_light) > sqrt(2.0)) break;
-        }
-        varp float global_light_participance = -dot(direction, globalLightDir);
-        // vec3 tmp = vec3(0);
-        if (global_light_participance > 0.9) {
-            accumulated_light += (vec3(.9,.9,.6)*3.0) * accumulated_reflection * global_light_participance / 2.0;
-        }
-        varp float ndot = (dot(normal, globalLightDir));
-        varp float _global_light_participance = (ndot>0)? material.roughness * ndot * 0.5 : 0.0;
-        accumulated_light += (vec3(.9,.9,.6)*3.0) * accumulated_reflection * _global_light_participance / 2.0;
 
-        multipass_color += accumulated_light;
+        multipass_color += TraceRay(origin, direction, accumulated_light, accumulated_reflection);
     }
+}
 
     varp vec3 color = multipass_color / float(NUM_SAMPLES);   
     

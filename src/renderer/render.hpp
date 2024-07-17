@@ -44,13 +44,13 @@ using namespace glm;
 using namespace std;
 
 //Everything is X -> Y -> Z order in arrays (vectors)
-#define BLOCK_SIZE 16 // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
-#define MATERIAL_PALETTE_SIZE 256 //0 always empty
-
+const int BLOCK_SIZE = 16; // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
+const int MATERIAL_PALETTE_SIZE = 256; //0 always empty
+const int RCACHE_RAYS_PER_PROBE = 32;
 // on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
-#define    BLOCK_PALETTE_SIZE_X 64
-#define    BLOCK_PALETTE_SIZE_Y 64
-#define    BLOCK_PALETTE_SIZE  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y)
+const int BLOCK_PALETTE_SIZE_X = 64;
+const int BLOCK_PALETTE_SIZE_Y = 64;
+const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 
 // #define STENCIL
 
@@ -354,6 +354,8 @@ public:
                 void   endMap();
             void recalculate_df();
             void raytrace();
+            void updadeRadiance();
+            void doLight();
             void denoise(int iterations, int denoising_radius, denoise_targets target);
             void accumulate();
             void upscale();
@@ -428,6 +430,8 @@ private:
     void setup_Map_Descriptors();
     void setup_Df_Descriptors();
     void setup_Raytrace_Descriptors();
+    void setup_Radiance_Cache_Descriptors();
+    void setup_Do_Light_Descriptors();
     void setup_Denoise_Descriptors();
     void setup_Accumulate_Descriptors();
     void setup_Upscale_Descriptors();
@@ -576,6 +580,7 @@ public:
     // vector<Image>  denoised_frame;
     // vector<Image>  upscaled_frame;
            Image step_count;
+           Image radiance_cache;
     #ifdef ACCUMULATE_HIGHRES
             Image lowres_frame;
         vector<Image> highres_frame;
@@ -685,6 +690,12 @@ public:
     VkDescriptorSetLayout  raytraceDescriptorSetLayout;
     vector<VkDescriptorSet>  raytraceDescriptorSets;
 
+    VkDescriptorSetLayout  updateRadianceDescriptorSetLayout;
+    vector<VkDescriptorSet>  updateRadianceDescriptorSets;
+
+    VkDescriptorSetLayout  doLightDescriptorSetLayout;
+    vector<VkDescriptorSet>  doLightDescriptorSets;
+
     VkDescriptorSetLayout  denoiseDescriptorSetLayout;
     vector<VkDescriptorSet>  denoiseDescriptorSets_lowres;
     vector<VkDescriptorSet>  denoiseDescriptorSets_highres;
@@ -712,6 +723,8 @@ public:
 // upscale denoise
 //compute pipeline things
     VkPipelineLayout raytraceLayout;
+    VkPipelineLayout radianceLayout;
+    VkPipelineLayout doLightLayout;
     VkPipelineLayout denoiseLayout;
     VkPipelineLayout upscaleLayout;
     VkPipelineLayout accumulateLayout;
@@ -722,6 +735,8 @@ public:
     // VkPipelineLayout       dfyLayout;
     // VkPipelineLayout       dfzLayout;
     VkPipeline raytracePipeline;
+    VkPipeline radiancePipeline;
+    VkPipeline doLightPipeline;
     VkPipeline denoisePipeline;
     VkPipeline denoisePipeline_lowres;
     VkPipeline accumulatePipeline;

@@ -401,12 +401,14 @@ void Engine::draw()
                 render.endMap();
 // println
                 render.raytrace();
+                // render.updadeRadiance();
+                // render.doLight();
 // println
-                render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                // render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 render.accumulate();
 // println
-                render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                // render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
@@ -417,7 +419,7 @@ void Engine::draw()
                     render.upscale();
                 }
 // println
-                render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
+                // render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
 // println
