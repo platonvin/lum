@@ -20,6 +20,7 @@
   - **MinGW64 C++ Compiler**: if on windows, follow instructions at https://www.msys2.org/
   - **Vcpkg**: follow instructions at https://vcpkg.io/en/getting-started
   - **Vulkan SDK**: follow instructions at https://vulkan.lunarg.com/sdk/home
+    - obviously, vulkan support required. But you can also use software renderers
   - **GNU Make**: installed with MinGW64 as mingw32-make.exe (mingw32-make.exe is refered as make)
 - ### Required Libraries
   - **GLM**: Install via MSYS2
