@@ -60,7 +60,7 @@ void Renderer::create_Sync_Objects(){
     raytraceFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     rayGenFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 
-       rayGenInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+       frameInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
     graphicalInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
       raytraceInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -77,7 +77,7 @@ void Renderer::create_Sync_Objects(){
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &rayGenFinishedSemaphores[i]));
         VK_CHECK(vkCreateFence(device, &fenceInfo, NULL, &graphicalInFlightFences[i]));
         VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,   &raytraceInFlightFences[i]));
-        VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,    &rayGenInFlightFences[i]));
+        VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,    &frameInFlightFences[i]));
     }
 }
 

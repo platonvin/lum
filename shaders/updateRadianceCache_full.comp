@@ -300,7 +300,7 @@ vec3 trace_ray(vec3 ray_pos, vec3 ray_dir){
 void store_probe(int probe_id, ivec3 probe_pos, vec3 accumulated_light){
     //probes are stored as 32-wide lines for x in world_size 3d images
     ivec3 subprobe_pos;
-          subprobe_pos.x  = probe_pos.x; //same as local_pos actually but its optimized away and worth it for modularity
+          subprobe_pos.x  = probe_pos.x*RAYS_PER_PROBE + probe_id; //same as local_pos actually but its optimized away and worth it for modularity
           subprobe_pos.yz = probe_pos.yz; //reuses but its optimized away
 
     vec3 old_light = clamp(imageLoad(radianceCache, subprobe_pos).xyz, 0, 1);
@@ -312,7 +312,7 @@ void store_probe(int probe_id, ivec3 probe_pos, vec3 accumulated_light){
     imageStore(radianceCache, subprobe_pos, vec4(new_light,1));
 }
 
-layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;
 void main(){
     ivec3 local_pos = ivec3(gl_GlobalInvocationID.xyz);
 
@@ -328,10 +328,8 @@ void main(){
     vec3 ray_dir = probeId_to_rayDir(probe_id);
         //  ray_dir = normalize(mix(ray_dir, NormalOrientedHemispherePoint(Random3D(), ray_dir), 0.8));
         //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));
-         ray_dir = normalize(ray_dir + .1 * (Random3D() - 0.5));
-        // ray_dir = randomCosineWeightedHemispherePoint(Random3D(), ray_dir);
-        // ray_dir = 2.0 * (Random3D() - 0.5);
-
+        //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));
+        ray_dir = randomCosineWeightedHemispherePoint(Random3D(), ray_dir);
     // randomVec = vec3(local_pos.x, local_pos.y, local_pos.z);
     
     vec3 ray_light = trace_ray(ray_pos, ray_dir);

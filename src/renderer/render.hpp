@@ -457,7 +457,7 @@ private:
 
     // void destroy_images
     void create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
-    void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size);
+    void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size, u32 flags = 0);
     void create_compute_pipelines();
     // void create_Blockify_Pipeline();
     // void create_Copy_Pipeline();
@@ -542,12 +542,12 @@ public:
     // vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
 
     vector<VkCommandBuffer>    rayGenCommandBuffers;
-    vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
+    // vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
     //It is so because they are too similar and easy to record (TODO: make concurent)
     vector<VkCommandBuffer>   computeCommandBuffers; 
-    vector<VkCommandBuffer> graphicalCommandBuffers;
-    vector<VkCommandBuffer> copyGraphicalCommandBuffers;
-    vector<VkCommandBuffer> renderGraphicalCommandBuffers;
+    vector<VkCommandBuffer> overlayCommandBuffers;
+    vector<VkCommandBuffer> copyOverlayCommandBuffers;
+    vector<VkCommandBuffer> renderOverlayCommandBuffers;
 
     vector<VkSemaphore>   imageAvailableSemaphores;
     vector<VkSemaphore>   renderFinishedSemaphores;
@@ -555,7 +555,7 @@ public:
     vector<VkSemaphore>   rayGenFinishedSemaphores;
     vector<VkFence> graphicalInFlightFences;
     vector<VkFence>  raytraceInFlightFences;
-    vector<VkFence>    rayGenInFlightFences;    
+    vector<VkFence>    frameInFlightFences;    
     
     //g buffer of prev_pixel pos, matid and normal
     // vector<VkImage>           rayGenNormImages;

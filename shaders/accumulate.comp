@@ -187,7 +187,7 @@ varp float old_mix_ratio = ((
         final_color = mix(new_color, old_color, mix_ratio); //NEVER MOVE IT OR WILL GET BLACK TRAILS
     }
 
-    // final_color = new_color;
+    final_color = new_color;
     // store
     imageStore(new_mix_ratio_image, pix, vec4(mix_ratio));
     // imageStore(old_mix_ratio_image, pix, vec4(mix_ratio));

@@ -53,7 +53,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
     printl(swapChainImageFormat)
     
     create_Command_Pool();
-    create_Command_Buffers(&graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&overlayCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
@@ -62,10 +62,10 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
         allocInfo.commandPool = commandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
         allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-    copyGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyGraphicalCommandBuffers.data())); 
-    renderGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderGraphicalCommandBuffers.data())); 
+    copyOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyOverlayCommandBuffers.data())); 
+    renderOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderOverlayCommandBuffers.data())); 
     
     create_SwapchainDependent();
 
@@ -164,6 +164,7 @@ println
 
     create_compute_pipelines();
     create_Sync_Objects();
+println
 }
 void Renderer::delete_Images(vector<Image>* images){
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
@@ -229,7 +230,7 @@ void Renderer::cleanup(){
         vkDestroySemaphore(device,  rayGenFinishedSemaphores[i], NULL);
         vkDestroyFence(device, graphicalInFlightFences[i], NULL);
         vkDestroyFence(device,   raytraceInFlightFences[i], NULL);
-        vkDestroyFence(device,    rayGenInFlightFences[i], NULL);
+        vkDestroyFence(device,    frameInFlightFences[i], NULL);
     }
     vkDestroyCommandPool(device, commandPool, NULL);
     vkDestroyRenderPass(device, graphicalRenderPass, NULL);
@@ -576,7 +577,7 @@ void Renderer::recreate_SwapchainDependent(){
     vkDestroyCommandPool(device, commandPool, NULL);
 
     create_Command_Pool();
-    create_Command_Buffers(&graphicalCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&overlayCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&   rayGenCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
@@ -585,10 +586,10 @@ void Renderer::recreate_SwapchainDependent(){
         allocInfo.commandPool = commandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
         allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-    copyGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyGraphicalCommandBuffers.data())); 
-    renderGraphicalCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderGraphicalCommandBuffers.data())); 
+    copyOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyOverlayCommandBuffers.data())); 
+    renderOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderOverlayCommandBuffers.data())); 
 
     create_SwapchainDependent();
 
@@ -737,12 +738,12 @@ void Renderer::start_Frame(){
 
         old_trans = current_trans;
     current_trans = worldToScreen;
+// println
+    vkWaitForFences(device, 1, &frameInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+    vkResetFences  (device, 1, &frameInFlightFences[currentFrame]);
 }
 
 void Renderer::startRaygen(){
-    vkWaitForFences(device, 1, &rayGenInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-    vkResetFences  (device, 1, &rayGenInFlightFences[currentFrame]);
-
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
     vkResetCommandBuffer(commandBuffer, 0);
     VkCommandBufferBeginInfo beginInfo = {};
@@ -968,18 +969,18 @@ void Renderer::endRaygen(){
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
-    VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &rayGenCommandBuffers[currentFrame];
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = &rayGenFinishedSemaphores[currentFrame];
-    VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, rayGenInFlightFences[currentFrame]));
+    // VkSubmitInfo submitInfo = {};
+    //     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    //     submitInfo.commandBufferCount = 1;
+    //     submitInfo.pCommandBuffers = &rayGenCommandBuffers[currentFrame];
+    //     submitInfo.signalSemaphoreCount = 1;
+    //     submitInfo.pSignalSemaphores = &rayGenFinishedSemaphores[currentFrame];
+    // VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, frameInFlightFences[currentFrame]));
 }
 void Renderer::startCompute(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
-    vkWaitForFences(device, 1, &raytraceInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-    vkResetFences  (device, 1, &raytraceInFlightFences[currentFrame]);
+    // vkWaitForFences(device, 1, &raytraceInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+    // vkResetFences  (device, 1, &raytraceInFlightFences[currentFrame]);
 
 
     
@@ -1296,7 +1297,6 @@ void Renderer::raytrace(){
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, raytraceLayout, 0, 1, &raytraceDescriptorSets[currentFrame], 0, 0);
 
-        itime++;
         old_camera_pos = camera_pos;
         old_camera_dir = camera_dir;
         struct rtpc {vec4 v1, v2;} raytrace_pushconstant = {vec4(camera_pos,intBitsToFloat(itime)), vec4(camera_dir,0)};
@@ -1339,14 +1339,29 @@ void Renderer::updadeRadiance(){
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radianceLayout, 0, 1, &updateRadianceDescriptorSets[currentFrame], 0, 0);
 
-        itime++;
         old_camera_pos = camera_pos;
         old_camera_dir = camera_dir;
         struct rtpc {int time;} pushconstant = {itime};
         vkCmdPushConstants(commandBuffer, radianceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
         
         // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, world_size.z);
-        vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
+        // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
+        int magic_number = itime % 2;
+        // ivec3 fullsize = ivec3(RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
+        // ivec3 partial_dispatch_size;
+        //       partial_dispatch_size.x = (fullsize.x)/2;
+        //       partial_dispatch_size.y = fullsize.y;
+        //       partial_dispatch_size.z = fullsize.z;
+
+        // ivec3 dispatch_shift = ivec3(partial_dispatch_size.x, 0, 0) * magic_number;
+        vkCmdDispatchBase(
+            commandBuffer,
+            // (world_size.x /2) * magic_number, 0, 0,
+            0, 0, 0,
+            (world_size.x /2), world_size.y, 7);
+            // dispatch_shift.x, dispatch_shift.y, dispatch_shift.z,
+            // fullsize.x, fullsize.y, fullsize.z);
+            // partial_dispatch_size.x, partial_dispatch_size.y, partial_dispatch_size.z);
 
     VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1380,7 +1395,6 @@ void Renderer::doLight(){
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, doLightLayout, 0, 1, &doLightDescriptorSets[currentFrame], 0, 0);
 
-        itime++;
         old_camera_pos = camera_pos;
         old_camera_dir = camera_dir;
         struct rtpc {vec4 v1, v2;} pushconstant = {vec4(camera_pos,intBitsToFloat(itime)), vec4(camera_dir,0)};
@@ -1521,19 +1535,20 @@ void Renderer::endCompute(){
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
         vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
         VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        VkSubmitInfo submitInfo = {};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.pWaitDstStageMask = computeWaitStages;
-            submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
-            submitInfo.pWaitSemaphores    = computeWaitSemaphores.data();
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
-            submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = &raytraceFinishedSemaphores[currentFrame];
-    VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, raytraceInFlightFences[currentFrame]));
+    //     VkSubmitInfo submitInfo = {};
+    //         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    //         submitInfo.pWaitDstStageMask = computeWaitStages;
+    //         submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
+    //         submitInfo.pWaitSemaphores    = computeWaitSemaphores.data();
+    //         submitInfo.commandBufferCount = 1;
+    //         submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+    //         submitInfo.signalSemaphoreCount = 1;
+    //         submitInfo.pSignalSemaphores = &raytraceFinishedSemaphores[currentFrame];
+    // VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, raytraceInFlightFences[currentFrame]));
 }
 void Renderer::start_ui(){
     //cause we render ui directly to swapchain image
+    // VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         // cout << KRED"failed to present swap chain image!\n" KEND;
@@ -1545,17 +1560,17 @@ void Renderer::start_ui(){
         exit(result);
     }
 
-    vkWaitForFences(device, 1, &graphicalInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-    vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
+    // vkWaitForFences(device, 1, &graphicalInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
+    // vkResetFences  (device, 1, &graphicalInFlightFences[currentFrame]);
 
-    vkResetCommandBuffer(graphicalCommandBuffers[currentFrame], 0);
-    vkResetCommandBuffer(copyGraphicalCommandBuffers[currentFrame], 0);
-    vkResetCommandBuffer(renderGraphicalCommandBuffers[currentFrame], 0);
+    vkResetCommandBuffer(overlayCommandBuffers[currentFrame], 0);
+    vkResetCommandBuffer(copyOverlayCommandBuffers[currentFrame], 0);
+    vkResetCommandBuffer(renderOverlayCommandBuffers[currentFrame], 0);
     VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = 0;
         beginInfo.pInheritanceInfo = NULL;
-    VK_CHECK(vkBeginCommandBuffer(graphicalCommandBuffers[currentFrame], &beginInfo));
+    VK_CHECK(vkBeginCommandBuffer(overlayCommandBuffers[currentFrame], &beginInfo));
     
     VkCommandBufferInheritanceInfo cmd_buf_inheritance_info = {};
         cmd_buf_inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO, cmd_buf_inheritance_info.pNext = NULL;
@@ -1568,13 +1583,13 @@ void Renderer::start_ui(){
         cmd_buf_inheritance_info.framebuffer = NULL;
     beginInfo.flags = 0;
     beginInfo.pInheritanceInfo = &cmd_buf_inheritance_info;
-    VK_CHECK(vkBeginCommandBuffer(copyGraphicalCommandBuffers[currentFrame], &beginInfo));
+    VK_CHECK(vkBeginCommandBuffer(copyOverlayCommandBuffers[currentFrame], &beginInfo));
         cmd_buf_inheritance_info.renderPass = graphicalRenderPass;
         cmd_buf_inheritance_info.framebuffer = swapChainFramebuffers[imageIndex];
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
         beginInfo.pInheritanceInfo = &cmd_buf_inheritance_info;
-    VK_CHECK(vkBeginCommandBuffer(renderGraphicalCommandBuffers[currentFrame], &beginInfo));
-    vkCmdBindPipeline(renderGraphicalCommandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    VK_CHECK(vkBeginCommandBuffer(renderOverlayCommandBuffers[currentFrame], &beginInfo));
+    vkCmdBindPipeline(renderOverlayCommandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
     VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -1583,16 +1598,16 @@ void Renderer::start_ui(){
         viewport.height = (float)(swapChainExtent.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(renderGraphicalCommandBuffers[currentFrame], 0, 1, &viewport);
+    vkCmdSetViewport(renderOverlayCommandBuffers[currentFrame], 0, 1, &viewport);
 
     UiRenderInterface->last_scissors.offset = {0,0};
     UiRenderInterface->last_scissors.extent = swapChainExtent;
-    vkCmdSetScissor(renderGraphicalCommandBuffers[currentFrame], 0, 1, &UiRenderInterface->last_scissors);
+    vkCmdSetScissor(renderOverlayCommandBuffers[currentFrame], 0, 1, &UiRenderInterface->last_scissors);
 
 }
 
 void Renderer::draw_ui(){
-    VkCommandBuffer &commandBuffer = graphicalCommandBuffers[currentFrame];
+    VkCommandBuffer &commandBuffer = overlayCommandBuffers[currentFrame];
 
     VkImageCopy copy_to_swapchain = {};
         copy_to_swapchain.extent.width  = swapChainExtent.width;
@@ -1665,11 +1680,11 @@ void Renderer::draw_ui(){
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT , &swapchain_images[imageIndex]);    
 
     //copying done
-    VK_CHECK(vkEndCommandBuffer(copyGraphicalCommandBuffers[currentFrame]));
-    VK_CHECK(vkEndCommandBuffer(renderGraphicalCommandBuffers[currentFrame]));
+    VK_CHECK(vkEndCommandBuffer(copyOverlayCommandBuffers[currentFrame]));
+    VK_CHECK(vkEndCommandBuffer(renderOverlayCommandBuffers[currentFrame]));
 
     //copies
-    vkCmdExecuteCommands(commandBuffer, 1, &copyGraphicalCommandBuffers[currentFrame]);
+    vkCmdExecuteCommands(commandBuffer, 1, &copyOverlayCommandBuffers[currentFrame]);
 
     VkClearValue clearColor = {{{0.111f, 0.444f, 0.666f, 1.0f}}};
     VkRenderPassBeginInfo renderPassInfo = {};
@@ -1684,33 +1699,43 @@ void Renderer::draw_ui(){
     
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-        vkCmdExecuteCommands(commandBuffer, 1, &renderGraphicalCommandBuffers[currentFrame]);
+        vkCmdExecuteCommands(commandBuffer, 1, &renderOverlayCommandBuffers[currentFrame]);
     vkCmdEndRenderPass(commandBuffer);
 
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 }
 
 void Renderer::present(){
-    // vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
-    vector<VkSemaphore> waitSemaphores = {raytraceFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
+    // vector<VkSemaphore> waitSemaphores = {raytraceFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
     vector<VkSemaphore> signalSemaphores = {renderFinishedSemaphores[currentFrame]};
     //TODO: replace with VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    // VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    
+    //ui drawn, and it waits for everything else already
+    vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    // vector<VkCommandBuffer>    rayGenCommandBuffers;
+    // vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
+    //It is so because they are too similar and easy to record (TODO: make concurent)
+    // vector<VkCommandBuffer>   computeCommandBuffers; 
+    // vector<VkCommandBuffer> graphicalCommandBuffers;
+    // vector<VkCommandBuffer> copyGraphicalCommandBuffers;
+    // vector<VkCommandBuffer> renderGraphicalCommandBuffers;
+    vector<VkCommandBuffer> commandBuffers = {rayGenCommandBuffers[currentFrame], computeCommandBuffers[currentFrame], overlayCommandBuffers[currentFrame]};
     VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.waitSemaphoreCount = waitSemaphores.size();
         submitInfo.pWaitSemaphores    = waitSemaphores.data();
+        // submitInfo.waitSemaphoreCount = 0;
+        // submitInfo.pWaitSemaphores    = NULL;
         submitInfo.pWaitDstStageMask = waitStages;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &graphicalCommandBuffers[currentFrame];
+        submitInfo.commandBufferCount = commandBuffers.size();
+        submitInfo.pCommandBuffers = commandBuffers.data();
         submitInfo.signalSemaphoreCount = signalSemaphores.size();
         submitInfo.pSignalSemaphores    = signalSemaphores.data();
-
-    VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, graphicalInFlightFences[currentFrame]));
+        
     VkSwapchainKHR swapchains[] = {swapchain};
-    
     VkPresentInfoKHR presentInfo = {};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = signalSemaphores.size();
@@ -1719,12 +1744,24 @@ void Renderer::present(){
         presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = NULL;
+        // presentInfo.
 
+// println
+    VK_CHECK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, frameInFlightFences[currentFrame]));
+// println
     VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+// println
+
+    
+
+    
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || is_resized) {
         is_resized = false; 
         // cout << KRED"failed to present swap chain image!\n" KEND;
+// println
         recreate_SwapchainDependent();
+// println
     } else if (result != VK_SUCCESS) {
         cout << KRED"failed to present swap chain image!\n" KEND;
         exit(result);
@@ -1732,11 +1769,13 @@ void Renderer::present(){
 }
 
 void Renderer::end_Frame(){
+// println
     previousFrame = currentFrame;
      currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     nextFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-
+    itime++;
     process_ui_deletion_queue();
+// println
 }
 
 // void Renderer::create_Image_Storages_DepthStencil(vector<VkImage>* images, vector<VmaAllocation>* allocs, vector<VkImageView>* depthViews, vector<VkImageView>* stencilViews,
@@ -2864,7 +2903,7 @@ void Renderer::setup_RayGen_Particles_Descriptors(){
 
 vector<char> read_Shader(const char* filename);
 
-void Renderer::create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size){
+void Renderer::create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size, u32 flags){
     auto compShaderCode = read_Shader(name);
 
     VkShaderModule module = create_Shader_Module(&compShaderCode);
@@ -2901,6 +2940,7 @@ void Renderer::create_compute_pipelines_helper(const char* name, VkDescriptorSet
         pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipelineInfo.stage = compShaderStageInfo; //always single stage so no pointer :)
         pipelineInfo.layout = *pipelineLayout;
+        pipelineInfo.flags = flags;
 
     VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, pipeline));
     vkDestroyShaderModule(device, module, NULL);
@@ -2914,7 +2954,7 @@ void Renderer::create_compute_pipelines(){
     // create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
     // create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
     create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(ivec4) + sizeof(vec4)*4);
-    create_compute_pipelines_helper("shaders/compiled/radiance.spv"    , updateRadianceDescriptorSetLayout, &radianceLayout, &radiancePipeline, sizeof(int));
+    create_compute_pipelines_helper("shaders/compiled/radiance.spv"    , updateRadianceDescriptorSetLayout, &radianceLayout, &radiancePipeline, sizeof(int), VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     create_compute_pipelines_helper("shaders/compiled/dolight.spv"    , doLightDescriptorSetLayout, &doLightLayout, &doLightPipeline, sizeof(ivec4) + sizeof(vec4)*4);
 
     create_compute_pipelines_helper("shaders/compiled/denoise.spv" ,  denoiseDescriptorSetLayout,  &denoiseLayout,  &denoisePipeline, sizeof(int)*2);

@@ -41,7 +41,7 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
         memcpy(data, indices, bufferSizeI);
         vmaUnmapMemory(render->VMAllocator, ui_mesh.indexes.alloc);
 
-    VkCommandBuffer &renderCommandBuffer = render->renderGraphicalCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
 
         VkBuffer vertexBuffers[] = {ui_mesh.vertexes.buffer};
         VkDeviceSize offsets[] = {0};
@@ -131,7 +131,7 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry(Rml::Vertex* vert
         memcpy(data, indices, bufferSizeI);
         vmaUnmapMemory(render->VMAllocator, stagingAllocationI);
 
-    VkCommandBuffer &copyCommandBuffer = render->copyGraphicalCommandBuffers[render->currentFrame];
+    VkCommandBuffer &copyCommandBuffer = render->copyOverlayCommandBuffers[render->currentFrame];
     VkBufferCopy staging_copy = {};
         staging_copy.size = bufferSizeV;
     vkCmdCopyBuffer(copyCommandBuffer, stagingBufferV, ui_mesh->vertexes.buffer, 1, &staging_copy);
@@ -146,7 +146,7 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry(Rml::Vertex* vert
 
 // Called by RmlUi when it wants to render application-compiled geometry.
 void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation){
-    VkCommandBuffer &renderCommandBuffer = render->renderGraphicalCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
     UiMesh* ui_mesh = (UiMesh*)geometry;
 
     VkBuffer vertexBuffers[] = {ui_mesh->vertexes.buffer};
@@ -194,7 +194,7 @@ void MyRenderInterface::ReleaseCompiledGeometry(Rml::CompiledGeometryHandle geom
 
 // Called by RmlUi when it wants to enable or disable scissoring to clip content.
 void MyRenderInterface::EnableScissorRegion(bool enable){
-    VkCommandBuffer &renderCommandBuffer = render->renderGraphicalCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
     if(true) {
         //do nothing...
         return;
@@ -209,7 +209,7 @@ void MyRenderInterface::EnableScissorRegion(bool enable){
 
 // Called by RmlUi when it wants to change the scissor region.
 void MyRenderInterface::SetScissorRegion(int x, int y, int width, int height){
-    VkCommandBuffer &renderCommandBuffer = render->renderGraphicalCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
     last_scissors = {};
         last_scissors.offset = {std::clamp(x,0,int(render->swapChainExtent.width -1)),
                                 std::clamp(y,0,int(render->swapChainExtent.height-1))};
@@ -381,7 +381,7 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     
 
-    VkCommandBuffer &copyCommandBuffer = render->copyGraphicalCommandBuffers[render->currentFrame];
+    VkCommandBuffer &copyCommandBuffer = render->copyOverlayCommandBuffers[render->currentFrame];
     render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, &barrier);
 
     VkBufferImageCopy staging_copy = {};
