@@ -73,7 +73,7 @@ obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.h
 	g++ common/ogt_voxel_meshify.cpp -O2 -c -o obj/ogt_voxel_meshify.o $(Flags) $(I) $(args)
 obj/meshopt.o: common/meshopt.cpp common/meshopt.hpp
 	g++ common/meshopt.cpp -O2 -c -o obj/meshopt.o $(Flags) $(I) $(args)
-obj/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.hpp src/renderer/ui.hpp
+obj/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp
 	g++ src/engine.cpp -c -o obj/engine.o $(Flags) $(I) $(args)
 obj/render.o: src/renderer/render.cpp src/renderer/render.hpp
 	g++ src/renderer/render.cpp -c -o obj/render.o $(Flags) $(I) $(args)

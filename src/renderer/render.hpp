@@ -161,13 +161,21 @@ typedef struct Image {
 enum MeshVertexTypes {
     // MESH_VERTEX_TYPE_
 };
-
+typedef struct IndexedVertices {
+    vector<Buffer> indexes;
+    u32 icount;
+} IndexedVertices;
+typedef struct FaceBuffers {
+    IndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
+    vector<Buffer> vertexes;
+} FaceBuffers;
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
     //VkBuffers for ray generation
-    vector<Buffer> vertexes;
-    vector<Buffer> indexes;
-    u32 icount;
+    // vector<Buffer> vertexes;
+    // vector<Buffer> indexes;
+    FaceBuffers triangles;
+
     vector<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
 
     quat rot;
@@ -366,8 +374,8 @@ public:
         void   present();
     void end_Frame();
 
-    template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(Vertex_T* vertices, u32 vcount, u32* indices, u32 icount); 
-    template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> create_RayGen_VertexBuffers(vector<Vertex_T> vertices, vector<u32> indices); 
+    template<class Vertex_T> vector<Buffer> create_elemBuffers(Vertex_T* vertices, u32 count, u32 buffer_usage = 0); 
+    template<class Vertex_T> vector<Buffer> create_elemBuffers(vector<Vertex_T> vertices, u32 buffer_usage = 0); 
 
     vector<Image>  create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size);
     void update_Block_Palette(Block** blockPalette);
@@ -819,61 +827,50 @@ public:
 };
 
 //TODO: need to find memory, verify flags
-template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> Renderer::create_RayGen_VertexBuffers(vector<Vertex_T> vertices, vector<u32> indices){
-    return create_RayGen_VertexBuffers<Vertex_T>(vertices.data(), vertices.size(), indices.data(), indices.size());
+template<class Elem_T> vector<Buffer> Renderer::create_elemBuffers(vector<Elem_T> elements, u32 buffer_usage){
+    return create_elemBuffers<Elem_T>(elements.data(), elements.size(), buffer_usage);
 }
 
-template<class Vertex_T> tuple<vector<Buffer>, vector<Buffer>> Renderer::create_RayGen_VertexBuffers(Vertex_T* vertices, u32 vcount, u32* indices, u32 icount){
-    VkDeviceSize bufferSizeV = sizeof(Vertex_T)*vcount;
-    VkDeviceSize bufferSizeI = sizeof(u32   )*icount;
+template<class Elem_T> vector<Buffer> Renderer::create_elemBuffers(Elem_T* elements, u32 count, u32 buffer_usage){
+    VkDeviceSize bufferSize = sizeof(Elem_T)*count;
+    // VkDeviceSize bufferSizeI = sizeof(u32   )*icount;
 
-    vector<Buffer> vertexes (MAX_FRAMES_IN_FLIGHT);
-    vector<Buffer>  indexes (MAX_FRAMES_IN_FLIGHT);
+    vector<Buffer> elems (MAX_FRAMES_IN_FLIGHT);
+    // vector<Buffer>  indexes (MAX_FRAMES_IN_FLIGHT);
 
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        stagingBufferInfo.size = bufferSizeV;
+        stagingBufferInfo.size = bufferSize;
         stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VmaAllocationCreateInfo stagingAllocInfo = {};
         stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
         stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    VkBuffer stagingBufferV = {};
-    VmaAllocation stagingAllocationV = {};
-    VkBuffer stagingBufferI = {};
-    VmaAllocation stagingAllocationI = {};
-    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferV, &stagingAllocationV, NULL);
-    stagingBufferInfo.size = bufferSizeI;
-    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferI, &stagingAllocationI, NULL);
+    VkBuffer stagingBuffer = {};
+    VmaAllocation stagingAllocation = {};
+    vmaCreateBuffer(VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
 
     void* data;
 assert (VMAllocator);
-assert (stagingAllocationV);
+assert (stagingAllocation);
 assert (&data);
-    vmaMapMemory(VMAllocator, stagingAllocationV, &data);
-        memcpy(data, vertices, bufferSizeV);
-    vmaUnmapMemory(VMAllocator, stagingAllocationV);
-
-    vmaMapMemory(VMAllocator, stagingAllocationI, &data);
-        memcpy(data, indices, bufferSizeI);
-    vmaUnmapMemory(VMAllocator, stagingAllocationI);
+    vmaMapMemory(VMAllocator, stagingAllocation, &data);
+        memcpy(data, elements, bufferSize);
+    vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-            bufferInfo.size = bufferSizeV;
-            bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            bufferInfo.size = bufferSize;
+            bufferInfo.usage = buffer_usage;
         VmaAllocationCreateInfo allocInfo = {};
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &vertexes[i].buffer, &vertexes[i].alloc, NULL);
-            bufferInfo.size = bufferSizeI;
-            bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &indexes[i].buffer, &indexes[i].alloc, NULL);
+        vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &elems[i].buffer, &elems[i].alloc, NULL);
                
-        copy_Buffer(stagingBufferV, vertexes[i].buffer, bufferSizeV);
-        copy_Buffer(stagingBufferI,  indexes[i].buffer, bufferSizeI);
+        copy_Buffer(stagingBuffer, elems[i].buffer, bufferSize);
+        // copy_Buffer(stagingBufferI,  indexes[i].buffer, bufferSizeI);
     }
 
-    vmaDestroyBuffer(VMAllocator, stagingBufferV, stagingAllocationV);
-    vmaDestroyBuffer(VMAllocator, stagingBufferI, stagingAllocationI);
-
-    return {vertexes, indexes};
+    vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
+    // vmaDestroyBuffer(VMAllocator, stagingBufferI, stagingAllocationI);
+// 
+    return elems;
 }

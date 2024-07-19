@@ -317,20 +317,24 @@ void main(){
     ivec3 local_pos = ivec3(gl_GlobalInvocationID.xyz);
 
     float seed = float(PushConstants.timeSeed);
-    random_storage = vec2(sin(local_pos.x*seed), sin(seed*local_pos.y));
+    random_storage = vec2(sin(local_pos.x*seed*5.12315), sin(local_pos.y*seed*7.7343));
     
     int probe_id = local_pos.x % RAYS_PER_PROBE;
 
     ivec3 probe_pos = ivec3(local_pos);
           probe_pos.x /= RAYS_PER_PROBE;
 
-    vec3 ray_pos = vec3(probe_pos) * 16.0 + 8.0;
+    vec3 block_center = vec3(probe_pos) * 16.0 + 8.0;
+    vec3 ray_pos = block_center;
+        //  ray_pos += 15.99*(Random3D() - 0.5);
     vec3 ray_dir = probeId_to_rayDir(probe_id);
         //  ray_dir = normalize(mix(ray_dir, NormalOrientedHemispherePoint(Random3D(), ray_dir), 0.8));
         //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));
-         ray_dir = normalize(ray_dir + .1 * (Random3D() - 0.5));
+         ray_dir = normalize(ray_dir + .1 * ((Random3D() - 0.5)*2.0));
+         ray_pos += ray_dir*8.0;
         // ray_dir = randomCosineWeightedHemispherePoint(Random3D(), ray_dir);
         // ray_dir = 2.0 * (Random3D() - 0.5);
+        // ray_dir = normalize(ray_pos - block_center);
 
     // randomVec = vec3(local_pos.x, local_pos.y, local_pos.z);
     

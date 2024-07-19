@@ -352,6 +352,8 @@ void Engine::draw()
                 block_mesh->shift = vec3(b.pos);
                 block_mesh->old_shift = vec3(b.pos);
 
+                // printl(block_palette[b.index]->mesh.triangles.Pzz.icount);
+                
                 render.RaygenMesh(block_mesh);
             }
             

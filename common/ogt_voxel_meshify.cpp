@@ -292,8 +292,11 @@ void my_int_mesh_optimize(const ogt_voxel_meshify_context* ctx, ogt_int_mesh* me
     }   
     // printl(mesh->vertex_count);
     // printl(remapping_index);
+    //its free to do so because of free() trick used in allocating this
     mesh->vertex_count = remapping_index;
-
+    // for (int i=0; i<mesh->vertex_count; i++){
+    //     printf("x:%1d y:%1d z:%1d\n", mesh->vertices[i].normal.x, mesh->vertices[i].normal.y, mesh->vertices[i].normal.z);
+    // }
     delete[] access_counter;
     delete[] remapping;
 

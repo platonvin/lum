@@ -815,10 +815,13 @@ void Renderer::startRaygen(){
 }
 
 static VkBuffer old_buff = NULL;
+static bool is_face_visible(vec3 normal, vec3 camera_dir){
+    return (dot(normal, camera_dir) < 0.0f);
+}
 void Renderer::RaygenMesh(Mesh *mesh){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
 
-        VkBuffer vertexBuffers[] = {(*mesh).vertexes[currentFrame].buffer};
+        VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
     
     struct {quat r1,r2; vec4 s1,s2;} raygen_pushconstant = {(*mesh).rot, (*mesh).old_rot, vec4((*mesh).shift,0), vec4((*mesh).old_shift,0)};
@@ -829,12 +832,35 @@ void Renderer::RaygenMesh(Mesh *mesh){
     (*mesh).old_shift = (*mesh).shift;
 
     // glm::mult
-    if(old_buff != (*mesh).indexes[currentFrame].buffer){
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
-        old_buff = (*mesh).indexes[currentFrame].buffer;
+    // if(old_buff != (*mesh).indexes[currentFrame].buffer){
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    // printl((*mesh).triangles.Pzz.icount);
+    if(is_face_visible(mesh->rot*vec3(+1,0,0), camera_dir)){
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Pzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.Pzz.icount, 1, 0, 0, 0);
     }
-    vkCmdDrawIndexed(commandBuffer, (*mesh).icount, 1, 0, 0, 0);
+    if(is_face_visible(mesh->rot*vec3(-1,0,0), camera_dir)){
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Nzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.Nzz.icount, 1, 0, 0, 0);
+    }
+    if(is_face_visible(mesh->rot*vec3(0,+1,0), camera_dir)){
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zPz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zPz.icount, 1, 0, 0, 0);
+    }
+    if(is_face_visible(mesh->rot*vec3(0,-1,0), camera_dir)){
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zNz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zNz.icount, 1, 0, 0, 0);
+    }
+    if(is_face_visible(mesh->rot*vec3(0,0,+1), camera_dir)){
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzP.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zzP.icount, 1, 0, 0, 0);
+    }
+    if(is_face_visible(mesh->rot*vec3(0,0,-1), camera_dir)){
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzN.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zzN.icount, 1, 0, 0, 0);
+    }
+        // old_buff = (*mesh).indexes[currentFrame].buffer;
+    // }
 }
 void Renderer::rayGenMapParticles(){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
@@ -1358,7 +1384,7 @@ void Renderer::updadeRadiance(){
             commandBuffer,
             // (world_size.x /2) * magic_number, 0, 0,
             0, 0, 0,
-            (world_size.x /2), world_size.y, 7);
+            (world_size.x /2), world_size.y/2, 7);
             // dispatch_shift.x, dispatch_shift.y, dispatch_shift.z,
             // fullsize.x, fullsize.y, fullsize.z);
             // partial_dispatch_size.x, partial_dispatch_size.y, partial_dispatch_size.z);
@@ -2055,7 +2081,7 @@ vector<Image> Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size){
         VK_FORMAT_R8_UINT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        0, // no VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT
         VK_IMAGE_ASPECT_COLOR_BIT,
         size);
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){

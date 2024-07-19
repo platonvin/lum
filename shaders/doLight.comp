@@ -134,18 +134,17 @@ NearestPoint[4] findNearestPoints(vec3 direction, float NUM_POINTS)
     return nearestPoints;
 }
 
-// Assume get_color returns a vec3 color for a given index
 vec3 get_color(int index, ivec3 probe_ipos){
     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
     ivec3 subprobe_pos;
-          subprobe_pos.x  = probe_ipos_clamped.x*RAYS_PER_PROBE + index; //same as local_pos actually but its optimized away and worth it for modularity
+          subprobe_pos.x  = probe_ipos_clamped.x*RAYS_PER_PROBE + index;
           subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
     // vec3 light = imageLoad(radianceCache, clamp(subprobe_pos, ivec3(0), world_size)).xyz;
     vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
     return clamp(light, 0, 1);
 }
 
-// Function to linearly interpolate between 4 colors based on their distances
+// linearly interpolate between 4 colors based on their distances
 // vec3 interpolateColors(vec3 direction, float NUM_POINTS, ivec3 probe_ipos)
 // {
 //     NearestPoint[4] nearestPoints = findNearestPoints(direction, NUM_POINTS);
@@ -179,7 +178,7 @@ vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
           subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
     // vec3 light = imageLoad(radianceCache, clamp(subprobe_pos, ivec3(0), world_size)).xyz;
     vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
-    return clamp(light, 0, 1);
+    return clamp(light, 0, 2);
 
     // NearestPoint[4] nearestPoints = findNearestPoints(direction, RAYS_PER_PROBE);
 
@@ -218,9 +217,10 @@ vec3 sample_radiance(vec3 position, vec3 normal){
     // alpha = vec3(1);
 
     for (int i=0; i<8; i++){
+        //weird algo to make it little more readable and maybe low-instruction-cache-but-fast-loops gpu's friendly (if they will ever exist)
         ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
 
-        float probe_weight =      1 ;
+        float probe_weight =     (1);
          vec3 probe_colour = vec3(0);
 
         vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
@@ -231,17 +231,25 @@ vec3 sample_radiance(vec3 position, vec3 normal){
         vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
         probe_weight = trilinear.x * trilinear.y * trilinear.z;
 
-        // probe_weight *= square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
-        // direction_to_probe = normalize(mix(direction_to_probe, normal, 0.8));
+        
+        /*
+        actually, not using directional weight **might** increase quality 
+        by adding extra shadows in corners made of solid blocks
+        but im still going to use it
 
-        float direction_weight = square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
-        // probe_weight *= direction_weight;
+        0.1 clamp to prevent weird cases where occasionally every single one would be 0 - in such cases, it will lead to trilinear
+        */
+        float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
+        // float direction_weight = square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
+        // float direction_weight = float(dot(direction_to_probe, normal) > 0);
+
+        probe_weight *= direction_weight;
         
         // const float crushThreshold = 0.2;
         // if (probe_weight < crushThreshold) {
         //     probe_weight *= probe_weight * probe_weight * (1.0 / square(crushThreshold)); 
         // }
-        
+
         probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
         // probe_colour = vec3(zero_probe_ipos + offset) / vec3(world_size);
 

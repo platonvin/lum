@@ -222,7 +222,8 @@ void Renderer::load_block(Block** block, const char* vox_file){
     (*block)->mesh.size = ivec3(scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
     (*block)->mesh.shift = vec3(0);
     (*block)->mesh.rot = quat_identity<float, defaultp>();
-    make_vertices(&(*block)->mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    make_vertices(&((*block)->mesh), (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    // printl((*block)->mesh.triangles.Pzz.icount);
     
     for (int x=0; x < scene->models[0]->size_x; x++){
     for (int y=0; y < scene->models[0]->size_y; y++){
@@ -232,10 +233,20 @@ void Renderer::load_block(Block** block, const char* vox_file){
     
     ogt::vox_destroy_scene(scene);
 }
+
+#define free_helper(dir) \
+if(not (*block)->mesh.triangles.dir. indexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.dir. indexes[i].buffer, (*block)->mesh.triangles.dir. indexes[i].alloc);
 void Renderer::free_block(Block** block){
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        if(not (*block)->mesh.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.vertexes[i].buffer, (*block)->mesh.vertexes[i].alloc);
-        if(not (*block)->mesh. indexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh. indexes[i].buffer, (*block)->mesh. indexes[i].alloc);
+        // if(not (*block)->mesh.triangles.Pzz.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.vertexes[i].buffer, (*block)->mesh.vertexes[i].alloc);
+        // if(not (*block)->mesh. indexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh. indexes[i].buffer, (*block)->mesh. indexes[i].alloc);
+        free_helper(Pzz);
+        free_helper(Nzz);
+        free_helper(zPz);
+        free_helper(zNz);
+        free_helper(zzP);
+        free_helper(zzN);
+        if(not (*block)->mesh.triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);\
     }
 
     if(not((*block)==NULL)) delete (*block);
@@ -262,13 +273,25 @@ void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int 
     // voxels_extended.deallocate();
 }
 //frees only gpu side stuff, not mesh ptr
+#undef  free_helper
+#define free_helper(dir) \
+if(not mesh->triangles.dir. indexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.dir. indexes[i].buffer, mesh->triangles.dir. indexes[i].alloc);
 void Renderer::free_mesh(Mesh* mesh){
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        if(not mesh->vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
-        if(not mesh->indexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->indexes[i].buffer, mesh->indexes[i].alloc);
-        if(not mesh->voxels.empty()) vmaDestroyImage(VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
-        if(not mesh->voxels.empty()) vkDestroyImageView(device, mesh->voxels[i].view, NULL);
+        // if(not mesh->vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
+        free_helper(Pzz);
+        free_helper(Nzz);
+        free_helper(zPz);
+        free_helper(zNz);
+        free_helper(zzP);
+        free_helper(zzN);
+        if(not mesh->triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);\
+        // if(not mesh->indexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->indexes[i].buffer, mesh->indexes[i].alloc);
+        // if(not mesh->voxels.empty()) vmaDestroyImage(VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
+        // if(not mesh->voxels.empty()) vkDestroyImageView(device, mesh->voxels[i].view, NULL);
+        // free_helper()
     }
+#undef free_helper
 }
 
 // #define 
@@ -284,28 +307,67 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
 
 // println
     vector<VoxelVertex> verts(ogt_mesh->vertex_count);
-    for(int i=0; i<ogt_mesh->vertex_count; i++){
+    for(u32 i=0; i<ogt_mesh->vertex_count; i++){
         verts[i].pos  = uvec3(ogt_mesh->vertices[i].pos);
         verts[i].norm = ivec3(ogt_mesh->vertices[i].normal);
         verts[i].matID = (MatID_t)ogt_mesh->vertices[i].palette_index;
 
         assert(verts[i].norm != (vec<3, signed char, defaultp>)(0));
-        if(length(vec3(verts[i].norm)) != 1.0f){
-            // printl(verts[i].norm.x);
-            printl((int)verts[i].norm.x);
-            printl((int)verts[i].norm.y);
-            printl((int)verts[i].norm.z);
-            printl(ogt_mesh->vertices[i].normal.x);
-            printl(ogt_mesh->vertices[i].normal.y);
-            printl(ogt_mesh->vertices[i].normal.z);
-            abort();
+        assert(length(vec3(verts[i].norm)) == 1.0f);
+    }
+
+    vector<u32> verts_Pzz = {};
+    vector<u32> verts_Nzz = {};
+    vector<u32> verts_zPz = {};
+    vector<u32> verts_zNz = {};
+    vector<u32> verts_zzP = {};
+    vector<u32> verts_zzN = {};
+
+    for(u32 i=0; i<ogt_mesh->index_count; i++){
+        u32 index = ogt_mesh->indices[i];
+        u32 provoking_index = ogt_mesh->indices[(i / 3) * 3];
+        vec<3, signed char, defaultp> norm = verts[provoking_index].norm;
+
+        //where is my clang-tidy disable specific warning #pragma?..
+        if     (norm == vec<3, signed char, defaultp>(+1,0,0)) verts_Pzz.push_back(index);
+        else if(norm == vec<3, signed char, defaultp>(-1,0,0)) verts_Nzz.push_back(index);
+        else if(norm == vec<3, signed char, defaultp>(0,+1,0)) verts_zPz.push_back(index);
+        else if(norm == vec<3, signed char, defaultp>(0,-1,0)) verts_zNz.push_back(index);
+        else if(norm == vec<3, signed char, defaultp>(0,0,+1)) verts_zzP.push_back(index);
+        else if(norm == vec<3, signed char, defaultp>(0,0,-1)) verts_zzN.push_back(index);
+        else {
+            printl((int)norm.x);
+            printl((int)norm.y);
+            printl((int)norm.z);
+            crash(unrecognized normal);
         }
     }
-    tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers<VoxelVertex>(verts.data(), ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
-    // tie(mesh->vertexes, mesh->indexes) = create_RayGen_VertexBuffers<VoxelVertex>((VoxelVertex*)ogt_mesh->vertices, ogt_mesh->vertex_count, ogt_mesh->indices, ogt_mesh->index_count);
 // println
+    mesh->triangles.vertexes = create_elemBuffers<VoxelVertex>(verts.data(), ogt_mesh->vertex_count, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+// println
+    // printl(verts_Pzz.data());
+    // printl(verts_Pzz.size());
 
-    mesh->icount = ogt_mesh->index_count;
+    mesh->triangles.Pzz.indexes = create_elemBuffers<u32>(verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.Nzz.indexes = create_elemBuffers<u32>(verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zPz.indexes = create_elemBuffers<u32>(verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zNz.indexes = create_elemBuffers<u32>(verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zzP.indexes = create_elemBuffers<u32>(verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zzN.indexes = create_elemBuffers<u32>(verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+// println
+    assert(verts_Pzz.size()!=0);
+    assert(verts_Nzz.size()!=0);
+    assert(verts_zPz.size()!=0);
+    assert(verts_zNz.size()!=0);
+    assert(verts_zzP.size()!=0);
+    assert(verts_zzN.size()!=0);
+    mesh->triangles.Pzz.icount = verts_Pzz.size();
+    mesh->triangles.Nzz.icount = verts_Nzz.size();
+    mesh->triangles.zPz.icount = verts_zPz.size();
+    mesh->triangles.zNz.icount = verts_zNz.size();
+    mesh->triangles.zzP.icount = verts_zzP.size();
+    mesh->triangles.zzN.icount = verts_zzN.size();
+    // mesh->icount = ogt_mesh->index_count;
     mesh->shift = vec3(0);
     mesh->rot = quat_identity<float, defaultp>();
     // ogt::ogt_mesh_destroy(&ctx, int_mesh);
