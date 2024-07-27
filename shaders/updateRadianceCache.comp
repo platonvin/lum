@@ -4,6 +4,8 @@ precision highp int;
 precision highp float;
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
+//well, its not really radiance. Its more of a minecraft lighting but raytraced
+
 //sadly there is no way to use specialization constants for this
 #define varp highp
 
@@ -15,13 +17,16 @@ layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // layout(constant_id = 0) const int RAYS_PER_PROBE = 32;
 layout(constant_id = 1) const int BLOCK_PALETTE_SIZE_X = 64;
 layout(constant_id = 2) const int MAX_DEPTH = 5;
-layout(constant_id = 3) const float REACTIVNESS = 0.01;
+layout(constant_id = 3) const float REACTIVNESS = 0.02;
 
 layout(push_constant) uniform constants{
     varp int timeSeed;
+    varp int iters;
 } PushConstants;
 
-#define RAYS_PER_PROBE (32) //TODO: change to spec const
+#define SUBGROUPS_PER_WORKGROUP 4
+#define RAYS_PER_PROBE (32*SUBGROUPS_PER_WORKGROUP) //TODO: change to spec const
+//funniest thing is that it should even work on amd, tho _light might take twice more
 
 const varp float PI = 3.1415926535897932384626433832795;
 const varp float FAR_DISTANCE = 100000.0;
@@ -308,11 +313,14 @@ void store_probe(int probe_id, ivec3 probe_pos, vec3 accumulated_light){
     vec3 new_light = mix(old_light, accumulated_light, REACTIVNESS);
 
     // new_light = vec3(probe_pos) / vec3(world_size);
-    
+    // imageAtomicDiv
     imageStore(radianceCache, subprobe_pos, vec4(new_light,1));
 }
 
-layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+//im tired of naming things, no one is gonna read this anyways
+shared vec3 _light[SUBGROUPS_PER_WORKGROUP];
+
+layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;
 void main(){
     ivec3 local_pos = ivec3(gl_GlobalInvocationID.xyz);
 
@@ -330,7 +338,7 @@ void main(){
     vec3 ray_dir = probeId_to_rayDir(probe_id);
         //  ray_dir = normalize(mix(ray_dir, NormalOrientedHemispherePoint(Random3D(), ray_dir), 0.8));
         //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));
-         ray_dir = normalize(ray_dir + .1 * ((Random3D() - 0.5)*2.0));
+         ray_dir = normalize(ray_dir + .05 * ((Random3D() - 0.5)*2.0));
          ray_pos += ray_dir*8.0;
         // ray_dir = randomCosineWeightedHemispherePoint(Random3D(), ray_dir);
         // ray_dir = 2.0 * (Random3D() - 0.5);
@@ -339,9 +347,32 @@ void main(){
     // randomVec = vec3(local_pos.x, local_pos.y, local_pos.z);
     
     vec3 ray_light = trace_ray(ray_pos, ray_dir);
-    ray_light = subgroupAdd(ray_light) / gl_SubgroupSize;
-    
+    // ray_light = subgroupAdd(ray_light) / gl_SubgroupSize;
+    // subgroupBarrier();
+    ray_light = subgroupAdd(ray_light) / float(clamp(RAYS_PER_PROBE, 0, gl_SubgroupSize));
+    // subgroupBarrier();
+
+    //version that syncs globally via VkBarriers
+    // if(subgroupElect()){
+    //     store_probe(probe_id, probe_pos, ray_light/2.0);
+    // }
+
+
+    //version that syncs locally via shared memory
+    //somehow it is ~2x faster
     if(subgroupElect()){
-    store_probe(probe_id, probe_pos, ray_light/2.0);
+        _light[gl_SubgroupID] = ray_light;
+        barrier();
+
+        vec3 final_light = vec3(0);
+        for(int i=0; i<SUBGROUPS_PER_WORKGROUP; i++){
+            final_light += _light[i];
+        }
+        final_light /= float(SUBGROUPS_PER_WORKGROUP);
+        // final_light = clamp(final_light, 0,1);
+
+        if(gl_SubgroupID == 0){
+            store_probe(probe_id, probe_pos, final_light/2.0);
+        }
     }
 }

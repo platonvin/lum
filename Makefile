@@ -5,8 +5,9 @@
 
 I = -I./src -I${VULKAN_SDK}/Include -I./common -I${VCPKG_ROOT}/installed/x64-mingw-static/Include
 L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
-debug_Flags = -pipe -fno-exceptions -O1
-release_Flags = -pipe -fno-exceptions -Os -DNDEBUG
+#-ftrivial-auto-var-init=zero sets "local" vars to 0 by default
+debug_Flags = -pipe -fno-exceptions -O1 -Wuninitialized -ftrivial-auto-var-init=zero
+release_Flags = -pipe -fno-exceptions -ftrivial-auto-var-init=zero -Os -DNDEBUG
 SA = -O --target-env=vulkan1.1
 
 objs := \
@@ -59,7 +60,8 @@ _shaders:= \
 	shaders/compiled/accumulate.spv\
 	shaders/compiled/upscale.spv\
 	shaders/compiled/radiance.spv\
-	shaders/compiled/dolight.spv\
+	shaders/compiled/diffuse.spv\
+	shaders/compiled/glossy.spv\
 
 # flags = 
 all: Flags=$(release_Flags)
@@ -122,8 +124,10 @@ shaders/compiled/comp.spv: shaders/compopt.comp
 	glslc shaders/compopt.comp -o shaders/compiled/comp.spv $(SA)
 shaders/compiled/radiance.spv: shaders/updateRadianceCache.comp
 	glslc shaders/updateRadianceCache.comp -o shaders/compiled/radiance.spv $(SA)
-shaders/compiled/dolight.spv: shaders/doLight.comp
-	glslc shaders/doLight.comp -o shaders/compiled/dolight.spv $(SA)
+shaders/compiled/diffuse.spv: shaders/diffuse.comp
+	glslc shaders/diffuse.comp -o shaders/compiled/diffuse.spv $(SA)
+shaders/compiled/glossy.spv: shaders/glossy.comp
+	glslc shaders/glossy.comp -o shaders/compiled/glossy.spv $(SA)
 shaders/compiled/denoise.spv: shaders/denoise.comp
 	glslc shaders/denoise.comp -o shaders/compiled/denoise.spv $(SA)
 shaders/compiled/upscale.spv: shaders/upscale.comp

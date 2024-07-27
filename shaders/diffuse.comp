@@ -1,8 +1,8 @@
 #version 450 core
 
 /*
-shader to color lowres frame
-ambient+ sampled radiance cache + glossy
+shader to diffuse-color lowres frame
+ambient + "radiant" diffuse
 */
 
 precision highp int;

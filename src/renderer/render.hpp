@@ -363,7 +363,8 @@ public:
             void recalculate_df();
             void raytrace();
             void updadeRadiance();
-            void doLight();
+            void diffuse();
+            void glossy();
             void denoise(int iterations, int denoising_radius, denoise_targets target);
             void accumulate();
             void upscale();
@@ -439,7 +440,8 @@ private:
     void setup_Df_Descriptors();
     void setup_Raytrace_Descriptors();
     void setup_Radiance_Cache_Descriptors();
-    void setup_Do_Light_Descriptors();
+    void setup_Diffuse_Descriptors();
+    void setup_Glossy_Descriptors();
     void setup_Denoise_Descriptors();
     void setup_Accumulate_Descriptors();
     void setup_Upscale_Descriptors();
@@ -507,10 +509,10 @@ public:
     VkDevice device;
     VkSurfaceKHR surface;
 
-    QueueFamilyIndices FamilyIndices;
+    QueueFamilyIndices familyIndices;
     VkQueue graphicsQueue;
     VkQueue presentQueue;
-    VkQueue computeQueue;
+    // VkQueue computeQueue;
     VkCommandPool commandPool;
 
     VkSwapchainKHR swapchain;
@@ -534,27 +536,27 @@ public:
     // VkShaderModule   raytraceShaderModule;
 
 //rasterization pipeline things
-    VkRenderPass    rayGenRenderPass;
+    VkRenderPass             rayGenRenderPass;
     VkRenderPass    rayGenParticlesRenderPass;
-    VkRenderPass graphicalRenderPass;
-    VkPipelineLayout rayGenPipelineLayout;
+    VkRenderPass            overlayRenderPass;
+    VkPipelineLayout          rayGenPipelineLayout;
     VkPipelineLayout rayGenParticlesPipelineLayout;
-    VkPipelineLayout       graphicsLayout;
-    VkPipeline   rayGenPipeline;
+    VkPipelineLayout         overlayPipelineLayout;
+    VkPipeline            rayGenPipeline;
     VkPipeline   rayGenParticlesPipeline;
-    VkPipeline graphicsPipeline;
+    VkPipeline           overlayPipeline;
 
 
-    vector<VkFramebuffer> swapChainFramebuffers;
-    vector<VkFramebuffer>    rayGenFramebuffers;
+    vector<VkFramebuffer>  swapChainFramebuffers;
+    vector<VkFramebuffer>     rayGenFramebuffers;
     // vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
 
-    vector<VkCommandBuffer>    rayGenCommandBuffers;
     // vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
     //It is so because they are too similar and easy to record (TODO: make concurent)
-    vector<VkCommandBuffer>   computeCommandBuffers; 
-    vector<VkCommandBuffer> overlayCommandBuffers;
-    vector<VkCommandBuffer> copyOverlayCommandBuffers;
+    vector<VkCommandBuffer>        rayGenCommandBuffers;
+    vector<VkCommandBuffer>       computeCommandBuffers; 
+    vector<VkCommandBuffer>       overlayCommandBuffers;
+    vector<VkCommandBuffer>   copyOverlayCommandBuffers;
     vector<VkCommandBuffer> renderOverlayCommandBuffers;
 
     vector<VkSemaphore>   imageAvailableSemaphores;
@@ -628,17 +630,14 @@ public:
                //    Image oldUv_downscaled; //dont need it
         vector<Image> mix_ratio;
     #endif
-        //    Image de
     vector<Image> swapchain_images;
     VkSampler  nearestSampler;
-    VkSampler  linearSampler;
-    VkSampler  uiSampler;
-
+    VkSampler   linearSampler;
+    VkSampler  overlaySampler;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
     vector<Buffer>      staging_world;
     vector<void*>       staging_world_mapped;
-
            Image                world; //can i really use just one?
 
     vector<Image> origin_block_palette;
@@ -646,48 +645,13 @@ public:
     vector<Image> material_palette;
     
     vector<Buffer>         uniform;
-    
-    //so we have buffer for particles
-    //it is divided in chunks
-    //when no particles left in chunk, it is freed
-    //NO ATOMICS!
-    //spawnParticles(vec3 center, vec3 direction, float deviation, int count)
-    /*
-    particles are in gpoups of fixed size
-    each groups has header in separate buffer
-    headers are copied to cpu every frame
-    cpu will remove empty groups from calculations and
-    work is submitted in groups
-    also, there is world for particle marking so cpu can allocate blocks 
 
-    particles move and have a chance to be reprojected in the world 
-    */
     vector<Particle>     particles;
     vector<Buffer>   gpu_particles; //multiple because cpu-related work
     vector<void* >   gpu_particles_mapped; //multiple because cpu-related work
-    vector<UiMeshDeletion> ui_mesh_deletion_queue;
-    vector<UiImageDeletion> ui_image_deletion_queue;
+    vector<UiMeshDeletion>   ui_mesh_deletion_queue;
+    vector<UiImageDeletion>  ui_image_deletion_queue;
     vector<UiBufferDeletion> ui_buffer_deletion_queue;
-
-    // Buffer 
-    // vector<Buffer> 
-    // vector<Buffer>       depthStaging; //atomic
-    // vector<VmaAllocation>        paletteCounterBufferAllocations;
-
-    // vector<Buffer> copy_queue;
-    // vector<VkBuffer>          copyCounterBuffers; //atomic
-    // vector<VmaAllocation>           copyCounterBufferAllocations;
-
-    // vector<Buffer> uniform;
-    // vector<Buffer> staging_uniform;
-    // vector<void*>  staging_uniform_mapped;
-    // vector<VmaAllocation>           RayGenUniformBufferAllocations;
-
-    //g buffer of prev_pixel pos, matid and normal
-    // vector<VkImageView>           rayGenNormImageViews;
-    // vector<VkImageView>           rayGenPosDiffImageViews;
-    // vector<VkImageView>         originBlocksImageViews;
-    // vector<VkImageView>   originVoxelPaletteImageViews; //unused - voxel mat palette does not change
 
     VkDescriptorSetLayout    RayGenDescriptorSetLayout;
     vector<VkDescriptorSet>    RayGenDescriptorSets;
@@ -701,8 +665,11 @@ public:
     VkDescriptorSetLayout  updateRadianceDescriptorSetLayout;
     vector<VkDescriptorSet>  updateRadianceDescriptorSets;
 
-    VkDescriptorSetLayout  doLightDescriptorSetLayout;
-    vector<VkDescriptorSet>  doLightDescriptorSets;
+    VkDescriptorSetLayout  diffuseDescriptorSetLayout;
+    vector<VkDescriptorSet>  diffuseDescriptorSets;
+
+    VkDescriptorSetLayout  glossyDescriptorSetLayout;
+    vector<VkDescriptorSet>  glossyDescriptorSets;
 
     VkDescriptorSetLayout  denoiseDescriptorSetLayout;
     vector<VkDescriptorSet>  denoiseDescriptorSets_lowres;
@@ -732,7 +699,8 @@ public:
 //compute pipeline things
     VkPipelineLayout raytraceLayout;
     VkPipelineLayout radianceLayout;
-    VkPipelineLayout doLightLayout;
+    VkPipelineLayout diffuseLayout;
+    VkPipelineLayout glossyLayout;
     VkPipelineLayout denoiseLayout;
     VkPipelineLayout upscaleLayout;
     VkPipelineLayout accumulateLayout;
@@ -742,13 +710,14 @@ public:
     // VkPipelineLayout       dfxLayout;
     // VkPipelineLayout       dfyLayout;
     // VkPipelineLayout       dfzLayout;
-    VkPipeline raytracePipeline;
-    VkPipeline radiancePipeline;
-    VkPipeline doLightPipeline;
-    VkPipeline denoisePipeline;
-    VkPipeline denoisePipeline_lowres;
+    VkPipeline   raytracePipeline;
+    VkPipeline   radiancePipeline;
+    VkPipeline    diffusePipeline;
+    VkPipeline    glossyPipeline;
+    VkPipeline    denoisePipeline;
+    VkPipeline    denoisePipeline_lowres;
     VkPipeline accumulatePipeline;
-    VkPipeline upscalePipeline;
+    VkPipeline    upscalePipeline;
     // VkPipeline blockifyPipeline;
     // VkPipeline     copyPipeline;
     VkPipeline      mapPipeline;

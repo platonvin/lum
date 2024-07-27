@@ -146,7 +146,7 @@ void Renderer::create_RenderPass_Graphical(){
         createInfo.dependencyCount = 1;
         createInfo.pDependencies = &dependency;
     
-    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &graphicalRenderPass));
+    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &overlayRenderPass));
 
 }
 void Renderer::create_RenderPass_RayGen(){
@@ -428,7 +428,7 @@ void Renderer::create_Graphics_Pipeline(){
         pipelineLayoutInfo.pushConstantRangeCount = 1;
         pipelineLayoutInfo.pPushConstantRanges = &pushRange;
 
-    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &graphicsLayout));
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &overlayPipelineLayout));
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -443,15 +443,15 @@ void Renderer::create_Graphics_Pipeline(){
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;
         
-        pipelineInfo.layout = graphicsLayout;
+        pipelineInfo.layout = overlayPipelineLayout;
         
-        pipelineInfo.renderPass = graphicalRenderPass;
+        pipelineInfo.renderPass = overlayRenderPass;
         pipelineInfo.subpass = 0;
         
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
         pipelineInfo.basePipelineIndex = -1;
 
-        VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &graphicsPipeline));
+        VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &overlayPipeline));
 }
 
 void Renderer::create_RayGen_Pipeline(){
@@ -999,7 +999,7 @@ void Renderer::create_Logical_Device(){
     VK_CHECK(vkCreateDevice(physicalDevice, &createInfo, NULL, &device));
 
     vkGetDeviceQueue(device, indices.graphicalAndCompute.value(), 0, &graphicsQueue);
-    vkGetDeviceQueue(device, indices.graphicalAndCompute.value(), 0, &computeQueue);
+    // vkGetDeviceQueue(device, indices.graphicalAndCompute.value(), 0, &computeQueue);
     vkGetDeviceQueue(device, indices.present.value(), 0, &presentQueue);
 }
 
