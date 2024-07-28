@@ -52,6 +52,7 @@ _shaders:= \
 	shaders/compiled/blockify.spv\
 	shaders/compiled/copy.spv\
 	shaders/compiled/map.spv\
+	shaders/compiled/mipmap.spv\
 	shaders/compiled/dfx.spv\
 	shaders/compiled/dfy.spv\
 	shaders/compiled/dfz.spv\
@@ -114,6 +115,8 @@ shaders/compiled/copy.spv: shaders/copy.comp
 	glslc shaders/copy.comp -o shaders/compiled/copy.spv $(SA)
 shaders/compiled/map.spv: shaders/map.comp
 	glslc shaders/map.comp -o shaders/compiled/map.spv $(SA)
+shaders/compiled/mipmap.spv: shaders/mipmap.comp
+	glslc shaders/mipmap.comp -o shaders/compiled/mipmap.spv $(SA)
 shaders/compiled/dfx.spv: shaders/dfx.comp
 	glslc shaders/dfx.comp -o shaders/compiled/dfx.spv $(SA)
 shaders/compiled/dfy.spv: shaders/dfy.comp

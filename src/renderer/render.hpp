@@ -437,6 +437,7 @@ private:
     void setup_Blockify_Descriptors();
     void setup_Copy_Descriptors();
     void setup_Map_Descriptors();
+    void setup_Mipmap_Descriptors();
     void setup_Df_Descriptors();
     void setup_Raytrace_Descriptors();
     void setup_Radiance_Cache_Descriptors();
@@ -455,16 +456,16 @@ private:
     void delete_Images(Image* images);
     void create_Image_Storages(vector<Image>* images, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
-    uvec3 size, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
+    uvec3 size, int mipmaps = 1, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
     void create_Image_Storages(Image* image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
-    uvec3 size, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
+    uvec3 size, int mipmaps = 1, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
 // #ifdef STENCIL 
     void create_Image_Storages_DepthStencil(vector<VkImage>* images, vector<VmaAllocation>* allocs, vector<VkImageView>* depthViews, vector<VkImageView>* stencilViews,
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size);
 // #endif
-
+    void generateMipmaps(VkCommandBuffer commandBuffer, VkImage image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, VkImageAspectFlags aspect);
     // void destroy_images
     void create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
     void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size, u32 flags = 0);
@@ -490,7 +491,7 @@ private:
     u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
-    void transition_Image_Layout_Singletime(Image* image, VkImageLayout newLayout);
+    void transition_Image_Layout_Singletime(Image* image, VkImageLayout newLayout, int mipmaps = 1);
     void transition_Image_Layout_Cmdb(VkCommandBuffer commandBuffer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
         VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask);
     void copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst);
@@ -611,6 +612,7 @@ public:
             Image mix_ratio;
     #else
         vector<Image> lowres_frames;
+               Image frame_mipmapped; //used for reflections
         // vector<Image> lowres_sunlight;
         vector<Image>  highres_frames;
         #ifdef STENCIL
@@ -621,6 +623,7 @@ public:
         #else
         vector<Image>  depthBuffers_highres; //used for depth testing
         vector<Image> depthBuffers_lowres; //used for depth testing
+               Image depth_mipmapped; //used for reflections
         // vector<Image> depthBuffer; //used for depth testing
         #endif
         vector<Image> matNorm_highres;
@@ -633,6 +636,7 @@ public:
     vector<Image> swapchain_images;
     VkSampler  nearestSampler;
     VkSampler   linearSampler;
+    VkSampler   frameSampler;
     VkSampler  overlaySampler;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
@@ -687,6 +691,9 @@ public:
     VkDescriptorSetLayout       mapDescriptorSetLayout;
     vector<VkDescriptorSet>       mapDescriptorSets;
 
+    VkDescriptorSetLayout       mipmapDescriptorSetLayout;
+    vector<VkDescriptorSet>       mipmapDescriptorSets;
+
     // VkDescriptorSetLayout        dfDescriptorSetLayout;
     // vector<VkDescriptorSet>        dfDescriptorSets;
 
@@ -707,6 +714,7 @@ public:
     // VkPipelineLayout blockifyLayout;
     // VkPipelineLayout     copyLayout;
     VkPipelineLayout      mapLayout;
+    VkPipelineLayout      mipmapLayout;
     // VkPipelineLayout       dfxLayout;
     // VkPipelineLayout       dfyLayout;
     // VkPipelineLayout       dfzLayout;
@@ -721,6 +729,7 @@ public:
     // VkPipeline blockifyPipeline;
     // VkPipeline     copyPipeline;
     VkPipeline      mapPipeline;
+    VkPipeline      mipmapPipeline;
     // VkPipeline       dfxPipeline;
     // VkPipeline       dfyPipeline;
     // VkPipeline       dfzPipeline;

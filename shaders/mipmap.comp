@@ -1,0 +1,102 @@
+#version 450 core
+
+/*
+generates block palette mipmaps every frame
+*/
+
+precision highp int;
+precision highp float;
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+layout(set = 0, binding = 0, r8ui) uniform uimage3D blockPalette;
+
+/*
+levels of detail depending on depth ()
+0000000000000000 11111111 2222 33 4 NaN
+16 8 4 2 1 NaN
+*/
+
+const int BLOCK_PALETTE_SIZE_X = 64;
+const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
+
+// ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
+//     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+//     int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+//     return relative_voxel_pos + ivec3(16*block_x, 16*block_y,0);
+// }
+
+int get_lod(int depth){
+    // int lod;
+
+    if(depth < 16) return 0;
+    if(depth < 16+8) return 1;
+    if(depth < 16+8+4) return 2;
+    if(depth < 16+8+4+2) return 3;
+    if(depth < 16+8+4+2+1) return 4;
+    
+    return 0;
+}
+
+int get_lod_shift(int lod){
+    // iтt lod;
+
+    if(lod == 0) return 0;
+    if(lod == 1) return 16;
+    if(lod == 2) return 16+8;
+    if(lod == 3) return 16+8+4;
+    if(lod == 4) return 16+8+4+2;
+    
+    return 0;
+}
+
+
+layout(local_size_x = 8, local_size_y = 8) in;
+void main(void){
+    ivec3 vox = ivec3(gl_GlobalInvocationID.xyz);
+
+    //should never be 0 cause its origin
+    int lod = get_lod(vox.z);
+    int prev_lod = lod-1;
+    int lod_block_size = 16 / (1 << lod);
+    int prev_block_size = 16 / (1 << prev_lod);
+
+    //relative to its LOD origin
+    ivec3 relative_vox = vox;
+          relative_vox.z -= get_lod_shift(lod);
+
+    //for now we do it as "nearest"
+    ivec3 relative_src_low_vox = relative_vox*2;
+    ivec3 src_low_vox = relative_src_low_vox;
+          src_low_vox.z += get_lod_shift(prev_lod);
+        //   src_vox += lod_block_size / 2;
+        //   src_vox += clamp(lod_block_size / 2, 0, lod-1);
+    ivec3 dst_vox = vox;
+
+    // int vox_id = int(imageLoad(blockPalette, src_low_vox).x); 
+    int vox_sum = 0;
+    int   w_sum = 0;
+    for(int dx=0; dx<=1; dx++){
+    for(int dy=0; dy<=1; dy++){
+    for(int dz=0; dz<=1; dz++){
+        ivec3 src_vox = src_low_vox + ivec3(dx,dy,dz);
+        int vox_id = int(imageLoad(blockPalette, src_vox).x); 
+
+        if(vox_id != 0) {
+            vox_sum = vox_id;
+            w_sum = 1;
+            // break;
+        }
+    }}}
+    // ivec3 v00_sr = (src_low_vox + ivec3(0,0,0));
+    // ivec3 v10_sr = (src_low_vox + ivec3());
+    // ivec3 v01_sr = (src_low_vox + ivec3());
+    // ivec3 v11_sr = (src_low_vox + ivec3()); 
+
+    // varp vec3 p00_color = (imageLoad(old_frame, p00_pix).rgb);
+    // varp vec3 p10_color = (imageLoad(old_frame, p10_pix).rgb);
+    // varp vec3 p01_color = (imageLoad(old_frame, p01_pix).rgb);
+    // varp vec3 p11_color = (imageLoad(old_frame, p11_pix).rgb);
+    int final_vox = vox_sum;
+    imageStore(blockPalette, dst_vox, uvec4(final_vox));
+}

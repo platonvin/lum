@@ -68,7 +68,7 @@ static double delt_time = 0;
 static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 15, 8128, float(1.5), false, false);
+    render.init(48, 48, 16, 15, 8128, float(1.0000001), false, false);
 // println
     vkDeviceWaitIdle(render.device);
 
@@ -408,11 +408,11 @@ void Engine::draw()
                 // render.diffuse();
                 // render.glossy();
 // println
-                // render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 render.accumulate();
 // println
-                // render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);

@@ -37,8 +37,8 @@
 `$ pacman -S mingw-w64-x86_64-glm mingw-w64-x86_64-glfw`
     - if not using MSYS2, just make sure necessary libraries and headers are installed in any other way and visible to compiler
 
-  - Clone the repository: \
-`$ git clone https://github.com/platonvin/lum.git`    
+  - Get the repository: \
+`$ git clone https://github.com/platonvin/lum.git` for unstable version or download code from releases    
 
   - Navigate to the project directory:\
 `$ cd lum` 

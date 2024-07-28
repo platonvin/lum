@@ -133,7 +133,7 @@ varp vec3 randomCosineWeightedHemispherePoint(varp vec3 rand, varp vec3 n) {
     tangent = cross(bitangent, n);
     
     return tangent * ph.x + bitangent * ph.y + n * ph.z;
-    }
+}
 varp vec3 get_origin_from_depth(varp float depth, varp vec2 uv_pos){
     const varp vec2 view_size = vec2(view_width, view_height);
     const varp vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
@@ -606,7 +606,7 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
             else
             {
                 varp vec3 idealReflection = reflect(direction, normal);
-                material.roughness = 0.03;
+                // material.roughness = 0.03;
                 new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
                 // new_direction = normalize(idealReflection);
                 new_origin += normal * 0.001;
@@ -647,8 +647,9 @@ vec3 TraceRay(inout vec3 rayOrigin, inout vec3 rayDirection, inout vec3 accumula
     }
     varp float global_light_participance = -dot(rayDirection, globalLightDir);
     // vec3 tmp = vec3(0);
-    if (global_light_participance > 0.9) {
-        light += (vec3(.9,.9,.6)*3.0) * reflection * global_light_participance / 2.0;
+    if (global_light_participance > 0.95 - material.roughness) {
+    // if (global_light_participance > 0.95) {
+        light += (vec3(.9,.9,.6)*3.0) * reflection * global_light_participance / 8.0;
     }
     // varp float ndot = (dot(normal, globalLightDir));
     // varp float _global_light_participance = (ndot>0)? 1.0 * 0.5 : 0.0;

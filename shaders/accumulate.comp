@@ -133,10 +133,19 @@ varp float y_mix = old_pos.y - p00_center.y;
 // float p01_depth_distance = abs(texelFetch(old_depth, p01_pix, 0).x - new_depth) + 0.001 / 2000.0;
 // float p11_depth_distance = abs(texelFetch(old_depth, p11_pix, 0).x - new_depth) + 0.001 / 2000.0;
 
-varp float p00_weight = +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat))) * float(dot(load_old_norm(p00_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > -.1);
-varp float p10_weight = +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat))) * float(dot(load_old_norm(p10_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > -.1);
-varp float p01_weight = +(1.0-x_mix)*(    y_mix) * (float((p01_mat==mat))) * float(dot(load_old_norm(p01_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > -.1);
-varp float p11_weight = +(    x_mix)*(    y_mix) * (float((p11_mat==mat))) * float(dot(load_old_norm(p11_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > -.1);
+varp float p00_weight = 1; 
+varp float p10_weight = 1; 
+varp float p01_weight = 1; 
+varp float p11_weight = 1; 
+p00_weight *= +(1.0-x_mix)*(1.0-y_mix) * (float((p00_mat==mat)));
+p10_weight *= +(    x_mix)*(1.0-y_mix) * (float((p10_mat==mat)));
+p01_weight *= +(1.0-x_mix)*(    y_mix) * (float((p01_mat==mat)));
+p11_weight *= +(    x_mix)*(    y_mix) * (float((p11_mat==mat)));
+//p00_weight *= float(dot(load_old_norm(p00_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p11_center).yzw, load_new_norm(pix)) > -.1);
+//p10_weight *= float(dot(load_old_norm(p10_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p10_center).yzw, load_new_norm(pix)) > -.1);
+//p01_weight *= float(dot(load_old_norm(p01_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p01_center).yzw, load_new_norm(pix)) > -.1);
+//p11_weight *= float(dot(load_old_norm(p11_pix), load_new_norm(pix)) > 0.5);// || ((distance(get_origin_from_depth(depth, pos), old_get_origin_from_depth(load_old_depth(old_uv), old_uv)) < .5) && (dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > 10.5)));// * float(dot(texture(old_new_matNorm, p00_center).yzw, load_new_norm(pix)) > -.1);
+
 // p00_weight += 1e-8;
 // p11_weight += 1e-8;
 
@@ -170,7 +179,7 @@ varp float old_mix_ratio = ((
     varp float mix_ratio = clamp(imageLoad(new_mix_ratio_image, pix).r,0,1);
     varp float roughness = 1.0 - GetMat(mat).smoothness;
 
-    // float target_mix_ratio = 0.995;
+    // float target_mix_ratio = 0.95;
     varp float target_mix_ratio = clamp((0.995 + roughness) / 2.0, 0.975, 0.995);
     
     // float mix_ratio_reactivness = sqrt(1.0-mix_ratio/1.1);
@@ -187,17 +196,17 @@ varp float old_mix_ratio = ((
         final_color = mix(new_color, old_color, mix_ratio); //NEVER MOVE IT OR WILL GET BLACK TRAILS
     }
 
-    final_color = new_color;
+    // final_color = new_color;
     // store
     imageStore(new_mix_ratio_image, pix, vec4(mix_ratio));
     // imageStore(old_mix_ratio_image, pix, vec4(mix_ratio));
 
-    varp float max_component = max(final_color.x, max(final_color.y, final_color.z));
-    varp vec3 normalized_color;
-    if(max_component > 1.0){
-        normalized_color = final_color / max_component;
-        final_color = normalized_color;
-    }
+    // varp float max_component = max(final_color.x, max(final_color.y, final_color.z));
+    // varp vec3 normalized_color;
+    // if(max_component > 1.0){
+    //     normalized_color = final_color / max_component;
+    //     final_color = normalized_color;
+    // }
 
     
     imageStore(new_frame, pix, vec4(final_color,1));

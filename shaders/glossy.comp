@@ -3,9 +3,6 @@
 /*
 this is basically cone tracing shader (lowres)
 ssr for mirrors but counting more than one "hit pixels" for rough reflections
-
-inspired by Godot voxel tracing
-*if you think your codestyle sucks look into any of Godot shaders*
 */
 
 precision highp int;
@@ -59,6 +56,7 @@ Material GetMat(in varp int voxel){
     // mat.transparancy = 1.0 - imageLoad(voxelPalette, ivec2(3,voxel)).r;
     mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
     mat.roughness    =       imageLoad(voxelPalette, ivec2(5,voxel)).r;
+    // mat.roughness = 1.0;
     mat.transparancy = 0;
 
     // mat.smoothness = 0.5;
@@ -159,47 +157,14 @@ highp float load_depth(highp ivec2 pixel){
     highp float depth_encoded = texture(depthBuffer, uv).x;
     return (1.0-depth_encoded)*1000.0;
 }
+highp float load_depth(highp ivec2 pixel, float lod){
+    highp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
+    highp float depth_encoded = textureLod(depthBuffer, uv, lod).x;
+    return (1.0-depth_encoded)*1000.0;
+}
 
-// bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 start_pix, out highp float fraction, out varp vec3 normal, out Material material){
-    // bool smooth_intersection = false;
-    // highp float fraction_step = .15;
-    
-    // fraction = 0.0;
-    // fraction = fraction_step;
-
-    // highp vec2 ssr_pix = start_pix;
-    // highp float depth = 0;
-    // while(true){
-    //     //TODO turn into cached step 
-    //     highp vec3 new_origin = origin + direction*fraction;
-    //     highp vec3 relative_pos = new_origin - PushConstants.camera_pos.xyz;
-    //     depth = dot(relative_pos, PushConstants.camera_direction.xyz);
-    //     ssr_pix.x = ((dot(relative_pos, horizline)/(view_width *2.0)) +0.5)*float(size.x);
-    //     ssr_pix.y = ((dot(relative_pos, vertiline)/(view_height*2.0)) +0.5)*float(size.y);
-
-    //     if (ssr_intersects(depth, ssr_pix, smooth_intersection)) {
-
-    //         // smooth_intersection = false;
-    //         // if(dot(imageLoad(norms, ivec2(pix)).xyz, direction) < -0.5) {smooth_intersection = true;}
-            
-    //         if(smooth_intersection){
-    //               normal =        load_norm(ivec2(ssr_pix));
-    //             material = GetMat(load_mat( ivec2(ssr_pix)));
-    //             return true;
-    //         } else {
-    //             fraction -= fraction_step;
-    //             return false;
-    //         }
-            
-    //         //return fraction
-    //     }
-    //     fraction += fraction_step;
-    //     if (fraction > 2.0) return false;
-//     }
-// }
-
-bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smooth_intersection){
-    highp float depth = load_depth(ivec2(pix));
+bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smooth_intersection, float lod){
+    highp float depth = load_depth(ivec2(pix), lod);
     varp float diff = test_depth - depth;
     bool ssr = false;
     smooth_intersection = false;
@@ -214,9 +179,23 @@ bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smoot
     // return false;
 }
 
-vec3 trace_cone(in varp vec3 origin, in varp vec3 direction){
-    bool smooth_intersection = false;
+ivec2 get_atrous_pix(int x, int y, ivec2 center_pix){
+    // int radius = iter;
+    ivec2 shift = ivec2(x,y);
+    // ivec2 shift = ivec2(x,y)*int(1 + iter);
+    return center_pix+shift;
+}
 
+vec3 sample_frame(vec2 pixel, float lod){
+    vec2 uv = ((pixel)+0.5) / vec2(size);
+
+    return textureLod(in_frame, uv, lod).xyz;
+}   
+
+vec3 trace_cone(in varp vec3 origin, in varp vec3 direction, float roughness){
+    vec3 total_color = vec3(0);
+    
+    bool smooth_intersection = false;
     highp float fraction_add = 0.1;
     highp float fraction_mul = 1.1;
     
@@ -225,9 +204,18 @@ vec3 trace_cone(in varp vec3 origin, in varp vec3 direction){
 
     vec3 hit_color = vec3(0);
 
+    float angle = 0;
+    float diameter = 0;
+    float lod = 0;
+
     highp vec2 ssr_pix;
     highp float depth = 0;
     while(true){
+        // lod = 0.0;
+        angle = (PI / 2.0) * roughness;
+        diameter = tan(angle)*fraction;
+        lod = log2(diameter);
+        lod = 100.0;
         //TODO turn into cached step 
         highp vec3 new_origin = origin + direction*fraction;
         highp vec3 relative_pos = new_origin - PushConstants.camera_pos.xyz;
@@ -235,19 +223,25 @@ vec3 trace_cone(in varp vec3 origin, in varp vec3 direction){
         ssr_pix.x = ((dot(relative_pos, horizline)/(view_width *2.0)) +0.5)*float(size.x);
         ssr_pix.y = ((dot(relative_pos, vertiline)/(view_height*2.0)) +0.5)*float(size.y);
 
-        if (ssr_intersects(depth, ssr_pix, smooth_intersection)) {
+        if (ssr_intersects(depth, ssr_pix, smooth_intersection, lod)) {
 
             // smooth_intersection = false;
             // if(dot(imageLoad(norms, ivec2(pix)).xyz, direction) < -0.5) {smooth_intersection = true;}
             
             if(smooth_intersection){
-                hit_color = vec3(1);
-                Material hitmat = GetMat(load_mat(ivec2(ssr_pix)));
-                hit_color = hitmat.color;
-                return hit_color;
+                // hit_color = vec3(1);
+                // Material hitmat = GetMat(load_mat(ivec2(ssr_pix)));
+                // hit_color = hitmat.color;
+                // hit_color = sample_frame(ivec2(ssr_pix), roughness*fraction);
+                hit_color = sample_frame(ivec2(ssr_pix), lod);
             } else {
-                hit_color = vec3(0);
-                return hit_color;
+                vec3 globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
+                varp float global_light_participance = -dot(direction, globalLightDir);
+                // vec3 tmp = vec3(0);
+                if (global_light_participance > 0.9) {
+                    hit_color = (vec3(.9,.9,.6)*3.0) * global_light_participance / 2.0;
+                }
+                // hit_color = vec3(.(9,.9,.6)*3.0);
             }
             
             //return fraction
@@ -255,8 +249,11 @@ vec3 trace_cone(in varp vec3 origin, in varp vec3 direction){
         fraction += fraction_add;
         fraction *= fraction_mul;
 
-        if (fraction > 100.0) return vec3(0);
+        if (fraction > 100.0) break;
     }
+
+    total_color = hit_color;
+    return total_color;
 }
 
 varp vec3 get_origin_from_depth(varp float depth, varp vec2 uv_pos){
@@ -310,11 +307,19 @@ void main(void){
     //roughness only changes diameter
     vec3 cone_dir = reflect(direction, normal); 
     
-    vec3 traced_color = trace_cone(origin, cone_dir) * mat.color / 2.0;
+    vec3 traced_color = vec3(0);
+    // if(mat.roughness < 0.99){
+        // float roughness = mat.roughness; 
+        float roughness = 1; 
+        // roughness /= 2.0;
+        traced_color = trace_cone(origin, cone_dir, roughness) * mat.color / 1.0;
+    // }
     
     vec3 old_color = imageLoad(out_frame, pix).xyz;
 
     vec3 new_color = traced_color + old_color;
+    // vec3 new_color = traced_color;
+    // vec3 new_color = old_color;
 
     imageStore(out_frame, pix, vec4((new_color), 1));
 }

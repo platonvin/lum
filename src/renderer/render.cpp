@@ -95,7 +95,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
-        {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
+        {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 32}); //TODO: dynamic
     // create_Image_Storages(&block_palette,
     //     VK_IMAGE_TYPE_3D,
     //     VK_FORMAT_R8_UINT,
@@ -142,6 +142,7 @@ void Renderer::init(int x_size, int y_size, int z_size, int _static_block_palett
     create_Descriptor_Pool();
     allocate_Descriptors();
 
+    setup_Mipmap_Descriptors();
     setup_Raytrace_Descriptors();
 // println
     setup_Radiance_Cache_Descriptors();
@@ -400,6 +401,7 @@ void Renderer::cleanup_SwapchainDependent(){
     vkDestroySwapchainKHR(device, swapchain, NULL);
 }
 void Renderer::create_SwapchainDependent(){
+    int mipmaps;
     if(is_scaled){
             create_Image_Storages(&oldUv_lowres,
                 VK_IMAGE_TYPE_2D,
@@ -412,11 +414,33 @@ void Renderer::create_SwapchainDependent(){
             create_Image_Storages(&lowres_frames,
                 VK_IMAGE_TYPE_2D,
                 RAYTRACED_IMAGE_FORMAT,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT  |VK_IMAGE_USAGE_SAMPLED_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 {raytraceExtent.width, raytraceExtent.height, 1});
+
+            mipmaps = (std::floor(std::log2(std::max(raytraceExtent.width, raytraceExtent.height)))) + 1;
+            printl(mipmaps);
+            create_Image_Storages(&frame_mipmapped,
+                VK_IMAGE_TYPE_2D,
+                RAYTRACED_IMAGE_FORMAT,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                {raytraceExtent.width, raytraceExtent.height, 1},
+                mipmaps);
+            create_Image_Storages(&depth_mipmapped,
+                VK_IMAGE_TYPE_2D,
+                DEPTH_FORMAT,
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+                VK_IMAGE_ASPECT_DEPTH_BIT,
+                {raytraceExtent.width, raytraceExtent.height, 1},
+                mipmaps);
+
             create_Image_Storages(&matNorm_lowres,
                 VK_IMAGE_TYPE_2D,
                 VK_FORMAT_R8G8B8A8_SNORM,
@@ -428,7 +452,7 @@ void Renderer::create_SwapchainDependent(){
             create_Image_Storages(&depthBuffers_lowres,
                 VK_IMAGE_TYPE_2D,
                 DEPTH_FORMAT,
-                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                 VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                 VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -534,6 +558,8 @@ void Renderer::create_SwapchainDependent(){
     }
     transition_Image_Layout_Singletime(&oldUv_lowres,  VK_IMAGE_LAYOUT_GENERAL);
     transition_Image_Layout_Singletime(&oldUv_highres, VK_IMAGE_LAYOUT_GENERAL);
+    transition_Image_Layout_Singletime(&frame_mipmapped, VK_IMAGE_LAYOUT_GENERAL, mipmaps);
+    transition_Image_Layout_Singletime(&depth_mipmapped, VK_IMAGE_LAYOUT_GENERAL, mipmaps);
 
     vector<vector<VkImageView>> swapViews(1);
     for(int i=0; i<swapchain_images.size(); i++) {
@@ -1333,6 +1359,55 @@ void Renderer::endMap(){
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &origin_block_palette[currentFrame]);
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    //submit lod update for every block
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mipmapPipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mipmapLayout, 0, 1, &mipmapDescriptorSets[currentFrame], 0, 0);
+    
+    // vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
+    // int nearest_sq_size =  ceil(sqrt((double)palette_counter));
+    int bounding_x_size = 16*BLOCK_PALETTE_SIZE_X;
+    int bounding_y_size = 16*((palette_counter+BLOCK_PALETTE_SIZE_X-1) / BLOCK_PALETTE_SIZE_X);
+
+    VkImageMemoryBarrier mipmap_barrier = {};
+        mipmap_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        mipmap_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        mipmap_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        mipmap_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        mipmap_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        mipmap_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        mipmap_barrier.subresourceRange.baseMipLevel = 0;
+        mipmap_barrier.subresourceRange.levelCount = 1;
+        mipmap_barrier.subresourceRange.baseArrayLayer = 0;
+        mipmap_barrier.subresourceRange.layerCount = 1;
+        mipmap_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        mipmap_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
+        mipmap_barrier.image = origin_block_palette[currentFrame].image;
+    //0 to 1
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &mipmap_barrier);
+    vkCmdDispatchBase(
+        commandBuffer,
+        0,0,16,
+        bounding_x_size/2,bounding_y_size/2,16/2);
+    //1 to 2
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &mipmap_barrier);
+    vkCmdDispatchBase(
+        commandBuffer,
+        0,0,16+8,
+        bounding_x_size/4,bounding_y_size/4,16/4);
+    //2 to 3
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &mipmap_barrier);
+    vkCmdDispatchBase(
+        commandBuffer,
+        0,0,16+8+4,
+        bounding_x_size/8,bounding_y_size/8,16/8);
+    //3 to 4
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &mipmap_barrier);
+    vkCmdDispatchBase(
+        commandBuffer,
+        0,0,16+8+4+2,
+        bounding_x_size/16,bounding_y_size/16,16/16);
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &mipmap_barrier);
 }
 
 void Renderer::raytrace(){
@@ -1520,7 +1595,111 @@ void Renderer::diffuse(){
 void Renderer::glossy(){
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     
+
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    // VkImageBlit blit = {};
+    //     blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    //     blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    //     blit.srcSubresource.layerCount = 1;
+    //     blit.dstSubresource.layerCount = 1;
+    //     blit.srcOffsets[0].x = 0;
+    //     blit.srcOffsets[0].y = 0;
+    //     blit.srcOffsets[0].z = 0;
+    //     blit.srcOffsets[1].x = swapChainExtent.width;
+    //     blit.srcOffsets[1].y = swapChainExtent.height;
+    //     blit.srcOffsets[1].z = 1;
+        
+    //     blit.dstOffsets[0].x = 0;
+    //     blit.dstOffsets[0].y = 0;
+    //     blit.dstOffsets[0].z = 0;
+    //     blit.dstOffsets[1].x = swapChainExtent.width;
+    //     blit.dstOffsets[1].y = swapChainExtent.height;
+    //     blit.dstOffsets[1].z = 1;
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
+        is_scaled? &highres_frames[0] : &highres_frames[currentFrame]);    
+
+    // barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    // barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    // barrier.image = swapchain_images[imageIndex].image;
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
+    //     &swapchain_images[imageIndex]);    
+    // vkCmdBlitImage(commandBuffer, (is_scaled? highres_frames[0].image : highres_frames[currentFrame].image), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain_images[imageIndex].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+    VkImageCopy copy = {};
+        copy.extent.width  = raytraceExtent.width;
+        copy.extent.height = raytraceExtent.height;
+        copy.extent.depth  = 1;
+        copy.dstOffset = {0,0};
+        copy.srcOffset = {0,0};
+        copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy.srcSubresource.baseArrayLayer = 0;
+        copy.srcSubresource.layerCount = 1;
+        copy.srcSubresource.mipLevel = 0;
+        copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy.dstSubresource.baseArrayLayer = 0;
+        copy.dstSubresource.layerCount = 1;
+        copy.dstSubresource.mipLevel = 0;
+
+    vkCmdCopyImage(commandBuffer, 
+        lowres_frames[currentFrame].image, lowres_frames[currentFrame].layout,
+        frame_mipmapped.image, frame_mipmapped.layout,
+        1, &copy
+        );
+        
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+        &frame_mipmapped);
+    copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    vkCmdCopyImage(commandBuffer, 
+        depthBuffers_lowres[currentFrame].image, depthBuffers_lowres[currentFrame].layout,
+        depth_mipmapped.image, depth_mipmapped.layout,
+        1, &copy
+        );
+
+    VkImageMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;  
+        barrier.image = frame_mipmapped.image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);
+        barrier.image = lowres_frames[currentFrame].image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        barrier.image = depth_mipmapped.image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    barrier = {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.image = frame_mipmapped.image;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
+
+    int32_t mipWidth = raytraceExtent.width;
+    int32_t mipHeight = raytraceExtent.height;
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+        &frame_mipmapped);
+
+    int mipmaps = (std::floor(std::log2(std::max(raytraceExtent.width, raytraceExtent.height)))) + 1;
+    generateMipmaps(commandBuffer, frame_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_COLOR_BIT);
+    generateMipmaps(commandBuffer, depth_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, 
         &lowres_frames[currentFrame]);
@@ -1536,7 +1715,7 @@ void Renderer::glossy(){
         
         vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
 
-    VkImageMemoryBarrier barrier{};
+    barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1555,6 +1734,10 @@ void Renderer::glossy(){
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
     barrier.image = radiance_cache.image;
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
+    barrier.subresourceRange.levelCount = mipmaps;
+    barrier.image = frame_mipmapped.image;
+    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
+
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 }
 void Renderer::denoise(int iterations, int denoising_radius, denoise_targets target){
@@ -2054,7 +2237,7 @@ void Renderer::cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayou
 }
 void Renderer::create_Image_Storages(vector<Image>* images, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
-    uvec3 size, VkSampleCountFlagBits sample_count){
+    uvec3 size, int mipmaps, VkSampleCountFlagBits sample_count){
     (*images).resize(MAX_FRAMES_IN_FLIGHT);
     
 
@@ -2066,7 +2249,7 @@ void Renderer::create_Image_Storages(vector<Image>* images,
             imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             imageInfo.imageType = type;
             imageInfo.format = format;
-            imageInfo.mipLevels = 1;
+            imageInfo.mipLevels = mipmaps;
             imageInfo.arrayLayers = 1;
             imageInfo.samples = sample_count;
             imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -2097,7 +2280,7 @@ void Renderer::create_Image_Storages(vector<Image>* images,
             viewInfo.subresourceRange.aspectMask = aspect;
             viewInfo.subresourceRange.baseMipLevel = 0;
             viewInfo.subresourceRange.baseArrayLayer = 0;
-            viewInfo.subresourceRange.levelCount = 1;
+            viewInfo.subresourceRange.levelCount = mipmaps;
             viewInfo.subresourceRange.layerCount = 1;
         VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &(*images)[i].view));
 
@@ -2110,7 +2293,7 @@ void Renderer::create_Image_Storages(vector<Image>* images,
 }
 void Renderer::create_Image_Storages(Image* image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
-    uvec3 size, VkSampleCountFlagBits sample_count){
+    uvec3 size, int mipmaps, VkSampleCountFlagBits sample_count){
 
     image->aspect = aspect;
     image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -2119,7 +2302,7 @@ void Renderer::create_Image_Storages(Image* image,
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.imageType = type;
         imageInfo.format = format;
-        imageInfo.mipLevels = 1;
+        imageInfo.mipLevels = mipmaps;
         imageInfo.arrayLayers = 1;
         imageInfo.samples = sample_count;
         imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -2147,7 +2330,7 @@ void Renderer::create_Image_Storages(Image* image,
         viewInfo.subresourceRange.aspectMask = aspect;
         viewInfo.subresourceRange.baseMipLevel = 0;
         viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.levelCount = mipmaps;
         viewInfo.subresourceRange.layerCount = 1;
     VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &image->view));
 
@@ -2284,7 +2467,12 @@ void Renderer::create_Descriptor_Set_Layouts(){
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, mapDescriptorSetLayout, device,
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-        
+
+    create_Descriptor_Set_Layout_Helper({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // block palette
+        }, 
+        VK_SHADER_STAGE_COMPUTE_BIT, mipmapDescriptorSetLayout, device
+        ); 
     // create_Descriptor_Set_Layout_Helper({
     //     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // blockPalette
     //     }, 
@@ -2420,7 +2608,7 @@ void Renderer::create_Descriptor_Pool(){
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = poolSizes.size();
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*10; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
+        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*11; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, NULL, &descriptorPool));
 }
 
@@ -2449,10 +2637,31 @@ void Renderer::allocate_Descriptors(){
     
     //we do not allocate this because it's descriptors are managed trough push_descriptor mechanism
     // allocate_Descriptors_helper(      mapDescriptorSets,       mapDescriptorSetLayout, descriptorPool, device); 
+    allocate_Descriptors_helper(      mipmapDescriptorSets,       mipmapDescriptorSetLayout, descriptorPool, device); 
     // allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
 
     allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
     allocate_Descriptors_helper(RayGenParticlesDescriptorSets, RayGenParticlesDescriptorSetLayout, descriptorPool, device);      
+}
+void Renderer::setup_Mipmap_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        int previous_frame = i - 1;
+        if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
+
+        VkDescriptorImageInfo inputBlockPaletteInfo = {};
+            inputBlockPaletteInfo.imageView = origin_block_palette[i].view;
+            inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = mipmapDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 0;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
+            
+        vector<VkWriteDescriptorSet> descriptorWrites = {blockPaletteWrite};
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
 }
 void Renderer::setup_Raytrace_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -2694,15 +2903,17 @@ void Renderer::setup_Glossy_Descriptors(){
             matNormInfo.imageView = is_scaled? matNorm_lowres[i].view : matNorm_highres[i].view;
             matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo depthInfo = {};
-            depthInfo.imageView = is_scaled? depthBuffers_lowres[i].view : depthBuffers_highres[i].view;
-            depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-            depthInfo.sampler = nearestSampler;
+            depthInfo.imageView = depth_mipmapped.view;
+            depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            depthInfo.sampler = frameSampler;
         VkDescriptorImageInfo inputVoxelPaletteInfo = {};
             inputVoxelPaletteInfo.imageView = material_palette[i].view;
             inputVoxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-        // VkDescriptorImageInfo inFrameInfo = {};
-        //     inFrameInfo.imageView = is_scaled? lowres_frames[i].view : highres_frames[i].view;
-        //     inFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inFrameInfo = {};
+        println
+            inFrameInfo.imageView = frame_mipmapped.view;
+            inFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            inFrameInfo.sampler = frameSampler;
         VkDescriptorImageInfo outputFrameInfo = {};
             outputFrameInfo.imageView = is_scaled? lowres_frames[i].view : highres_frames[i].view;
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -2729,13 +2940,13 @@ void Renderer::setup_Glossy_Descriptors(){
             depthWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             depthWrite.descriptorCount = 1;
             depthWrite.pImageInfo = &depthInfo;
-        // VkWriteDescriptorSet inFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-        //     inFrameWrite.dstSet = glossyDescriptorSets[i];
-        //     inFrameWrite.dstBinding = 3;
-        //     inFrameWrite.dstArrayElement = 0;
-        //     inFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        //     inFrameWrite.descriptorCount = 1;
-        //     inFrameWrite.pImageInfo = &outputFrameInfo;
+        VkWriteDescriptorSet inFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            inFrameWrite.dstSet = glossyDescriptorSets[i];
+            inFrameWrite.dstBinding = 3;
+            inFrameWrite.dstArrayElement = 0;
+            inFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            inFrameWrite.descriptorCount = 1;
+            inFrameWrite.pImageInfo = &inFrameInfo;
         VkWriteDescriptorSet outFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             outFrameWrite.dstSet = glossyDescriptorSets[i];
             outFrameWrite.dstBinding = 4;
@@ -2744,7 +2955,7 @@ void Renderer::setup_Glossy_Descriptors(){
             outFrameWrite.descriptorCount = 1;
             outFrameWrite.pImageInfo = &outputFrameInfo;
                 
-        vector<VkWriteDescriptorSet> descriptorWrites = {matNormWrite, depthWrite, voxelPaletteWrite, /* inFrameWrite, */ outFrameWrite};
+        vector<VkWriteDescriptorSet> descriptorWrites = {matNormWrite, depthWrite, voxelPaletteWrite, inFrameWrite, outFrameWrite};
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
 }
@@ -3041,6 +3252,14 @@ void Renderer::create_samplers(){
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &linearSampler));
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 10.0f;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &frameSampler));
+
 
         samplerInfo.magFilter = VK_FILTER_NEAREST;
         samplerInfo.minFilter = VK_FILTER_NEAREST;
@@ -3158,6 +3377,7 @@ void Renderer::create_compute_pipelines(){
     // create_compute_pipelines_helper("shaders/compiled/blockify.spv", blockifyDescriptorSetLayout, &blockifyLayout, &blockifyPipeline, sizeof(mat4));
     // create_compute_pipelines_helper("shaders/compiled/copy.spv"    , copyDescriptorSetLayout    , &copyLayout    , &copyPipeline    , 0);
     create_compute_pipelines_helper("shaders/compiled/map.spv"     , mapDescriptorSetLayout     , &mapLayout     , &mapPipeline     , sizeof(mat4) + sizeof(ivec4));
+    create_compute_pipelines_helper("shaders/compiled/mipmap.spv"     , mipmapDescriptorSetLayout     , &mipmapLayout     , &mipmapPipeline     , 0, VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     // create_compute_pipelines_helper("shaders/compiled/dfx.spv"      , dfDescriptorSetLayout      , &dfxLayout      , &dfxPipeline      , 0);
     // create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
     // create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
@@ -3285,7 +3505,7 @@ void Renderer::end_Single_Time_Commands(VkCommandBuffer commandBuffer) {
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-void Renderer::transition_Image_Layout_Singletime(Image* image, VkImageLayout newLayout) {
+void Renderer::transition_Image_Layout_Singletime(Image* image, VkImageLayout newLayout, int mipmaps) {
     VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
 
     VkImageMemoryBarrier barrier{};
@@ -3297,7 +3517,7 @@ void Renderer::transition_Image_Layout_Singletime(Image* image, VkImageLayout ne
     barrier.image = (*image).image;
     barrier.subresourceRange.aspectMask = (*image).aspect;
     barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.levelCount = mipmaps;
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.layerCount = 1;
 
@@ -3315,6 +3535,83 @@ void Renderer::transition_Image_Layout_Singletime(Image* image, VkImageLayout ne
     (*image).layout = newLayout;
 
     end_Single_Time_Commands(commandBuffer);
+}
+
+void Renderer::generateMipmaps(VkCommandBuffer commandBuffer, VkImage image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, VkImageAspectFlags aspect) {
+    // VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.image = image;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.subresourceRange.aspectMask = aspect;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
+
+    int32_t mipWidth = texWidth;
+    int32_t mipHeight = texHeight;
+
+    for (uint32_t i = 1; i < mipLevels; i++) {
+        barrier.subresourceRange.baseMipLevel = i - 1;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier);
+            VkImageBlit blit{};
+        blit.srcOffsets[0] = { 0, 0, 0 };
+        blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+        blit.srcSubresource.aspectMask = aspect;
+        blit.srcSubresource.mipLevel = i - 1;
+        blit.srcSubresource.baseArrayLayer = 0;
+        blit.srcSubresource.layerCount = 1;
+        blit.dstOffsets[0] = { 0, 0, 0 };
+        blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+        blit.dstSubresource.aspectMask = aspect;
+        blit.dstSubresource.mipLevel = i;
+        blit.dstSubresource.baseArrayLayer = 0;
+        blit.dstSubresource.layerCount = 1;
+        vkCmdBlitImage(commandBuffer,
+            image, VK_IMAGE_LAYOUT_GENERAL,
+            image, VK_IMAGE_LAYOUT_GENERAL,
+            1, &blit,
+            (aspect==VK_IMAGE_ASPECT_COLOR_BIT)? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
+            
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier);
+        
+        if (mipWidth  > 1) mipWidth  /= 2;
+        if (mipHeight > 1) mipHeight /= 2;
+    }
+
+    barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(commandBuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier);
+
+    // end_Single_Time_Commands(commandBuffer);
 }
 
 void Renderer::copy_Whole_Image(VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst){
