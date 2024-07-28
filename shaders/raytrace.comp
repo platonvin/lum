@@ -141,7 +141,7 @@ varp vec3 get_origin_from_depth(varp float depth, varp vec2 uv_pos){
     varp vec3 origin = PushConstants.camera_pos.xyz + 
         (horizline*clip_pos_scaled.x) + 
         (vertiline*clip_pos_scaled.y) +
-        (PushConstants.camera_direction.xyz*depth);
+        (normalize(PushConstants.camera_direction.xyz)*depth);
     return origin;
 }
 
@@ -257,7 +257,8 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
     
     varp int current_voxel = GetVoxel(voxel_pos);
 
-    varp int max_steps = int(step_counts[current_reflection]);
+    // varp int max_steps = int(step_counts[current_reflection]);
+    varp int max_steps = 256;
     
     varp int iterations = 0;
     while (true) {
@@ -271,9 +272,11 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
         fcurrentStepDiretion.y = int(int((!xLy) && ( yLz)));
         fcurrentStepDiretion.z = int(int((!xLz) && (!yLz)));
 
+        // imageStore(frame, pix, vec4(vec3(abs(fcurrentStepDiretion)), 1));
+        // return false;
+
         voxel_pos += steps * ivec3(fcurrentStepDiretion);
         tMax += tDelta * fcurrentStepDiretion;
-
         
         current_voxel = GetVoxel(voxel_pos);
         
@@ -285,46 +288,49 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
         //     block_hit = false;
         //     break;
         // }
-        if ((iterations++ >= max_steps) || (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16))))) {
+        if ((iterations++ >= max_steps) 
+        || (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16))))
+        ) {
             block_hit = false;
             break;
         }
     }
 
-    varp int used_counter = iterations;
-    varp int average_counter = subgroupAdd(used_counter) / int(gl_SubgroupSize);
-    if(subgroupElect()){
-        varp int difference = max_steps - average_counter;
-        varp float ratio = float(average_counter) / float(max_steps); 
-        varp int proportional_steps = int(float(max_steps) * 0.5);
-        // ratio *= 0.95;
+    // varp int used_counter = iterations;
+    // varp int average_counter = subgroupAdd(used_counter) / int(gl_SubgroupSize);
+    // if(subgroupElect()){
+    //     varp int difference = max_steps - average_counter;
+    //     varp float ratio = float(average_counter) / float(max_steps); 
+    //     varp int proportional_steps = int(float(max_steps) * 0.5);
+    //     // ratio *= 0.95;
 
-        varp int high = 28;
-        varp int low = 17;
-        varp int border = 65;
-        varp int difference_to_cmp = proportional_steps + 30;
+    //     varp int high = 28;
+    //     varp int low = 17;
+    //     varp int border = 65;
+    //     varp int difference_to_cmp = proportional_steps + 30;
         
-        if(difference < difference_to_cmp-5){
-        // if(
-        //     ((difference < high) && max_steps >= border) ||
-        //     ((difference <  low) && max_steps <  border)
-        //     ){
-            max_steps += 10; // so we need more steps
-        }
-        //too much left
-        if(difference > difference_to_cmp+5){
-        // if(
-        //     ((difference > high) && max_steps >= border) ||
-        //     ((difference >  low) && max_steps <  border)
-        //     ){
-            max_steps -= 5; //so we remove extra
-        }
+    //     if(difference < difference_to_cmp-5){
+    //     // if(
+    //     //     ((difference < high) && max_steps >= border) ||
+    //     //     ((difference <  low) && max_steps <  border)
+    //     //     ){
+    //         max_steps += 10; // so we need more steps
+    //     }
+    //     //too much left
+    //     if(difference > difference_to_cmp+5){
+    //     // if(
+    //     //     ((difference > high) && max_steps >= border) ||
+    //     //     ((difference >  low) && max_steps <  border)
+    //     //     ){
+    //         max_steps -= 5; //so we remove extra
+    //     }
 
-        //write new max_steps back
-        step_counts[current_reflection] = max_steps;
-    }
+    //     //write new max_steps back
+    //     step_counts[current_reflection] = max_steps;
+    // }
 
-    normal = -(fsteps * fcurrentStepDiretion);
+    normal = -(fsteps * vec3(fcurrentStepDiretion));
+
     varp vec3 tFinal = tMax - tDelta;
     // block_fraction += dot(tFinal, fcurrentStepDiretion);
     block_fraction = dot(tFinal, fcurrentStepDiretion);
@@ -600,11 +606,13 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
             else
             {
                 varp vec3 idealReflection = reflect(direction, normal);
-                material.roughness = 1.0;
+                material.roughness = 0.03;
                 new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
+                // new_direction = normalize(idealReflection);
                 new_origin += normal * 0.001;
+                
                 accumulated_reflection *= material.color;
-                accumulated_light += accumulated_reflection * material.emmitance;
+                accumulated_light += accumulated_reflection * (material.emmitance);
                 // accumulated_light += vec3(0.8) * 0.1 * accumulated_reflection;
             }
 
@@ -635,17 +643,18 @@ vec3 TraceRay(inout vec3 rayOrigin, inout vec3 rayDirection, inout vec3 accumula
             fraction, normal, material, 
             light, reflection);
         
-        if(length(reflection) < 0.1 || length(light) > sqrt(2.0)) break;
+        // if(length(reflection) < 0.1 || length(light) > sqrt(2.0)) break;
     }
     varp float global_light_participance = -dot(rayDirection, globalLightDir);
     // vec3 tmp = vec3(0);
     if (global_light_participance > 0.9) {
         light += (vec3(.9,.9,.6)*3.0) * reflection * global_light_participance / 2.0;
     }
-    varp float ndot = (dot(normal, globalLightDir));
-    varp float _global_light_participance = (ndot>0)? material.roughness * ndot * 0.5 : 0.0;
-    light += (vec3(.9,.9,.6)*3.0) * reflection * _global_light_participance / 2.0;
+    // varp float ndot = (dot(normal, globalLightDir));
+    // varp float _global_light_participance = (ndot>0)? 1.0 * 0.5 : 0.0;
+    // light += (vec3(.9,.9,.6)*3.0) * reflection * _global_light_participance / 2.0;
 
+    // light += 0.3;
     return light;
 }
 
@@ -770,7 +779,8 @@ void main(void){
     pix = ivec2(gl_GlobalInvocationID.xy);
     warp_id = ivec2(gl_WorkGroupID.xy);
     if (pix.x >= size.x || pix.y >= size.y) {return;}
-    const varp vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
+    // const varp vec2 pos = (vec2(pix) +0.5) / vec2(size.x - 1, size.y - 1);
+    const varp vec2 pos = (vec2(pix)) / vec2(size.x - 1, size.y - 1);
 
     random_storage = vec2(float(PushConstants.timeSeed)*pos.x, pos.x*pos.y);
 // #define DYNAMIC_STEP_COUNTER
@@ -801,19 +811,21 @@ void main(void){
     for(int pass = 0; (pass < NUM_SAMPLES); pass++){
         varp vec3 accumulated_reflection = stored_accumulated_reflection;
         varp vec3 accumulated_light = stored_accumulated_light;
-        highp vec3 direction = stored_direction;
-        highp vec3 origin = stored_origin;
-        // origin = stored_origin + sin(RandomNoise())*vertiline*0.25 + sin(RandomNoise())*horizline*0.25;
-        varp vec3 normal = stored_normal;
+        highp vec3 direction = (stored_direction);
+        highp vec3 origin = (stored_origin);
+        varp vec3 normal = (stored_normal);
         bool hit = true;
         Material material = stored_mat;
+
+        // origin += normal*0.001; 
 
         ProcessHit(origin, direction,
             0, normal, material,
             accumulated_light, accumulated_reflection);
-        
+
+            //what is ssr doing here? Prevents aligned (grid) to unaligned (triangles) collisions and works as ambient occlusion for cornern
             varp float fraction = 0.0;
-            bool ssr = false;
+            bool ssr = false; 
             ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
             origin += fraction*direction;
             if(ssr) {
@@ -822,13 +834,14 @@ void main(void){
                     accumulated_light, accumulated_reflection);
             }
 
-            ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
-            origin += fraction*direction;
-            if(ssr) {
-                ProcessHit(origin, direction,
-                    0, normal, material,
-                    accumulated_light, accumulated_reflection);
-            }
+            //second one might be useful
+            // ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
+            // origin += fraction*direction;
+            // if(ssr) {
+            //     ProcessHit(origin, direction,
+            //         0, normal, material,
+            //         accumulated_light, accumulated_reflection);
+            // }
 
         multipass_color += TraceRay(origin, direction, accumulated_light, accumulated_reflection);
     }
@@ -836,7 +849,9 @@ void main(void){
 
     varp vec3 color = multipass_color / float(NUM_SAMPLES);   
     
-    imageStore(frame, pix, vec4(encode_color(color), 1));
+    // if(color == vec3(0)) color = vec3(1);
+
+    imageStore(frame, pix, vec4((color), 1));
 
     #ifdef DYNAMIC_STEP_COUNTER
     imageStore(step_count, warp_id, step_counts);

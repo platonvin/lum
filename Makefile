@@ -55,7 +55,7 @@ _shaders:= \
 	shaders/compiled/dfx.spv\
 	shaders/compiled/dfy.spv\
 	shaders/compiled/dfz.spv\
-	shaders/compiled/comp.spv\
+	shaders/compiled/raytrace.spv\
 	shaders/compiled/denoise.spv\
 	shaders/compiled/accumulate.spv\
 	shaders/compiled/upscale.spv\
@@ -120,8 +120,11 @@ shaders/compiled/dfy.spv: shaders/dfy.comp
 	glslc shaders/dfy.comp -o shaders/compiled/dfy.spv $(SA)
 shaders/compiled/dfz.spv: shaders/dfz.comp
 	glslc shaders/dfz.comp -o shaders/compiled/dfz.spv $(SA)
-shaders/compiled/comp.spv: shaders/compopt.comp
-	glslc shaders/compopt.comp -o shaders/compiled/comp.spv $(SA)
+	
+shaders/compiled/raytrace.spv: shaders/conetrace.comp
+	glslc shaders/conetrace.comp -o shaders/compiled/raytrace.spv $(SA)
+# shaders/compiled/raytrace.spv: shaders/raytrace.comp
+# 	glslc shaders/raytrace.comp -o shaders/compiled/raytrace.spv $(SA)
 shaders/compiled/radiance.spv: shaders/updateRadianceCache.comp
 	glslc shaders/updateRadianceCache.comp -o shaders/compiled/radiance.spv $(SA)
 shaders/compiled/diffuse.spv: shaders/diffuse.comp

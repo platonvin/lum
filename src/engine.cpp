@@ -403,10 +403,10 @@ void Engine::draw()
 // println
                 render.endMap();
 // println
-                // render.raytrace();
-                render.updadeRadiance();
-                render.diffuse();
-                render.glossy();
+                render.raytrace();
+                // render.updadeRadiance();
+                // render.diffuse();
+                // render.glossy();
 // println
                 // render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println

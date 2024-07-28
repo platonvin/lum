@@ -3161,7 +3161,10 @@ void Renderer::create_compute_pipelines(){
     // create_compute_pipelines_helper("shaders/compiled/dfx.spv"      , dfDescriptorSetLayout      , &dfxLayout      , &dfxPipeline      , 0);
     // create_compute_pipelines_helper("shaders/compiled/dfy.spv"      , dfDescriptorSetLayout      , &dfyLayout      , &dfyPipeline      , 0);
     // create_compute_pipelines_helper("shaders/compiled/dfz.spv"      , dfDescriptorSetLayout      , &dfzLayout      , &dfzPipeline      , 0);
-    create_compute_pipelines_helper("shaders/compiled/comp.spv"    , raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(ivec4) + sizeof(vec4)*4);
+    create_compute_pipelines_helper(
+        // "shaders/compiled/conetrace.spv", //its not separate shader cause it is direct improvement, not alternative
+        "shaders/compiled/raytrace.spv",
+         raytraceDescriptorSetLayout, &raytraceLayout, &raytracePipeline, sizeof(ivec4) + sizeof(vec4)*4);
     create_compute_pipelines_helper("shaders/compiled/radiance.spv"    , updateRadianceDescriptorSetLayout, &radianceLayout, &radiancePipeline, sizeof(int)*2, VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     create_compute_pipelines_helper("shaders/compiled/diffuse.spv"    , diffuseDescriptorSetLayout, &diffuseLayout, &diffusePipeline, sizeof(ivec4) + sizeof(vec4)*4);
     create_compute_pipelines_helper("shaders/compiled/glossy.spv"    , glossyDescriptorSetLayout, &glossyLayout, &glossyPipeline, sizeof(vec4) + sizeof(vec4));
