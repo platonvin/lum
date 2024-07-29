@@ -208,6 +208,31 @@ typedef struct UiBufferDeletion {
     int life_counter;
 } UiBufferDeletion;
 
+//used for configuring raster pipeline
+typedef struct AttrFormOffs{
+    VkFormat format;
+    uint32_t offset;
+}AttrFormOffs;
+typedef struct SimpleBlend{
+    bool enabled;
+}SimpleBlend;
+typedef struct ShaderStage{
+    const char* src;
+    VkShaderStageFlagBits stage;
+}ShaderStage;
+//problem with such abstractions in vulkan is that they almost always have to be extended to a point where they make no sense
+typedef struct RasterPipe { 
+    VkPipeline pipe;
+    VkPipelineLayout pipeLayout;
+    
+    VkDescriptorSetLayout dsetLayout;
+    vector<VkDescriptorSet> descriptors;
+
+    VkRenderPass rpass; //we dont really need to store it in here but why not
+    i32 subpass_id;
+    // vksubn; //we dont really need to store it in here but why not
+} RasterPipe;
+
 
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
@@ -431,8 +456,14 @@ private:
     void create_Descriptor_Pool();
     void allocate_Descriptors();
 
+    void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
+        u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
+        VkExtent2D extent, vector<SimpleBlend> blends, u32 push_size, bool depthTest);
+    void destroy_Raster_Pipeline(RasterPipe* pipe);
     //not possible without loosing perfomance
     // void setup_descriptors_helper(vector<VkDescriptorSet>* descriptor_sets, vector<Buffers> buffers, vector<Images> images);
+
+    void setup_Descriptors();
 
     void setup_Blockify_Descriptors();
     void setup_Copy_Descriptors();
@@ -521,15 +552,19 @@ public:
     VkExtent2D swapChainExtent;
     VkExtent2D  raytraceExtent;
 
-    VkShaderModule graphicsVertShaderModule;
-    VkShaderModule graphicsFragShaderModule;
+    RasterPipe overlayPipe;
+    RasterPipe raygenPipe;
+    RasterPipe raygenParticlesPipe;
 
-    VkShaderModule rayGenVertShaderModule;
-    VkShaderModule rayGenFragShaderModule;
+    // VkShaderModule graphicsVertShaderModule;
+    // VkShaderModule graphicsFragShaderModule;
 
-    VkShaderModule rayGenParticlesVertShaderModule;
-    VkShaderModule rayGenParticlesFragShaderModule;
-    VkShaderModule rayGenParticlesGeomShaderModule;
+    // VkShaderModule rayGenVertShaderModule;
+    // VkShaderModule rayGenFragShaderModule;
+
+    // VkShaderModule rayGenParticlesVertShaderModule;
+    // VkShaderModule rayGenParticlesFragShaderModule;
+    // VkShaderModule rayGenParticlesGeomShaderModule;
     // VkShaderModule   blockifyShaderModule;
     // VkShaderModule       copyShaderModule;
     // VkShaderModule        mapShaderModule;
@@ -540,12 +575,12 @@ public:
     VkRenderPass             rayGenRenderPass;
     VkRenderPass    rayGenParticlesRenderPass;
     VkRenderPass            overlayRenderPass;
-    VkPipelineLayout          rayGenPipelineLayout;
-    VkPipelineLayout rayGenParticlesPipelineLayout;
-    VkPipelineLayout         overlayPipelineLayout;
-    VkPipeline            rayGenPipeline;
-    VkPipeline   rayGenParticlesPipeline;
-    VkPipeline           overlayPipeline;
+    // VkPipelineLayout          rayGenPipelineLayout;
+    // VkPipelineLayout rayGenParticlesPipelineLayout;
+    // VkPipelineLayout         overlayPipelineLayout;
+    // VkPipeline            rayGenPipeline;
+    // VkPipeline   rayGenParticlesPipeline;
+    // VkPipeline           overlayPipeline;
 
 
     vector<VkFramebuffer>  swapChainFramebuffers;
@@ -657,11 +692,11 @@ public:
     vector<UiImageDeletion>  ui_image_deletion_queue;
     vector<UiBufferDeletion> ui_buffer_deletion_queue;
 
-    VkDescriptorSetLayout    RayGenDescriptorSetLayout;
-    vector<VkDescriptorSet>    RayGenDescriptorSets;
+    // VkDescriptorSetLayout    RayGenDescriptorSetLayout;
+    // vector<VkDescriptorSet>    RayGenDescriptorSets;
 
-    VkDescriptorSetLayout    RayGenParticlesDescriptorSetLayout;
-    vector<VkDescriptorSet>    RayGenParticlesDescriptorSets;
+    // VkDescriptorSetLayout    RayGenParticlesDescriptorSetLayout;
+    // vector<VkDescriptorSet>    RayGenParticlesDescriptorSets;
 
     VkDescriptorSetLayout  raytraceDescriptorSetLayout;
     vector<VkDescriptorSet>  raytraceDescriptorSets;
@@ -697,8 +732,8 @@ public:
     // VkDescriptorSetLayout        dfDescriptorSetLayout;
     // vector<VkDescriptorSet>        dfDescriptorSets;
 
-    VkDescriptorSetLayout graphicalDescriptorSetLayout;
-    vector<VkDescriptorSet> graphicalDescriptorSets;
+    // VkDescriptorSetLayout graphicalDescriptorSetLayout;
+    // vector<VkDescriptorSet> graphicalDescriptorSets;
 
     VkDescriptorPool descriptorPool;
     

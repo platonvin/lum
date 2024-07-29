@@ -48,7 +48,7 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
     
     struct {vec4 shift; mat4 trans;} ui_pc = {vec4(translation.x, translation.y, render->swapChainExtent.width, render->swapChainExtent.height), current_transform};
     //TODO:
-    vkCmdPushConstants(renderCommandBuffer, render->overlayPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ui_pc), &ui_pc);
+    vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ui_pc), &ui_pc);
 
         Image* texture_image = (Image*)texture;
         VkDescriptorImageInfo
@@ -69,7 +69,7 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
             textureWrite.descriptorCount = 1;
             textureWrite.pImageInfo = &textureInfo;
         vector<VkWriteDescriptorSet> descriptorWrites = {textureWrite};
-    vkCmdPushDescriptorSetKHR(renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipelineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
+    vkCmdPushDescriptorSetKHR(renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipe.pipeLayout, 0, descriptorWrites.size(), descriptorWrites.data());
 
     vkCmdBindVertexBuffers(renderCommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(renderCommandBuffer, ui_mesh.indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -154,8 +154,8 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
     
     struct {vec4 shift; mat4 trans;} ui_pc = {vec4(translation.x, translation.y, render->swapChainExtent.width, render->swapChainExtent.height), current_transform};
     //TODO:
-    vkCmdPushConstants(renderCommandBuffer, render->overlayPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ui_pc), &ui_pc);
-    // vkCmdPushConstants(renderCommandBuffer, render->overlayPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
+    vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ui_pc), &ui_pc);
+    // vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
 
     Image* texture_image = ui_mesh->image;
 // printl(texture_image);
@@ -178,7 +178,7 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
             textureWrite.descriptorCount = 1;
             textureWrite.pImageInfo = &textureInfo;
         vector<VkWriteDescriptorSet> descriptorWrites = {textureWrite};
-    vkCmdPushDescriptorSetKHR(renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipelineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
+    vkCmdPushDescriptorSetKHR(renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipe.pipeLayout, 0, descriptorWrites.size(), descriptorWrites.data());
     vkCmdBindVertexBuffers(renderCommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(renderCommandBuffer, ui_mesh->indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
     

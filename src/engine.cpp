@@ -406,8 +406,11 @@ void Engine::draw()
 // println
                 // render.raytrace();
                 render.updadeRadiance();
+// println
                 render.diffuse();
+// println
                 render.glossy();
+// println
                 if(render.pre_denoiser_count > 0)
                     render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println

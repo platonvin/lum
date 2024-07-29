@@ -160,9 +160,44 @@ println
     setup_RayGen_Descriptors();
     setup_RayGen_Particles_Descriptors();
 
-    create_RayGen_Pipeline();
-    create_RayGen_Particles_Pipeline();
-    create_Graphics_Pipeline();
+    raygenPipe.rpass = rayGenRenderPass;
+    raygenParticlesPipe.rpass = rayGenParticlesRenderPass;
+    overlayPipe.rpass = overlayRenderPass;
+
+    //that is why NOT abstracting vulkan is also an option
+    //if you cannot guess what things mean by just looking at them maybe read old (0.0.3) release src
+    create_Raster_Pipeline(&raygenPipe, {
+            {"shaders/compiled/rayGenVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        },{
+            {VK_FORMAT_R8G8B8_UINT, offsetof(VoxelVertex, pos)},
+            {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
+            {VK_FORMAT_R8_UINT, offsetof(VoxelVertex, matID)},
+        }, 
+        sizeof(VoxelVertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        swapChainExtent, {{false}, {false}}, (sizeof(quat) + sizeof(vec4))*2, true);
+    create_Raster_Pipeline(&raygenParticlesPipe, {
+            {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/rayGenParticlesGeom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+            {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        },{
+            {VK_FORMAT_R32G32B32_SFLOAT, offsetof(Particle, pos)},
+            {VK_FORMAT_R32G32B32_SFLOAT, offsetof(Particle, vel)},
+            {VK_FORMAT_R32_SFLOAT, offsetof(Particle, lifeTime)},
+            {VK_FORMAT_R8_UINT, offsetof(Particle, matID)},
+        }, 
+        sizeof(Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
+        swapChainExtent, {{false}, {false}}, 0, true);
+    create_Raster_Pipeline(&overlayPipe, {
+            {"shaders/compiled/vert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT}, 
+        },{
+            {VK_FORMAT_R32G32_SFLOAT, offsetof(Rml::Vertex, position)},
+            {VK_FORMAT_R8G8B8A8_UNORM, offsetof(Rml::Vertex, colour)},
+            {VK_FORMAT_R32G32_SFLOAT, offsetof(Rml::Vertex, tex_coord)},
+        }, 
+        sizeof(Rml::Vertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        swapChainExtent, {{true}}, sizeof(vec4)+sizeof(mat4), false);
 
     create_compute_pipelines();
     create_Sync_Objects();
@@ -210,9 +245,11 @@ void Renderer::cleanup(){
         vmaDestroyBuffer(VMAllocator,  uniform[i].buffer, uniform[i].alloc);
     }
 
+    destroy_Raster_Pipeline(&raygenPipe);
+    destroy_Raster_Pipeline(&raygenParticlesPipe);
+    destroy_Raster_Pipeline(&overlayPipe);
+    
     vkDestroyDescriptorPool(device, descriptorPool, NULL);
-    vkDestroyDescriptorSetLayout(device,     RayGenDescriptorSetLayout, NULL);
-    vkDestroyDescriptorSetLayout(device,     RayGenParticlesDescriptorSetLayout, NULL);
     // vkDestroyDescriptorSetLayout(device,   blockifyDescriptorSetLayout, NULL);
     // vkDestroyDescriptorSetLayout(device,       copyDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,        mapDescriptorSetLayout, NULL);
@@ -223,7 +260,6 @@ void Renderer::cleanup(){
     vkDestroyDescriptorSetLayout(device,   glossyDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,    denoiseDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,    upscaleDescriptorSetLayout, NULL);
-    vkDestroyDescriptorSetLayout(device,  graphicalDescriptorSetLayout, NULL);
     vkDestroyDescriptorSetLayout(device,  accumulateDescriptorSetLayout, NULL);
 
     for (int i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
@@ -240,8 +276,6 @@ void Renderer::cleanup(){
     vkDestroyRenderPass(device, rayGenRenderPass, NULL);
     vkDestroyRenderPass(device, rayGenParticlesRenderPass, NULL);
 
-    vkDestroyPipeline(device,   rayGenPipeline, NULL);
-    vkDestroyPipeline(device,   rayGenParticlesPipeline, NULL);
     // vkDestroyPipeline(device, blockifyPipeline, NULL);
     // vkDestroyPipeline(device,     copyPipeline, NULL);
     vkDestroyPipeline(device,      mapPipeline, NULL);
@@ -256,10 +290,7 @@ void Renderer::cleanup(){
     vkDestroyPipeline(device,    denoisePipeline, NULL);
     vkDestroyPipeline(device,    upscalePipeline, NULL);
     vkDestroyPipeline(device, accumulatePipeline, NULL);
-    vkDestroyPipeline(device,   overlayPipeline, NULL);
 
-    vkDestroyPipelineLayout(device,   rayGenPipelineLayout, NULL);
-    vkDestroyPipelineLayout(device,   rayGenParticlesPipelineLayout, NULL);
     // vkDestroyPipelineLayout(device, blockifyLayout, NULL);
     // vkDestroyPipelineLayout(device,     copyLayout, NULL);
     vkDestroyPipelineLayout(device,      mapLayout, NULL);
@@ -274,15 +305,6 @@ void Renderer::cleanup(){
     vkDestroyPipelineLayout(device,    denoiseLayout, NULL);
     vkDestroyPipelineLayout(device,    upscaleLayout, NULL);
     vkDestroyPipelineLayout(device, accumulateLayout, NULL);
-    vkDestroyPipelineLayout(device,   overlayPipelineLayout, NULL);
-
-    vkDestroyShaderModule(device, rayGenVertShaderModule, NULL);
-    vkDestroyShaderModule(device, rayGenFragShaderModule, NULL); 
-    vkDestroyShaderModule(device, rayGenParticlesVertShaderModule, NULL);
-    vkDestroyShaderModule(device, rayGenParticlesGeomShaderModule, NULL);
-    vkDestroyShaderModule(device, rayGenParticlesFragShaderModule, NULL);
-    vkDestroyShaderModule(device, graphicsVertShaderModule, NULL);
-    vkDestroyShaderModule(device, graphicsFragShaderModule, NULL); 
 
     cleanup_SwapchainDependent();
 
@@ -826,8 +848,8 @@ void Renderer::startRaygen(){
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipeline);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenPipelineLayout, 0, 1, &RayGenDescriptorSets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenPipe.pipe);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenPipe.pipeLayout, 0, 1, &raygenPipe.descriptors[currentFrame], 0, 0);
 
     VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -856,7 +878,7 @@ void Renderer::RaygenMesh(Mesh *mesh){
     
     struct {quat r1,r2; vec4 s1,s2;} raygen_pushconstant = {(*mesh).rot, (*mesh).old_rot, vec4((*mesh).shift,0), vec4((*mesh).old_shift,0)};
     //TODO:
-    vkCmdPushConstants(commandBuffer, rayGenPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
+    vkCmdPushConstants(commandBuffer, raygenPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
     (*mesh).old_rot   = (*mesh).rot;
     (*mesh).old_shift = (*mesh).shift;
@@ -931,8 +953,8 @@ void Renderer::rayGenMapParticles(){
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     if(particles.size() > 0){ //driver probably handles this automatically, but just for safity
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenParticlesPipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rayGenParticlesPipelineLayout, 0, 1, &RayGenParticlesDescriptorSets[currentFrame], 0, 0);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.pipe);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.pipeLayout, 0, 1, &raygenParticlesPipe.descriptors[currentFrame], 0, 0);
 
         VkViewport viewport = {};
             viewport.x = 0.0f;
@@ -1693,10 +1715,10 @@ void Renderer::glossy(){
 
     // int32_t mipWidth = raytraceExtent.width;
     // int32_t mipHeight = raytraceExtent.height;
-    // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
-    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
-    //     &frame_mipmapped);
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+        &frame_mipmapped);
 
     int mipmaps = (std::floor(std::log2(std::max(raytraceExtent.width, raytraceExtent.height)))) + 1;
     // generateMipmaps(commandBuffer, frame_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -1705,8 +1727,10 @@ void Renderer::glossy(){
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, 
         &lowres_frames[currentFrame]);
     
+// println
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, glossyPipeline);
 
+// println
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, glossyLayout, 0, 1, &glossyDescriptorSets[currentFrame], 0, 0);
 
         old_camera_pos = camera_pos;
@@ -1714,7 +1738,9 @@ void Renderer::glossy(){
         struct rtpc {vec4 v1, v2;} pushconstant = {vec4(camera_pos,0), vec4(camera_dir,0)};
         vkCmdPushConstants(commandBuffer, glossyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
         
+// println
         vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
+// println
 
     barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1907,7 +1933,7 @@ void Renderer::start_ui(){
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
         beginInfo.pInheritanceInfo = &cmd_buf_inheritance_info;
     VK_CHECK(vkBeginCommandBuffer(renderOverlayCommandBuffers[currentFrame], &beginInfo));
-    vkCmdBindPipeline(renderOverlayCommandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipeline);
+    vkCmdBindPipeline(renderOverlayCommandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipe.pipe);
 
     VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -2567,18 +2593,18 @@ void Renderer::create_Descriptor_Set_Layouts(){
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, //frame-constant world_to_screen mat4
         }, 
-        VK_SHADER_STAGE_VERTEX_BIT, RayGenDescriptorSetLayout, device);
+        VK_SHADER_STAGE_VERTEX_BIT, raygenPipe.dsetLayout, device);
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, //frame-constant world_to_screen mat4
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //blocks
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, //voxel palette
         }, 
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, RayGenParticlesDescriptorSetLayout, device);
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, raygenParticlesPipe.dsetLayout, device);
 
     create_Descriptor_Set_Layout_Helper({
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //in texture (ui)
         }, 
-        VK_SHADER_STAGE_FRAGMENT_BIT, graphicalDescriptorSetLayout, device,
+        VK_SHADER_STAGE_FRAGMENT_BIT, overlayPipe.dsetLayout, device,
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
 }
 
@@ -2641,11 +2667,99 @@ void Renderer::allocate_Descriptors(){
     //we do not allocate this because it's descriptors are managed trough push_descriptor mechanism
     // allocate_Descriptors_helper(      mapDescriptorSets,       mapDescriptorSetLayout, descriptorPool, device); 
     allocate_Descriptors_helper(      mipmapDescriptorSets,       mipmapDescriptorSetLayout, descriptorPool, device); 
-    // allocate_Descriptors_helper(graphicalDescriptorSets, graphicalDescriptorSetLayout, descriptorPool, device);     
+    // allocate_Descriptors_helper(graphicalDescriptorSets, overlayPipe.dsetLayout, descriptorPool, device);     
 
-    allocate_Descriptors_helper(RayGenDescriptorSets, RayGenDescriptorSetLayout, descriptorPool, device);     
-    allocate_Descriptors_helper(RayGenParticlesDescriptorSets, RayGenParticlesDescriptorSetLayout, descriptorPool, device);      
+    allocate_Descriptors_helper(raygenPipe.descriptors, raygenPipe.dsetLayout, descriptorPool, device);     
+    allocate_Descriptors_helper(raygenParticlesPipe.descriptors, raygenParticlesPipe.dsetLayout, descriptorPool, device);      
 }
+enum RelativeDescriptorPos {
+    RELATIVE_DESCRIPTOR_MATCHING,
+    RELATIVE_DESCRIPTOR_PREVIOUS
+};
+
+void Renderer::setup_Descriptors(){
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        int previous_frame = i - 1;
+        if (previous_frame < 0) previous_frame = MAX_FRAMES_IN_FLIGHT-1; // so frames do not intersect
+
+        VkDescriptorImageInfo matNormInfo = {};
+            matNormInfo.imageView = is_scaled? matNorm_lowres[i].view : matNorm_highres[i].view;
+            matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo depthInfo = {};
+            depthInfo.imageView = is_scaled? depthBuffers_lowres[i].view : depthBuffers_highres[i].view;
+            depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            depthInfo.sampler = nearestSampler;
+        VkDescriptorImageInfo inputBlockInfo = {};
+            inputBlockInfo.imageView = world.view;
+            inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputBlockPaletteInfo = {};
+            inputBlockPaletteInfo.imageView = origin_block_palette[i].view;
+            inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputVoxelPaletteInfo = {};
+            inputVoxelPaletteInfo.imageView = material_palette[i].view;
+            inputVoxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo outputFrameInfo = {};
+            outputFrameInfo.imageView = is_scaled? lowres_frames[i].view : highres_frames[i].view;
+            outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo stepCountInfo = {};
+            stepCountInfo.imageView = step_count.view;
+            stepCountInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            
+        VkWriteDescriptorSet matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            matNormWrite.dstSet = raytraceDescriptorSets[i];
+            matNormWrite.dstBinding = 0;
+            matNormWrite.dstArrayElement = 0;
+            matNormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            matNormWrite.descriptorCount = 1;
+            matNormWrite.pImageInfo = &matNormInfo;
+        VkWriteDescriptorSet depthWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            depthWrite.dstSet = raytraceDescriptorSets[i];
+            depthWrite.dstBinding = 1;
+            depthWrite.dstArrayElement = 0;
+            depthWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            depthWrite.descriptorCount = 1;
+            depthWrite.pImageInfo = &depthInfo;
+        VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockWrite.dstSet = raytraceDescriptorSets[i];
+            blockWrite.dstBinding = 2;
+            blockWrite.dstArrayElement = 0;
+            blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockWrite.descriptorCount = 1;
+            blockWrite.pImageInfo = &inputBlockInfo;
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = raytraceDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 3;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
+        VkWriteDescriptorSet voxelPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            voxelPaletteWrite.dstSet = raytraceDescriptorSets[i];
+            voxelPaletteWrite.dstBinding = 4;
+            voxelPaletteWrite.dstArrayElement = 0;
+            voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            voxelPaletteWrite.descriptorCount = 1;
+            voxelPaletteWrite.pImageInfo = &inputVoxelPaletteInfo;
+        VkWriteDescriptorSet stepCount = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            stepCount.dstSet = raytraceDescriptorSets[i];
+            stepCount.dstBinding = 5;
+            stepCount.dstArrayElement = 0;
+            stepCount.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            stepCount.descriptorCount = 1;
+            stepCount.pImageInfo = &stepCountInfo;
+        VkWriteDescriptorSet outNewRaytracedWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            outNewRaytracedWrite.dstSet = raytraceDescriptorSets[i];
+            outNewRaytracedWrite.dstBinding = 6;
+            outNewRaytracedWrite.dstArrayElement = 0;
+            outNewRaytracedWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            outNewRaytracedWrite.descriptorCount = 1;
+            outNewRaytracedWrite.pImageInfo = &outputFrameInfo;
+            
+        vector<VkWriteDescriptorSet> descriptorWrites = {matNormWrite, depthWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, stepCount, outNewRaytracedWrite};
+        vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
+    }
+}
+
 void Renderer::setup_Mipmap_Descriptors(){
     for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         int previous_frame = i - 1;
@@ -2907,7 +3021,7 @@ void Renderer::setup_Glossy_Descriptors(){
             matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo depthInfo = {};
             depthInfo.imageView = depthBuffers_lowres[i].view;
-            depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            depthInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
             depthInfo.sampler = frameSampler;
         VkDescriptorImageInfo inputBlockInfo = {};
             inputBlockInfo.imageView = world.view;
@@ -3309,7 +3423,7 @@ void Renderer::setup_RayGen_Descriptors(){
             transInfo.range = VK_WHOLE_SIZE;
         VkWriteDescriptorSet descriptorWrite = {};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrite.dstSet = RayGenDescriptorSets[i];
+            descriptorWrite.dstSet = raygenPipe.descriptors[i];
             descriptorWrite.dstBinding = 0;
             descriptorWrite.dstArrayElement = 0;
             descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -3333,21 +3447,21 @@ void Renderer::setup_RayGen_Particles_Descriptors(){
         
         VkWriteDescriptorSet uniformWrite = {};
             uniformWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            uniformWrite.dstSet = RayGenParticlesDescriptorSets[i];
+            uniformWrite.dstSet = raygenParticlesPipe.descriptors[i];
             uniformWrite.dstBinding = 0;
             uniformWrite.dstArrayElement = 0;
             uniformWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             uniformWrite.descriptorCount = 1;
             uniformWrite.pBufferInfo = &transInfo;
         VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            blockWrite.dstSet = RayGenParticlesDescriptorSets[i];
+            blockWrite.dstSet = raygenParticlesPipe.descriptors[i];
             blockWrite.dstBinding = 1;
             blockWrite.dstArrayElement = 0;
             blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             blockWrite.descriptorCount = 1;
             blockWrite.pImageInfo = &inputBlockInfo;
         VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            blockPaletteWrite.dstSet = RayGenParticlesDescriptorSets[i];
+            blockPaletteWrite.dstSet = raygenParticlesPipe.descriptors[i];
             blockPaletteWrite.dstBinding = 2;
             blockPaletteWrite.dstArrayElement = 0;
             blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
