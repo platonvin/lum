@@ -292,13 +292,27 @@ vec3 trace_ray(vec3 ray_pos, vec3 ray_dir){
     }
     varp float global_light_participance = -dot(direction, globalLightDir);
     // vec3 tmp = vec3(0);
-    if (global_light_participance > 0.9) {
-        light += (vec3(.9,.9,.6)*3.0) * reflection * global_light_participance / 2.0;
-    }
-    varp float ndot = (dot(normal, globalLightDir));
-    varp float _global_light_participance = (ndot>0.1)? material.roughness * ndot * 0.5 : 0.0;
-    light += (vec3(.9,.9,.6)*3.0) * reflection * _global_light_participance / 2.0;
+    if(
+        // any(greaterThanEqual(rayOrigin, vec3(world_size*15))) ||
+        // any(lessThanEqual(rayOrigin, vec3(0))) ||
+        (
+        // left_bounds ||
+        true ||
+        false) && 
+        // (!hit) &&
+        true
+    ){
 
+        varp float global_light_participance = -dot(direction, globalLightDir);
+        if (global_light_participance > 0.95) {
+        // if (global_light_participance > 0.95) {
+            light += (vec3(0.9,0.9,0.6)*3.0) * reflection * global_light_participance;
+        } 
+        else {
+            //sky blue
+            light += (vec3(0.53,0.81,0.92)*0.1) * reflection;
+        }
+    }
     return light;
 }
 

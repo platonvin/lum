@@ -116,7 +116,7 @@ void main(){
 
 
     vec3 final_color = color / weight;
-        //  final_color = ll_lowres_color;
+         final_color = ll_lowres_color;
 
     imageStore(upscaled_frame, highres_pix, vec4(encode_color(final_color),1));
     // imageStore(upscaled_frame, highres_pix, vec4(encode_color(vec3(highres_pix.x / 1000.0)),1));

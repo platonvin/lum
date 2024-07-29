@@ -1424,7 +1424,8 @@ void Renderer::raytrace(){
 
         old_camera_pos = camera_pos;
         old_camera_dir = camera_dir;
-        struct rtpc {vec4 v1, v2;} raytrace_pushconstant = {vec4(camera_pos,intBitsToFloat(itime)), vec4(camera_dir,0)};
+        // struct rtpc {vec4 v1, v2;} raytrace_pushconstant = {vec4(camera_pos, float(0)), vec4(camera_dir,0)};
+        struct rtpc {vec4 v1, v2;} raytrace_pushconstant = {vec4(camera_pos, float(itime + 1)/100.0), vec4(normalize(camera_dir),0)};
         vkCmdPushConstants(commandBuffer, raytraceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(raytrace_pushconstant), &raytrace_pushconstant);
         vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
 
@@ -1625,38 +1626,38 @@ void Renderer::glossy(){
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
     //     &swapchain_images[imageIndex]);    
     // vkCmdBlitImage(commandBuffer, (is_scaled? highres_frames[0].image : highres_frames[currentFrame].image), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain_images[imageIndex].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
-    VkImageCopy copy = {};
-        copy.extent.width  = raytraceExtent.width;
-        copy.extent.height = raytraceExtent.height;
-        copy.extent.depth  = 1;
-        copy.dstOffset = {0,0};
-        copy.srcOffset = {0,0};
-        copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy.srcSubresource.baseArrayLayer = 0;
-        copy.srcSubresource.layerCount = 1;
-        copy.srcSubresource.mipLevel = 0;
-        copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy.dstSubresource.baseArrayLayer = 0;
-        copy.dstSubresource.layerCount = 1;
-        copy.dstSubresource.mipLevel = 0;
+    // VkImageCopy copy = {};
+    //     copy.extent.width  = raytraceExtent.width;
+    //     copy.extent.height = raytraceExtent.height;
+    //     copy.extent.depth  = 1;
+    //     copy.dstOffset = {0,0};
+    //     copy.srcOffset = {0,0};
+    //     copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    //     copy.srcSubresource.baseArrayLayer = 0;
+    //     copy.srcSubresource.layerCount = 1;
+    //     copy.srcSubresource.mipLevel = 0;
+    //     copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    //     copy.dstSubresource.baseArrayLayer = 0;
+    //     copy.dstSubresource.layerCount = 1;
+    //     copy.dstSubresource.mipLevel = 0;
 
-    vkCmdCopyImage(commandBuffer, 
-        lowres_frames[currentFrame].image, lowres_frames[currentFrame].layout,
-        frame_mipmapped.image, frame_mipmapped.layout,
-        1, &copy
-        );
+    // vkCmdCopyImage(commandBuffer, 
+    //     lowres_frames[currentFrame].image, lowres_frames[currentFrame].layout,
+    //     frame_mipmapped.image, frame_mipmapped.layout,
+    //     1, &copy
+    //     );
         
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
-        &frame_mipmapped);
-    copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    vkCmdCopyImage(commandBuffer, 
-        depthBuffers_lowres[currentFrame].image, depthBuffers_lowres[currentFrame].layout,
-        depth_mipmapped.image, depth_mipmapped.layout,
-        1, &copy
-        );
+    // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+    //     &frame_mipmapped);
+    // copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    // copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    // vkCmdCopyImage(commandBuffer, 
+    //     depthBuffers_lowres[currentFrame].image, depthBuffers_lowres[currentFrame].layout,
+    //     depth_mipmapped.image, depth_mipmapped.layout,
+    //     1, &copy
+    //     );
 
     VkImageMemoryBarrier barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1680,26 +1681,26 @@ void Renderer::glossy(){
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    barrier = {};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.image = frame_mipmapped.image;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.subresourceRange.levelCount = 1;
+    // barrier = {};
+    // barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    // barrier.image = frame_mipmapped.image;
+    // barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    // barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    // barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    // barrier.subresourceRange.baseArrayLayer = 0;
+    // barrier.subresourceRange.layerCount = 1;
+    // barrier.subresourceRange.levelCount = 1;
 
-    int32_t mipWidth = raytraceExtent.width;
-    int32_t mipHeight = raytraceExtent.height;
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
-        &frame_mipmapped);
+    // int32_t mipWidth = raytraceExtent.width;
+    // int32_t mipHeight = raytraceExtent.height;
+    // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+    //     &frame_mipmapped);
 
     int mipmaps = (std::floor(std::log2(std::max(raytraceExtent.width, raytraceExtent.height)))) + 1;
-    generateMipmaps(commandBuffer, frame_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_COLOR_BIT);
-    generateMipmaps(commandBuffer, depth_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_DEPTH_BIT);
+    // generateMipmaps(commandBuffer, frame_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_COLOR_BIT);
+    // generateMipmaps(commandBuffer, depth_mipmapped.image, raytraceExtent.width, raytraceExtent.height, mipmaps, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, 
         &lowres_frames[currentFrame]);
@@ -2510,11 +2511,13 @@ void Renderer::create_Descriptor_Set_Layouts(){
         VK_SHADER_STAGE_COMPUTE_BIT, diffuseDescriptorSetLayout, device);
         
     create_Descriptor_Set_Layout_Helper({
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // uniform image2D   matNorm; //in lowres gbuffer
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // uniform image2D   voxelPalette;
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, // uniform sampler2D depthBuffer; //in lowres gbuffer but with mipmaps
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, // uniform sampler2D  in_frame; //ambient + diffuse + emmitance mipmapped frame
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // uniform image2D   out_frame; //out "reflections". resolve in here? 
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // rgba8_snorm) uniform image2D   matNorm
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // r16i       ) uniform iimage3D  blocks
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // r8ui       ) uniform uimage3D  blockPalette
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // r32f       ) uniform image2D   voxelPalette
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //   ) uniform sampler2D depthBuffer
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // rgba16     ) uniform image2D   out_frame
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // ???        ) uniform image2D   radianceCache
         }, 
         VK_SHADER_STAGE_COMPUTE_BIT, glossyDescriptorSetLayout, device);
 
@@ -2903,14 +2906,20 @@ void Renderer::setup_Glossy_Descriptors(){
             matNormInfo.imageView = is_scaled? matNorm_lowres[i].view : matNorm_highres[i].view;
             matNormInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo depthInfo = {};
-            depthInfo.imageView = depth_mipmapped.view;
+            depthInfo.imageView = depthBuffers_lowres[i].view;
             depthInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             depthInfo.sampler = frameSampler;
+        VkDescriptorImageInfo inputBlockInfo = {};
+            inputBlockInfo.imageView = world.view;
+            inputBlockInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkDescriptorImageInfo inputBlockPaletteInfo = {};
+            inputBlockPaletteInfo.imageView = origin_block_palette[i].view;
+            inputBlockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inputVoxelPaletteInfo = {};
             inputVoxelPaletteInfo.imageView = material_palette[i].view;
             inputVoxelPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         VkDescriptorImageInfo inFrameInfo = {};
-        println
+        // println
             inFrameInfo.imageView = frame_mipmapped.view;
             inFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             inFrameInfo.sampler = frameSampler;
@@ -2918,6 +2927,9 @@ void Renderer::setup_Glossy_Descriptors(){
             outputFrameInfo.imageView = is_scaled? lowres_frames[i].view : highres_frames[i].view;
             outputFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             depthInfo.sampler = nearestSampler;
+        VkDescriptorImageInfo radianceCacheInfo = {};
+            radianceCacheInfo.imageView = radiance_cache.view;
+            radianceCacheInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         VkWriteDescriptorSet matNormWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             matNormWrite.dstSet = glossyDescriptorSets[i];
@@ -2926,36 +2938,56 @@ void Renderer::setup_Glossy_Descriptors(){
             matNormWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             matNormWrite.descriptorCount = 1;
             matNormWrite.pImageInfo = &matNormInfo;
+        VkWriteDescriptorSet blockWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockWrite.dstSet = glossyDescriptorSets[i];
+            blockWrite.dstBinding = 1;
+            blockWrite.dstArrayElement = 0;
+            blockWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockWrite.descriptorCount = 1;
+            blockWrite.pImageInfo = &inputBlockInfo;
+        VkWriteDescriptorSet blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            blockPaletteWrite.dstSet = glossyDescriptorSets[i];
+            blockPaletteWrite.dstBinding = 2;
+            blockPaletteWrite.dstArrayElement = 0;
+            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            blockPaletteWrite.descriptorCount = 1;
+            blockPaletteWrite.pImageInfo = &inputBlockPaletteInfo;
         VkWriteDescriptorSet voxelPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             voxelPaletteWrite.dstSet = glossyDescriptorSets[i];
-            voxelPaletteWrite.dstBinding = 1;
+            voxelPaletteWrite.dstBinding = 3;
             voxelPaletteWrite.dstArrayElement = 0;
             voxelPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             voxelPaletteWrite.descriptorCount = 1;
             voxelPaletteWrite.pImageInfo = &inputVoxelPaletteInfo;
         VkWriteDescriptorSet depthWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             depthWrite.dstSet = glossyDescriptorSets[i];
-            depthWrite.dstBinding = 2;
+            depthWrite.dstBinding = 4;
             depthWrite.dstArrayElement = 0;
             depthWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             depthWrite.descriptorCount = 1;
             depthWrite.pImageInfo = &depthInfo;
-        VkWriteDescriptorSet inFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            inFrameWrite.dstSet = glossyDescriptorSets[i];
-            inFrameWrite.dstBinding = 3;
-            inFrameWrite.dstArrayElement = 0;
-            inFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            inFrameWrite.descriptorCount = 1;
-            inFrameWrite.pImageInfo = &inFrameInfo;
+        // VkWriteDescriptorSet inFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        //     inFrameWrite.dstSet = glossyDescriptorSets[i];
+        //     inFrameWrite.dstBinding = 5;
+        //     inFrameWrite.dstArrayElement = 0;
+        //     inFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        //     inFrameWrite.descriptorCount = 1;
+        //     inFrameWrite.pImageInfo = &inFrameInfo;
         VkWriteDescriptorSet outFrameWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
             outFrameWrite.dstSet = glossyDescriptorSets[i];
-            outFrameWrite.dstBinding = 4;
+            outFrameWrite.dstBinding = 5;
             outFrameWrite.dstArrayElement = 0;
             outFrameWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             outFrameWrite.descriptorCount = 1;
             outFrameWrite.pImageInfo = &outputFrameInfo;
-                
-        vector<VkWriteDescriptorSet> descriptorWrites = {matNormWrite, depthWrite, voxelPaletteWrite, inFrameWrite, outFrameWrite};
+        VkWriteDescriptorSet radianceCacheWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            radianceCacheWrite.dstSet = glossyDescriptorSets[i];
+            radianceCacheWrite.dstBinding = 6;
+            radianceCacheWrite.dstArrayElement = 0;
+            radianceCacheWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            radianceCacheWrite.descriptorCount = 1;
+            radianceCacheWrite.pImageInfo = &radianceCacheInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {matNormWrite, blockWrite, blockPaletteWrite, voxelPaletteWrite, depthWrite, outFrameWrite, radianceCacheWrite};
         vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, NULL);
     }
 }
@@ -2978,7 +3010,7 @@ void Renderer::setup_Denoise_Descriptors(){
             outputFrameInfo.imageView = is_scaled? highres_frames[0].view : highres_frames[i].view;
         VkDescriptorImageInfo mixratioInfo = {};
             mixratioInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            mixratioInfo.imageView = mix_ratio[currentFrame].view;
+            mixratioInfo.imageView = mix_ratio[i].view;
             mixratioInfo.sampler = nearestSampler;
         VkDescriptorImageInfo matPaletteInfo = {};
             matPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;

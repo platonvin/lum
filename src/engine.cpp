@@ -68,7 +68,7 @@ static double delt_time = 0;
 static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 15, 8128, float(1.0000001), false, false);
+    render.init(48, 48, 16, 15, 8128, float(1.000001), false, false);
 // println
     vkDeviceWaitIdle(render.device);
 
@@ -145,7 +145,8 @@ void Engine::handle_input(){
     // set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
     set_key(GLFW_KEY_COMMA  , render.camera_dir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
     set_key(GLFW_KEY_PERIOD , render.camera_dir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
-
+    render.camera_dir = normalize(render.camera_dir); 
+    
     vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
     vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
     // render.particles[0].vel = vec3(0);
@@ -177,7 +178,7 @@ void Engine::handle_input(){
 
     if(glfwGetKey(render.window.pointer, GLFW_KEY_LEFT) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
-        tank_body.rot *= quat(vec3(0,0,+.03 * 50.0*delt_time));
+        tank_body.rot *= quat(vec3(0,0,+.05 * 50.0*delt_time));
         quat new_rot = tank_body.rot;
 
         vec3 old_center = old_rot * vec3(tank_body.size)/2.f;
@@ -189,7 +190,7 @@ void Engine::handle_input(){
     }
     if(glfwGetKey(render.window.pointer, GLFW_KEY_RIGHT) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
-        tank_body.rot *= quat(vec3(0,0,-.03 * 50.0*delt_time));
+        tank_body.rot *= quat(vec3(0,0,-.05 * 50.0*delt_time));
         quat new_rot = tank_body.rot;
 
         vec3 old_center = old_rot * vec3(tank_body.size)/2.f;
@@ -403,16 +404,17 @@ void Engine::draw()
 // println
                 render.endMap();
 // println
-                render.raytrace();
-                // render.updadeRadiance();
-                // render.diffuse();
-                // render.glossy();
-// println
-                render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                // render.raytrace();
+                render.updadeRadiance();
+                render.diffuse();
+                render.glossy();
+                if(render.pre_denoiser_count > 0)
+                    render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 render.accumulate();
 // println
-                render.denoise(render.post_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                if(render.post_denoiser_count > 0)
+                    render.denoise(render.post_denoiser_count, 2, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
@@ -423,7 +425,8 @@ void Engine::draw()
                     render.upscale();
                 }
 // println
-                // render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
+                if(render.final_denoiser_count > 0)
+                    render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
 // println

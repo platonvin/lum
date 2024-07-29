@@ -180,7 +180,7 @@ varp float old_mix_ratio = ((
     varp float roughness = 1.0 - GetMat(mat).smoothness;
 
     // float target_mix_ratio = 0.95;
-    varp float target_mix_ratio = clamp((0.995 + roughness) / 2.0, 0.975, 0.995);
+    varp float target_mix_ratio = clamp((0.995 + roughness) / 2.0, 0.975, 0.98);
     
     // float mix_ratio_reactivness = sqrt(1.0-mix_ratio/1.1);
     varp float mix_ratio_reactivness = 0.35;
@@ -196,17 +196,17 @@ varp float old_mix_ratio = ((
         final_color = mix(new_color, old_color, mix_ratio); //NEVER MOVE IT OR WILL GET BLACK TRAILS
     }
 
-    // final_color = new_color;
+    final_color = new_color;
     // store
     imageStore(new_mix_ratio_image, pix, vec4(mix_ratio));
     // imageStore(old_mix_ratio_image, pix, vec4(mix_ratio));
 
-    // varp float max_component = max(final_color.x, max(final_color.y, final_color.z));
-    // varp vec3 normalized_color;
-    // if(max_component > 1.0){
-    //     normalized_color = final_color / max_component;
-    //     final_color = normalized_color;
-    // }
+    varp float max_component = max(final_color.x, max(final_color.y, final_color.z));
+    varp vec3 normalized_color;
+    if(max_component > 1.0){
+        normalized_color = final_color / max_component;
+        final_color = normalized_color;
+    }
 
     
     imageStore(new_frame, pix, vec4(final_color,1));

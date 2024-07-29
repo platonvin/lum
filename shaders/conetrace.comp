@@ -13,9 +13,9 @@ precision highp float;
 #define varp highp
 
 layout(push_constant) uniform constants{
-    varp vec3 camera_pos;
-    varp  int timeSeed;
-    varp  vec4 camera_direction;
+    varp vec4 camera_pos;
+    varp vec4 camera_direction;
+    // varp  int timeSeed;
 } PushConstants;
 
 layout(set = 0, binding = 0, rgba8_snorm) uniform image2D     matNorm;
@@ -32,6 +32,7 @@ layout(constant_id = 3) const int BLOCK_PALETTE_SIZE_X = 64;
 layout(constant_id = 4) const int size_height = (0);
 
 varp vec3 globalLightDir;
+varp vec3 cameraRayDir;
 varp vec3 cameraRayDirPlane;
 varp vec3 horizline;
 varp vec3 vertiline;
@@ -367,7 +368,7 @@ bool initTvals(out varp vec3 tMax, out varp vec3 tDelta, out varp ivec3 blockPos
 //is actually precise
 bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection, 
         out varp float fraction, out varp vec3 normal, out Material material, varp float ignored_voxel,
-        inout varp float diameter, in varp float angle){
+        inout varp float diameter, in varp float angle, out bool left_bounds){
     bool block_hit = false;
 
     varp ivec3 steps;
@@ -383,14 +384,26 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
     varp ivec3 fcurrentStepDiretion = ivec3(0);
 
-    initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
-    
+    // initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
+    varp vec3 block_corner1 = (floor(rayOrigin) - rayOrigin)/rayDirection; //now corners are relative vectors
+    varp vec3 block_corner2 = (floor(rayOrigin) - rayOrigin)/rayDirection  + 1.0/rayDirection;
+    tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+    tMax.y = max(block_corner1.y, block_corner2.y);
+    tMax.z = max(block_corner1.z, block_corner2.z);
+
+    tDelta = 1.0 / abs(rayDirection); //how many dir vectors needeed to move 1.0 across each axys
+    voxel_pos = ivec3(rayOrigin); //round origin to block pos
+
+
     varp int current_voxel = GetVoxel(voxel_pos);
 
     varp int max_steps = 128;
+    float angle_tan = tan(angle);
     
+
     varp int iterations = 0;
     while (true) {
+
 
         bool xLy = tMax.x <= tMax.y;
         bool xLz = tMax.x <= tMax.z;
@@ -403,30 +416,23 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
         voxel_pos += steps * ivec3(fcurrentStepDiretion);
         tMax += tDelta * fcurrentStepDiretion;
+
+        diameter += angle_tan*2.0 * dot(tMax, vec3(1));
+        int lod = int(log2(clamp(diameter/2.0 + 2.0, 2.0,16.0))); 
+
         
-
-        varp vec3 tFinal = tMax - tDelta;
-        // block_fraction += dot(tFinal, fcurrentStepDiretion);
-        block_fraction = dot(tFinal, fcurrentStepDiretion);
-
-        // float angle_tan = tan(angle);
-        float angle_tan = tan(PI/3.0);
-        float dist = block_fraction;
-
-        diameter = 2.0 * angle_tan * dist; 
-
-        // current_voxel = GetVoxel(voxel_pos);
-        current_voxel = sample_voxel(voxel_pos, diameter, rayDirection);
+        current_voxel = GetVoxel(voxel_pos);
         
         if (current_voxel != 0){
             block_hit = true;
             break;
         }
-        // if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
-        //     block_hit = false;
-        //     break;
-        // }
-        if ((iterations++ >= max_steps) || (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16))))) {
+        if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
+            block_hit = false;
+            left_bounds = true;
+            break;
+        }
+        if (iterations++ >= max_steps) {
             block_hit = false;
             break;
         }
@@ -437,14 +443,7 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
     // block_fraction += dot(tFinal, fcurrentStepDiretion);
     block_fraction = dot(tFinal, fcurrentStepDiretion);
 
-    float angle_tan = tan(angle);
-    float dist = block_fraction;
-
-    // diameter += 2.0 * angle_tan * dist; 
-    // diameter = 0.0;
-    //here comes the difference
-    // material = GetMat(current_voxel);
-    material = sample_mat(voxel_pos, diameter);
+    material = GetMat(current_voxel);
     
     fraction = block_fraction;
 
@@ -453,7 +452,7 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
 bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection, 
         out varp float fraction, out varp vec3 normal, out Material material, varp float ignored_voxel,
-        inout varp float diameter, in varp float angle){
+        inout varp float diameter, in varp float angle, out bool left_bounds){
     
             
     bool block_hit = false; 
@@ -468,18 +467,17 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
     float current_diff = fract_diff;
 
-    //so we
-    int max_steps = 128;
+    // int max_steps = 128;
     
-    float angle_tan = tan(angle);
+    float angle_tan = tan(clamp(angle, 0, PI/4.0));
+    // float angle_tan = 0;
     // float angle_tan = tan(PI/3.0);
-
+    left_bounds = false;
     // int thread_unique_value = (10 + int(gl_LocalInvocationID.x) * 10);
     // while (counter++<max_steps) {
-    while (block_fraction<256.0) {
+    while (true) {
         // fstep_Diretion =  vec3(0);
         
-        block_fraction += fract_diff;
         // if(df > 0.5) {
         // } else {
             // current_diff = df;
@@ -492,31 +490,45 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
         // current_pos += current_diff*rayDirection;
         float dist = block_fraction;
-        float cur_diameter = diameter + 2.0 * angle_tan * dist; 
+        // float cur_diameter = diameter + 2.0 * angle_tan * dist; 
 
-        int lod = int(log2(clamp((cur_diameter/2.0 + 1.0),0.0,16.0))); 
+        float cur_diameter = 2.0 * angle_tan * dist; 
+
+        // int lod = int(log2(clamp((cur_diameter/2.0 + 2.0),3.0,3.0))); 
+        int lod = int(log2(clamp(cur_diameter/2.0 + 2.0, 2.0,16.0))); 
+        // int lod = int(log2(2.0)); 
+        // lod = clamp(lod,0,1);
         lod = 0;
-        fract_diff = 0.5 * clamp((cur_diameter/2.0+1.0),0,4.0);
-        // fract_diff = 0.5;
+        fract_diff = 1.0 * ((cur_diameter/16.0+0.5)) + 0.5;
+        // fract_diff = clamp(fract_diff, 0.2, 8.0);
+        fract_diff = 0.5;
+        block_fraction += fract_diff;
+
 
         // ivec2 tmp = GetVoxelAndDf(ivec3(current_pos), current_voxel, current_df);
         
 
         // current_diff = fract_diff;
+        current_pos = rayOrigin + block_fraction*rayDirection;
+        current_voxel = GetVoxel((ivec3(current_pos)), lod);
         // current_diff = fract_diff + sqrt(float(tmp.g));
         if ((current_voxel != 0)){
             block_hit = true;
             break;
         }
-        current_pos = rayOrigin + block_fraction*rayDirection;
 
-        current_voxel = GetVoxel((ivec3(current_pos)), lod);
         // current_diff = fract_diff;
         // block_fraction += current_diff;
 
         //LOL literally does nothing in terms of perfomance
         if (any(lessThan(current_pos,vec3(0))) || any(greaterThan(current_pos,out_of_bounds_check))) {
             block_hit = false;
+            left_bounds = true;
+            return false;
+        }
+        if(block_fraction>512.0){
+            block_hit = false;
+            left_bounds = false;
             return false;
         }
 
@@ -524,7 +536,7 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
     vec3 before_hit = current_pos - 1.0*fract_diff*rayDirection;
 
-    if(current_voxel != 0){
+    if(block_hit){
 
         ivec3 steps = ivec3(greaterThan(rayDirection, vec3(0)));
         steps = 2 * steps + (-1);
@@ -544,7 +556,7 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
         vec3 fcurrentStepDiretion = vec3(0);
         current_voxel = GetVoxel(voxel_pos);
         int iterations = 0;
-        while ((iterations++ <= 2) && (current_voxel == 0)) {
+        while ((iterations++ <= 128) && (current_voxel == 0)) {
             // initTvals(tMax, tDelta, voxel_pos, rayOrigin+dot(tMax - tDelta, fcurrentStepDiretion)*rayDirection, rayDirection); //does not intersect with scene
             // fstep_Diretion =  vec3(0);
             fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
@@ -561,10 +573,10 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
         vec3 tFinal = tMax - tDelta;
         block_fraction = dot(tFinal, fcurrentStepDiretion);
 
-        fraction = block_fraction;
         material = GetMat(current_voxel);
     }
 
+    fraction = block_fraction;
     return (block_hit);
 }
 
@@ -596,12 +608,12 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
             {
                 varp vec3 idealReflection = reflect(direction, normal);
                 // new_direction = idealReflection; //conetracing just works this way
-                new_direction = normalize(mix(idealReflection, new_direction, material.roughness / 1.0)); //conetracing just works this way
+                new_direction = normalize(mix(idealReflection, new_direction, material.roughness)); //conetracing just works this way
                 new_origin += normal * 0.001;
                 accumulated_reflection *= material.color;
                 accumulated_light += accumulated_reflection * material.emmitance;
                 // accumulated_light += vec3(0.8) * 0.1 * accumulated_reflection;
-
+// 
                 angle += PI * material.roughness;
                 angle = clamp(angle, 0.0, PI/4.0);
                 // angle = PI/2.0;
@@ -660,27 +672,50 @@ vec3 TraceRay(inout vec3 rayOrigin, inout vec3 rayDirection, inout vec3 accumula
     vec3 reflection = accumulated_reflection;
 
     Material material;
+    bool left_bounds = false;
+    bool hit;
     for (int i = 0; (i < MAX_DEPTH); i++)
     {
-        // bool hit = CastRay_precise(rayOrigin, direction, fraction, normal, material, 9999.0, cone_diameter, cone_angle);
-        bool hit = CastRay_fast(rayOrigin, direction, fraction, normal, material, 9999.0, cone_diameter, cone_angle);
+        left_bounds = false;
+        // bool hit = CastRay_precise(rayOrigin, direction, fraction, normal, material, 9999.0, cone_diameter, cone_angle, left_bounds);
+        hit = CastRay_fast(rayOrigin, direction, fraction, normal, material, 9999.0, cone_diameter, cone_angle, left_bounds);
         // dir_before_hit = direction;
         if(!hit) break;
         ProcessHit(rayOrigin, direction, 
             fraction, normal, material, 
             light, reflection, cone_angle);
         
-        if(length(reflection) < 0.01 || length(light) > sqrt(3.0)) break;
+        // if(length(reflection) < 0.01 || length(light) > sqrt(3.0)) break;
     }
     // varp float sun_size = 0.05;
-    // varp float global_light_participance = mix(-dot(rayDirection, globalLightDir), 1, material.roughness);
-    varp float global_light_participance = -dot(rayDirection, globalLightDir);
+    // varp float global_light_participance = -dot(rayDirection, globalLightDir);
     // vec3 tmp = vec3(0);
     // if (global_light_participance > clamp(0.95 - material.roughness,0,1)) {
-    if (global_light_participance > 0.9) {
-    // if (global_light_participance > 0.95) {
-        light += (vec3(.9,.9,.6)*1.0) * reflection * global_light_participance / 1.0;
+    if(
+        // any(greaterThanEqual(rayOrigin, vec3(world_size*15))) ||
+        // any(lessThanEqual(rayOrigin, vec3(0))) ||
+        (
+        left_bounds ||
+        // true ||
+        false) && 
+        // (!hit) &&
+        true
+    ){
+
+        float rdot = -dot(rayDirection, globalLightDir);
+        if(rdot > 0.2){
+            varp float global_light_participance = mix(rdot, 1.0, material.roughness);
+            if (global_light_participance > 0.95) {
+            // if (global_light_participance > 0.95) {
+                light += (vec3(0.9,0.9,0.6)*0.005) * reflection * global_light_participance;
+            } 
+            else {
+                //sky blue
+                // light += (vec3(0.53,0.81,0.92)*0.1) * reflection;
+            }
+        }
     }
+    // if(any(greaterThan(reflection, vec3(1)))) return vec3(0);
     // varp float ndot = (dot(normal, globalLightDir));
     // varp float _global_light_participance = (ndot>0)? material.roughness * ndot * 0.5 : 0.0;
     // light += (vec3(.9,.9,.6)*3.0) * reflection * _global_light_participance / 2.0;
@@ -714,7 +749,7 @@ bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smoot
     bool ssr = false;
     smooth_intersection = false;
     // if(diff >= 0.03)    {ssr = true;}
-    if(diff > 0.1)    {ssr = true;}
+    if(diff > 0.2)    {ssr = true;}
     //ATTENTION causes division line on low values due to rounding errors
     // if(diff >= 0.0)    {ssr = true;}
     // if(diff <  0.5) {smooth_intersection = true;}
@@ -772,7 +807,7 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 sta
             //return fraction
         }
         fraction += fraction_step;
-        if (fraction > 1.0) return false;
+        if (fraction > 2.0) return false;
     }
 }
 
@@ -797,19 +832,23 @@ void main(void){
     // size = imageSize(Gbuffer);
     size = imageSize(frame);
 
-    globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
+    globalLightDir = normalize(vec3(-0.5, -0.5, -1.9));
+    // globalLightDir = normalize(vec3(0., 0., -1.9));
 
     // globalLightDir = normalize(vec3(1, 1, -1.6));
     // globalLightDir = rotateAxis(globalLightDir, vec3(0,0,1), PushConstants.timeSeed.x / 100.0);
-    
-    cameraRayDirPlane = normalize(vec3(PushConstants.camera_direction.xy, 0));
+    cameraRayDir = normalize(PushConstants.camera_direction.xyz);
+    cameraRayDirPlane = normalize(vec3(cameraRayDir.xy, 0));
     horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
-    vertiline = normalize(cross(PushConstants.camera_direction.xyz, horizline));
+    vertiline = normalize(cross(cameraRayDir, horizline));
     
     pix = ivec2(gl_GlobalInvocationID.xy);
     if (pix.x >= size.x || pix.y >= size.y) {return;}
     const varp vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
-    random_storage = vec2(float(PushConstants.timeSeed)*pos.x, pos.x*pos.y);
+
+    float timeSeed = PushConstants.camera_pos.w;
+    random_storage = vec2(sin(timeSeed*pos.x * 34.41), cos(pos.y * timeSeed*123.34 + timeSeed));
+    // random_storage = vec2((pos.x), (pos.x*pos.y));
 
 
     const varp     float stored_depth = load_depth(pix);
@@ -817,9 +856,9 @@ void main(void){
     const       Material stored_mat = GetMat(load_mat(pix));
     const varp      vec3 stored_accumulated_reflection = vec3(1);
     const varp      vec3 stored_accumulated_light = vec3(0);
-    const highp      vec3 stored_direction = PushConstants.camera_direction.xyz;
+    const highp      vec3 stored_direction = cameraRayDir;
     const highp      vec3 stored_origin = get_origin_from_depth(stored_depth, pos);
-    const varp      vec3 stored_normal = load_norm(pix);
+    const varp      vec3 stored_normal = normalize(load_norm(pix));
     // fraction = 0;
     // int iterations_left;
     // imageStore(frame, pix, vec4(encode_color(abs(vec3(stored_mat.color))/1.0), 1));
@@ -836,9 +875,9 @@ void main(void){
         bool hit = true;
         Material material = stored_mat;
 
-        // origin += normal * 1.1;
+        origin += normal * 0.01;
 
-        float cone_angle = 0.0;
+        float cone_angle = 0.00;
         
         ProcessHit(origin, direction,
             0, normal, material,
@@ -854,14 +893,15 @@ void main(void){
                     accumulated_light, accumulated_reflection, cone_angle);
             }
 
-            // ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
-            // origin += fraction*direction;
-            // if(ssr) {
-            //     ProcessHit(origin, direction,
-            //         0, normal, material,
-            //         accumulated_light, accumulated_reflection, cone_angle);
-            // }
+            ssr = ssr_traceRay(origin, direction, vec2(pix), fraction, normal, material);
+            origin += fraction*direction;
+            if(ssr) {
+                ProcessHit(origin, direction,
+                    0, normal, material,
+                    accumulated_light, accumulated_reflection, cone_angle);
+            }
 
+        // multipass_color += accumulated_light;
         multipass_color += TraceRay(origin, direction, accumulated_light, accumulated_reflection, cone_angle); 
     }
 }
@@ -869,15 +909,13 @@ void main(void){
     varp vec3 color = multipass_color / float(NUM_SAMPLES);   
     
     varp float max_component = max(color.x, max(color.y, color.z));
-    varp vec3 normalized_color;
     if(max_component > 1.0){
-        normalized_color = color / max_component;
+        varp vec3 normalized_color = color / max_component;
         color = normalized_color;
     }
 
-
-    // if(isnan(color.x)) color = vec3(1);
-    // if(isnan(color.y)) color = vec3(1);
-    // if(isnan(color.z)) color = vec3(1);
+    // if(isnan(stored_normal.x)) color = vec3(0);
+    // if(isnan(stored_normal.y)) color = vec3(0);
+    // if(isnan(stored_normal.z)) color = vec3(0);
     imageStore(frame, pix, vec4((color), 1));
 }
