@@ -58,7 +58,7 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
             } else {
                 textureInfo.imageView = default_image->view; //CHANGE ME
             }
-            textureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            textureInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             textureInfo.sampler = render->overlaySampler;
         VkWriteDescriptorSet 
             textureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -167,7 +167,7 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
             } else {
                 textureInfo.imageView = default_image->view; //CHANGE ME
             }
-            textureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            textureInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             textureInfo.sampler = render->overlaySampler;
         VkWriteDescriptorSet 
             textureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -368,7 +368,7 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
     VkImageMemoryBarrier barrier = {};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.image = texture_image->image;
@@ -390,9 +390,9 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
         staging_copy.imageSubresource.baseArrayLayer = 0;
         staging_copy.imageSubresource.mipLevel = 0;
         staging_copy.imageSubresource.layerCount = 1;
-    vkCmdCopyBufferToImage(copyCommandBuffer, stagingBuffer, texture_image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &staging_copy);
+    vkCmdCopyBufferToImage(copyCommandBuffer, stagingBuffer, texture_image->image, VK_IMAGE_LAYOUT_GENERAL, 1, &staging_copy);
 
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier);

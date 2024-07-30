@@ -1,5 +1,22 @@
 #include "engine.hpp"
 
+#include <chrono>
+void printFPS() {
+    static int frameCount = 0;
+    static auto lastTime = std::chrono::high_resolution_clock::now();
+    
+    frameCount++;
+    
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = currentTime - lastTime;
+    
+    if (elapsed.count() >= 1.0) {
+        std::cout << "FPS: " << frameCount << std::endl;
+        frameCount = 0;
+        lastTime = currentTime;
+    }
+}
+
 vec3 rnVec3(float minValue, float maxValue) {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -466,6 +483,7 @@ void Engine::update(){
     process_animations();
     cull_meshes();
     draw();
+    printFPS();
 }
 
 void Engine::cleanup(){

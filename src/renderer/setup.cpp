@@ -9,8 +9,8 @@ using namespace glm;
 const vector<const char*> instanceLayers = {
     #ifndef VKNDEBUG
     "VK_LAYER_KHRONOS_validation",
-    #endif
     "VK_LAYER_LUNARG_monitor",
+    #endif
 };
 /*const*/vector<const char*> instanceExtensions = {
     VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
@@ -116,12 +116,12 @@ void Renderer::create_RenderPass_Graphical(){
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; //final frame copied into swapchain image
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL; //final frame copied into swapchain image
         colorAttachment.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; //to present
 
     VkAttachmentReference colorAttachmentRef = {};
         colorAttachmentRef.attachment = 0;
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //for drawing
+        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL; //for drawing
 
     VkSubpassDescription subpass = {};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -158,7 +158,7 @@ void Renderer::create_RenderPass_RayGen(){
         caMatNorm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caMatNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         caMatNorm.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        caMatNorm.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; //for blit if scaled or 
+        caMatNorm.finalLayout = VK_IMAGE_LAYOUT_GENERAL; //for blit if scaled or 
     VkAttachmentDescription caOldUv = {};
         caOldUv.format = OLD_UV_FORMAT;
         caOldUv.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -167,7 +167,7 @@ void Renderer::create_RenderPass_RayGen(){
         caOldUv.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caOldUv.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         caOldUv.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        caOldUv.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
+        caOldUv.finalLayout = VK_IMAGE_LAYOUT_GENERAL; 
     VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = DEPTH_FORMAT;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -176,20 +176,20 @@ void Renderer::create_RenderPass_RayGen(){
         depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
         // depthAttachment.
     VkAttachmentReference MatNormRef = {};
         MatNormRef.attachment = 0;
-        MatNormRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        MatNormRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentReference oldUvRef = {};
         oldUvRef.attachment = 1;
-        oldUvRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        oldUvRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     // VkAttachmentReference depthRef = {};
     //     depthRef.attachment = 2;
     //     depthRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentReference depthAttachmentRef = {};
         depthAttachmentRef.attachment = 2;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL;
 
     vector<VkAttachmentDescription> attachments = {caMatNorm, caOldUv, /*caDepth,*/ depthAttachment};
 
@@ -230,8 +230,8 @@ void Renderer::create_RenderPass_RayGen_Particles(){
         caMatNorm.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         caMatNorm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caMatNorm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        caMatNorm.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        caMatNorm.finalLayout = is_scaled? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
+        caMatNorm.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        caMatNorm.finalLayout = is_scaled? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription caOldUv = {};
         caOldUv.format = OLD_UV_FORMAT;
         caOldUv.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -239,8 +239,8 @@ void Renderer::create_RenderPass_RayGen_Particles(){
         caOldUv.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         caOldUv.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         caOldUv.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        caOldUv.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        caOldUv.finalLayout = is_scaled? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL; 
+        caOldUv.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        caOldUv.finalLayout = is_scaled? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_GENERAL; 
     VkAttachmentDescription depthAttachment = {};
         depthAttachment.format = DEPTH_FORMAT;
         depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -248,21 +248,21 @@ void Renderer::create_RenderPass_RayGen_Particles(){
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
         depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        depthAttachment.finalLayout = is_scaled? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        depthAttachment.finalLayout = is_scaled? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_GENERAL;
         // depthAttachment.
     VkAttachmentReference MatNormRef = {};
         MatNormRef.attachment = 0;
-        MatNormRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        MatNormRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentReference oldUvRef = {};
         oldUvRef.attachment = 1;
-        oldUvRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        oldUvRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     // VkAttachmentReference depthRef = {};
     //     depthRef.attachment = 2;
     //     depthRef.layout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentReference depthAttachmentRef = {};
         depthAttachmentRef.attachment = 2;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_GENERAL;
 
     vector<VkAttachmentDescription> attachments = {caMatNorm, caOldUv, /*caDepth,*/ depthAttachment};
 
@@ -321,19 +321,6 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         shaderStages[i].pName = "main";
     }
 
-
-    // VkPipelineShaderStageCreateInfo 
-    //     vertShaderStageInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-    //     vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    //     vertShaderStageInfo.module = vertShaderModule;
-    //     vertShaderStageInfo.pName = "main";
-    // VkPipelineShaderStageCreateInfo 
-    //     fragShaderStageInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-    //     fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    //     fragShaderStageInfo.module = fragShaderModule;
-    //     fragShaderStageInfo.pName = "main";
-    
-    // vector<VkPipelineShaderStageCreateInfo> shaderStages = {vertShaderStageInfo, fragShaderStageInfo};
     vector<VkVertexInputAttributeDescription> attributeDescriptions(attr_desc.size());
         for(int i=0; i<attr_desc.size(); i++){
             attributeDescriptions[i].binding = 0;
@@ -498,6 +485,50 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         vkDestroyShaderModule(device, shader_modules[i], NULL);
     }
 }
+
+void Renderer::destroy_Compute_Pipeline(ComputePipe* pipe){
+    vkDestroyPipeline(device, pipe->pipe, NULL);
+    vkDestroyPipelineLayout(device, pipe->pipeLayout, NULL);
+    vkDestroyDescriptorSetLayout(device, pipe->dsetLayout, NULL);
+}
+void Renderer::create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 push_size, VkPipelineCreateFlags create_flags){
+    auto compShaderCode = read_Shader(src);
+
+    VkShaderModule module = create_Shader_Module(&compShaderCode);
+    
+    // VkSpecializationInfo specConstants = {};
+    VkPipelineShaderStageCreateInfo 
+        compShaderStageInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        compShaderStageInfo.module = module;
+        compShaderStageInfo.pName = "main";
+
+    VkPushConstantRange     
+        pushRange = {};
+        pushRange.size = push_size;
+        pushRange.offset = 0;
+        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkPipelineLayoutCreateInfo 
+        pipelineLayoutInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &pipe->dsetLayout;
+        if(push_size != 0) {
+            pipelineLayoutInfo.pushConstantRangeCount = 1;
+            pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+        }
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &pipe->pipeLayout));
+
+    VkComputePipelineCreateInfo 
+        pipelineInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        pipelineInfo.stage = compShaderStageInfo;
+        pipelineInfo.layout = pipe->pipeLayout;
+        pipelineInfo.flags = create_flags;
+
+    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &pipe->pipe));
+    vkDestroyShaderModule(device, module, NULL);
+}
+
 
 void Renderer::create_Surface(){
     VK_CHECK(glfwCreateWindowSurface(instance, window.pointer, NULL, &surface));

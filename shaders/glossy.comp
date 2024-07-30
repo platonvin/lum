@@ -394,7 +394,7 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
                 varp vec3 idealReflection = reflect(direction, normal);
                 new_direction = idealReflection; //conetracing just works this way
                 // new_direction = normalize(mix(idealReflection, new_direction, material.roughness)); //conetracing just works this way
-                new_origin += normal * 0.1; //TODO
+                new_origin += normal * 0.001; //TODO
 
                 vec3 diffuse_light = sample_radiance(new_origin, normal);
                 material.diffuse_light = diffuse_light;
@@ -544,7 +544,7 @@ bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smoot
 }
 bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 start_pix, out highp float fraction, out varp vec3 normal, out Material material){
     bool smooth_intersection = false;
-    highp float fraction_step = .15;
+    highp float fraction_step = .1;
     
     fraction = 0.0;
     fraction = fraction_step;
@@ -570,7 +570,7 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 sta
             }
         }
         fraction += fraction_step;
-        if (fraction > 2.0) return false;
+        if (fraction > 1.5) return false;
     }
 }
 
@@ -621,7 +621,19 @@ void main(void){
     ProcessHit(origin, direction, 
             0, normal, mat, 
             accumulated_light, accumulated_reflection);
+
+    Material ssr_mat;
+    float ssr_fraction;
+    vec3 ssr_normal;
+    bool ssr_hit = ssr_traceRay(origin, direction, vec2(pix), ssr_fraction, ssr_normal, ssr_mat);
     
+    origin += ssr_fraction * direction;
+    if(ssr_hit){
+        ProcessHit(origin, direction, 
+            0, normal, mat, 
+            accumulated_light, accumulated_reflection);
+    }
+
     vec3 traced_color = vec3(0);
     if(mat.roughness >.2){
         return;

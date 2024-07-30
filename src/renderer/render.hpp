@@ -232,7 +232,36 @@ typedef struct RasterPipe {
     i32 subpass_id;
     // vksubn; //we dont really need to store it in here but why not
 } RasterPipe;
+typedef struct ComputePipe { 
+    VkPipeline pipe;
+    VkPipelineLayout pipeLayout;
+    
+    VkDescriptorSetLayout dsetLayout;
+    vector<VkDescriptorSet> descriptors;
+} ComputePipe;
 
+typedef struct RenderPass { 
+    VkPipeline pipe;
+    VkPipelineLayout pipeLayout;
+    
+    VkDescriptorSetLayout dsetLayout;
+    vector<VkDescriptorSet> descriptors;
+
+    VkRenderPass rpass; //we dont really need to store it in here but why not
+    i32 subpass_id;
+    // vksubn; //we dont really need to store it in here but why not
+} RenderPass;
+typedef struct SubPass { 
+    VkPipeline pipe;
+    VkPipelineLayout pipeLayout;
+    
+    VkDescriptorSetLayout dsetLayout;
+    vector<VkDescriptorSet> descriptors;
+
+    VkRenderPass rpass; //we dont really need to store it in here but why not
+    i32 subpass_id;
+    // vksubn; //we dont really need to store it in here but why not
+} SubPass;
 
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
@@ -310,7 +339,29 @@ enum denoise_targets{
     DENOISE_TARGET_LOWRES,
     DENOISE_TARGET_HIGHRES,
 };
+enum RelativeDescriptorPos {
+    RD_NONE,    //what?
+    RD_PREVIOUS,  //Relatove Descriptor position previous - for accumulators
+    RD_CURRENT, //Relatove Descriptor position matching - common cpu-paired
+    RD_FIRST,    //Relatove Descriptor position first    - for gpu-only
+};
 
+#define NO_SAMPLER ((VkSampler)(0))
+#define NO_LAYOUT ((VkImageLayout)(0))
+typedef struct DescriptorInfo {
+    RelativeDescriptorPos relative_pos;
+    vector<Buffer> buffers;
+    vector<Image> images;
+    VkSampler image_sampler;
+    VkImageLayout image_layout; //ones that will be in use, not current
+} DescriptorInfo;
+
+typedef struct DelayedDescriptorSetup {
+    VkDescriptorSetLayout* dsetLayout;
+    vector<VkDescriptorSet>* descriptors; 
+    vector<DescriptorInfo> description;
+    VkShaderStageFlags stages;
+} DelayedDescriptorSetup;
 class MyRenderInterface;   
 
 class Renderer {
@@ -460,10 +511,18 @@ private:
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
         VkExtent2D extent, vector<SimpleBlend> blends, u32 push_size, bool depthTest);
     void destroy_Raster_Pipeline(RasterPipe* pipe);
+
+    void create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
+    void destroy_Compute_Pipeline(ComputePipe* pipe);
     //not possible without loosing perfomance
     // void setup_descriptors_helper(vector<VkDescriptorSet>* descriptor_sets, vector<Buffers> buffers, vector<Images> images);
+    // void destroy_Compute_Pipeline(ComputePipe* pipe);
 
-    void setup_Descriptors();
+    // void just_Count_Descriptors()
+    void defer_Descriptors_setup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
+    void setup_Descriptors(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
+    vector<DelayedDescriptorSetup> delayed_descriptor_setups;
+    void flush_Descriptor_Setup();
 
     void setup_Blockify_Descriptors();
     void setup_Copy_Descriptors();
@@ -531,6 +590,13 @@ private:
 
     void get_Instance_Extensions();
     // void get_PhysicalDevice_Extensions();
+
+    u32 STORAGE_BUFFER_DESCRIPTOR_COUNT = 0;
+    u32 STORAGE_IMAGE_DESCRIPTOR_COUNT = 0;
+    u32 COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT = 0;
+    u32 UNIFORM_BUFFER_DESCRIPTOR_COUNT = 0;
+    void count_Descriptor(const VkDescriptorType type);
+    void create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags stageFlags, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
 public:
     
 
@@ -556,31 +622,9 @@ public:
     RasterPipe raygenPipe;
     RasterPipe raygenParticlesPipe;
 
-    // VkShaderModule graphicsVertShaderModule;
-    // VkShaderModule graphicsFragShaderModule;
-
-    // VkShaderModule rayGenVertShaderModule;
-    // VkShaderModule rayGenFragShaderModule;
-
-    // VkShaderModule rayGenParticlesVertShaderModule;
-    // VkShaderModule rayGenParticlesFragShaderModule;
-    // VkShaderModule rayGenParticlesGeomShaderModule;
-    // VkShaderModule   blockifyShaderModule;
-    // VkShaderModule       copyShaderModule;
-    // VkShaderModule        mapShaderModule;
-    // VkShaderModule         dfShaderModule;
-    // VkShaderModule   raytraceShaderModule;
-
-//rasterization pipeline things
     VkRenderPass             rayGenRenderPass;
     VkRenderPass    rayGenParticlesRenderPass;
     VkRenderPass            overlayRenderPass;
-    // VkPipelineLayout          rayGenPipelineLayout;
-    // VkPipelineLayout rayGenParticlesPipelineLayout;
-    // VkPipelineLayout         overlayPipelineLayout;
-    // VkPipeline            rayGenPipeline;
-    // VkPipeline   rayGenParticlesPipeline;
-    // VkPipeline           overlayPipeline;
 
 
     vector<VkFramebuffer>  swapChainFramebuffers;
@@ -602,29 +646,7 @@ public:
     vector<VkFence> graphicalInFlightFences;
     vector<VkFence>  raytraceInFlightFences;
     vector<VkFence>    frameInFlightFences;    
-    
-    //g buffer of prev_pixel pos, matid and normal
-    // vector<VkImage>           rayGenNormImages;
-    // vector<VkImage>           rayGenPosDiffImages;
-    //TODO: no copy if supported
 
-    // vector<Image> depth ; //copy to this
-    // vector<Image> depth_downscaled;
-
-    //if scaled, we render to matnorm and downscale
-    //if not scaled, we render to  matnorm_downscaled and just use it with nearest sampler
-    
-    // vector<Image> oldUv;
-    // vector<Image> oldUv_downscaled;
-    // vector<Image> oldUv_downscaled;
-    // vector<VkSampler> oldUvSampler;
-
-    // vector<Image> gBuffer;
-    // vector<Image> gBuffer_downscaled;
-    // vector<Image> step_count;
-    // vector<Image> raytraced_frame;
-    // vector<Image>  denoised_frame;
-    // vector<Image>  upscaled_frame;
            Image step_count;
            Image radiance_cache;
     #ifdef ACCUMULATE_HIGHRES
@@ -692,82 +714,23 @@ public:
     vector<UiImageDeletion>  ui_image_deletion_queue;
     vector<UiBufferDeletion> ui_buffer_deletion_queue;
 
-    // VkDescriptorSetLayout    RayGenDescriptorSetLayout;
-    // vector<VkDescriptorSet>    RayGenDescriptorSets;
-
-    // VkDescriptorSetLayout    RayGenParticlesDescriptorSetLayout;
-    // vector<VkDescriptorSet>    RayGenParticlesDescriptorSets;
-
-    VkDescriptorSetLayout  raytraceDescriptorSetLayout;
-    vector<VkDescriptorSet>  raytraceDescriptorSets;
-
-    VkDescriptorSetLayout  updateRadianceDescriptorSetLayout;
-    vector<VkDescriptorSet>  updateRadianceDescriptorSets;
-
-    VkDescriptorSetLayout  diffuseDescriptorSetLayout;
-    vector<VkDescriptorSet>  diffuseDescriptorSets;
-
-    VkDescriptorSetLayout  glossyDescriptorSetLayout;
-    vector<VkDescriptorSet>  glossyDescriptorSets;
-
-    VkDescriptorSetLayout  denoiseDescriptorSetLayout;
-    vector<VkDescriptorSet>  denoiseDescriptorSets_lowres;
-    vector<VkDescriptorSet>  denoiseDescriptorSets_highres;
-
-    VkDescriptorSetLayout  upscaleDescriptorSetLayout;
-    vector<VkDescriptorSet>  upscaleDescriptorSets;
-
-    VkDescriptorSetLayout  accumulateDescriptorSetLayout;
-    vector<VkDescriptorSet>  accumulateDescriptorSets;
-
-    VkDescriptorSetLayout  estimateVarianceDescriptorSetLayout;
-    vector<VkDescriptorSet>  estimateVarianceDescriptorSets;
-
-    VkDescriptorSetLayout       mapDescriptorSetLayout;
-    vector<VkDescriptorSet>       mapDescriptorSets;
-
-    VkDescriptorSetLayout       mipmapDescriptorSetLayout;
-    vector<VkDescriptorSet>       mipmapDescriptorSets;
-
-    // VkDescriptorSetLayout        dfDescriptorSetLayout;
-    // vector<VkDescriptorSet>        dfDescriptorSets;
-
-    // VkDescriptorSetLayout graphicalDescriptorSetLayout;
-    // vector<VkDescriptorSet> graphicalDescriptorSets;
 
     VkDescriptorPool descriptorPool;
-    
-// upscale denoise
-//compute pipeline things
-    VkPipelineLayout raytraceLayout;
-    VkPipelineLayout radianceLayout;
-    VkPipelineLayout diffuseLayout;
-    VkPipelineLayout glossyLayout;
-    VkPipelineLayout denoiseLayout;
-    VkPipelineLayout upscaleLayout;
-    VkPipelineLayout accumulateLayout;
-    // VkPipelineLayout blockifyLayout;
-    // VkPipelineLayout     copyLayout;
-    VkPipelineLayout      mapLayout;
-    VkPipelineLayout      mipmapLayout;
-    // VkPipelineLayout       dfxLayout;
-    // VkPipelineLayout       dfyLayout;
-    // VkPipelineLayout       dfzLayout;
-    VkPipeline   raytracePipeline;
-    VkPipeline   radiancePipeline;
-    VkPipeline    diffusePipeline;
-    VkPipeline    glossyPipeline;
-    VkPipeline    denoisePipeline;
-    VkPipeline    denoisePipeline_lowres;
-    VkPipeline accumulatePipeline;
-    VkPipeline    upscalePipeline;
-    // VkPipeline blockifyPipeline;
-    // VkPipeline     copyPipeline;
-    VkPipeline      mapPipeline;
-    VkPipeline      mipmapPipeline;
-    // VkPipeline       dfxPipeline;
-    // VkPipeline       dfyPipeline;
-    // VkPipeline       dfzPipeline;
+    ComputePipe   raytracePipe;
+    ComputePipe   radiancePipe;
+    ComputePipe    diffusePipe;
+    ComputePipe     glossyPipe;
+    ComputePipe    denoisePipe;
+    ComputePipe    denoisePipe_lowres;
+    ComputePipe accumulatePipe;
+    ComputePipe    upscalePipe;
+    ComputePipe        mapPipe;
+    ComputePipe     mipmapPipe;
+    // ComputePipe blockifyPipe;
+    // ComputePipe     copyPipe;
+    // ComputePipe       dfxPipe;
+    // ComputePipe       dfyPipe;
+    // ComputePipe       dfzPipe;
 
     VmaAllocator VMAllocator; 
     u32 imageIndex = 0;
