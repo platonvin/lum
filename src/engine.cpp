@@ -151,18 +151,18 @@ void Engine::handle_input(){
     should_close |= (glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
     
     #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
-    set_key(GLFW_KEY_W, render.camera_pos += dvec3(dvec2(render.camera_dir),0) * 1.4);
-    set_key(GLFW_KEY_S, render.camera_pos -= dvec3(dvec2(render.camera_dir),0) * 1.4);
+    set_key(GLFW_KEY_W, render.cameraPos += dvec3(dvec2(render.cameraDir),0) * 1.4);
+    set_key(GLFW_KEY_S, render.cameraPos -= dvec3(dvec2(render.cameraDir),0) * 1.4);
 
-    dvec3 camera_direction_to_right = dquat(dvec3(0.0, 0.0, pi<double>()/2.0)) * render.camera_dir;
+    dvec3 camera_direction_to_right = dquat(dvec3(0.0, 0.0, pi<double>()/2.0)) * render.cameraDir;
 
-    set_key(GLFW_KEY_A, render.camera_pos += dvec3(dvec2(camera_direction_to_right),0) * 1.4);
-    set_key(GLFW_KEY_D, render.camera_pos -= dvec3(dvec2(camera_direction_to_right),0) * 1.4);
+    set_key(GLFW_KEY_A, render.cameraPos += dvec3(dvec2(camera_direction_to_right),0) * 1.4);
+    set_key(GLFW_KEY_D, render.cameraPos -= dvec3(dvec2(camera_direction_to_right),0) * 1.4);
     // set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
     // set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
-    set_key(GLFW_KEY_COMMA  , render.camera_dir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
-    set_key(GLFW_KEY_PERIOD , render.camera_dir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.camera_dir,0));
-    render.camera_dir = normalize(render.camera_dir); 
+    set_key(GLFW_KEY_COMMA  , render.cameraDir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.cameraDir,0));
+    set_key(GLFW_KEY_PERIOD , render.cameraDir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.cameraDir,0));
+    render.cameraDir = normalize(render.cameraDir); 
     
     vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
     vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
@@ -351,7 +351,7 @@ void Engine::cull_meshes(){
             struct block_render_request /*goes*/ brr = {}; //
             brr.pos = ivec3(xx*16,yy*16, zz*16);
             brr.index = block_id;
-            if(is_block_visible(render.current_trans, dvec3(brr.pos))){
+            if(is_block_visible(render.cameraTransform, dvec3(brr.pos))){
                 que.push_back(brr);
             }
         }
@@ -363,8 +363,8 @@ void Engine::cull_meshes(){
 void Engine::draw()
 {
 // println
-    render.start_Frame();
-        render.startRaygen();
+    render.start_frame();
+        render.start_raygen();
             for(auto b : que){
                 Mesh* block_mesh = NULL;
                 block_mesh = &block_palette[b.index]->mesh;
@@ -373,73 +373,73 @@ void Engine::draw()
 
                 // printl(block_palette[b.index]->mesh.triangles.Pzz.icount);
                 
-                render.RaygenMesh(block_mesh);
+                render.raygen_mesh(block_mesh);
             }
             
-            render.RaygenMesh(&tank_body);
-            render.RaygenMesh(&tank_head);
+            render.raygen_mesh(&tank_body);
+            render.raygen_mesh(&tank_head);
             
-            render.RaygenMesh(&tank_rf_leg);
-            render.RaygenMesh(&tank_lb_leg);
+            render.raygen_mesh(&tank_rf_leg);
+            render.raygen_mesh(&tank_lb_leg);
 // println
-            render.RaygenMesh(&tank_lf_leg);
-            render.RaygenMesh(&tank_rb_leg);
-            render.rayGenMapParticles();
+            render.raygen_mesh(&tank_lf_leg);
+            render.raygen_mesh(&tank_rb_leg);
+            render.raygen_map_particles();
 // println
-        render.endRaygen();
+        render.end_raygen();
 // println
 
-        render.startBlockify();
+        render.start_blockify();
 // println
-            render.blockifyMesh(&tank_body);
-            render.blockifyMesh(&tank_head);
+            render.blockify_mesh(&tank_body);
+            render.blockify_mesh(&tank_head);
         
-            render.blockifyMesh(&tank_rf_leg);
-            render.blockifyMesh(&tank_lb_leg);
-            render.blockifyMesh(&tank_lf_leg);
-            render.blockifyMesh(&tank_rb_leg);
-        render.endBlockify();
+            render.blockify_mesh(&tank_rf_leg);
+            render.blockify_mesh(&tank_lb_leg);
+            render.blockify_mesh(&tank_lf_leg);
+            render.blockify_mesh(&tank_rb_leg);
+        render.end_blockify();
 // println
 
-        render.updateParticles();
+        render.update_particles();
 // println
 
-        render.startCompute();
+        render.start_compute();
 // println
-            render.execCopies();
+            render.exec_copies();
 // println
-                render.startMap();
+                render.start_map();
 // println
-                    render.mapMesh(&tank_body);
-                    render.mapMesh(&tank_head);
+                    render.map_mesh(&tank_body);
+                    render.map_mesh(&tank_head);
                     
-                    render.mapMesh(&tank_rf_leg);
+                    render.map_mesh(&tank_rf_leg);
 // println
-                    render.mapMesh(&tank_lb_leg);
-                    render.mapMesh(&tank_lf_leg);
-                    render.mapMesh(&tank_rb_leg);
+                    render.map_mesh(&tank_lb_leg);
+                    render.map_mesh(&tank_lf_leg);
+                    render.map_mesh(&tank_rb_leg);
 // println
-                render.endMap();
+                render.end_map();
 // println
                 // render.raytrace();
-                render.updadeRadiance();
+                render.updade_radiance();
 // println
                 render.diffuse();
 // println
                 render.glossy();
 // println
                 if(render.pre_denoiser_count > 0)
-                    render.denoise(render.pre_denoiser_count, 1, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                    render.denoise(render.pre_denoiser_count, 1, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 render.accumulate();
 // println
                 if(render.post_denoiser_count > 0)
-                    render.denoise(render.post_denoiser_count, 2, render.is_scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                    render.denoise(render.post_denoiser_count, 2, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(5, 2, DENOISE_TARGET_LOWRES);
-                if(render.is_scaled){
+                if(render.scaled){
                     // render.denoise(9, 3, DENOISE_TARGET_LOWRES);
                     // render.denoise(5, 1, DENOISE_TARGET_LOWRES);
                     render.upscale();
@@ -450,7 +450,7 @@ void Engine::draw()
                 // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
 // println
-        render.endCompute();
+        render.end_compute();
 
 // println
         render.start_ui(); 
@@ -462,7 +462,7 @@ void Engine::draw()
         render.draw_ui(); 
 // println
         render.present();
-    render.end_Frame();
+    render.end_frame();
 }
 
 void Engine::setup(){
@@ -474,7 +474,7 @@ void Engine::update(){
     prev_time = curr_time;
     curr_time = glfwGetTime();
     delt_time = curr_time-prev_time;
-    render.delta_time = delt_time;
+    render.deltaTime = delt_time;
 
 // println
     update_system();

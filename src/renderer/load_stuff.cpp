@@ -62,7 +62,7 @@ assert(blockPaletteLinear.data()!=NULL);
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, &origin_block_palette[i], uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16));
+        copy_Buffer(stagingBuffer, &originBlockPalette[i], uvec3(16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16));
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
@@ -89,7 +89,7 @@ void Renderer::update_Material_Palette(Material* materialPalette){
     vmaUnmapMemory(VMAllocator, stagingAllocation);
 
     for(i32 i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
-        copy_Buffer(stagingBuffer, &material_palette[i], uvec3(6,256,1));
+        copy_Buffer(stagingBuffer, &this->materialPalette[i], uvec3(6,256,1));
     }
 
     vmaDestroyBuffer(VMAllocator, stagingBuffer, stagingAllocation);
@@ -159,8 +159,8 @@ void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, 
 
     load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
     
-    if(extrude_palette and not has_palette){
-        has_palette = true;
+    if(extrude_palette and not hasPalette){
+        hasPalette = true;
         for(int i=0; i<MATERIAL_PALETTE_SIZE; i++){   
             mat_palette[i].color = vec4(
                 scene->palette.color[i].r / 256.0,

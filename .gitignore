@@ -6,7 +6,8 @@ obj/*.gch
 shaders/*.spv
 shaders/compiled/*.spv
 # IDE things
-compile_flags.txt
+# compile_flags.txt
+*.txt
 .vscode
 .idea
 
@@ -14,7 +15,6 @@ test.cpp
 temp.cpp
 r.cpp
 .vscode
-todo.txt
 assets/*.zip
 run.py
 #memory dump from VMA
@@ -26,4 +26,3 @@ intel_traces
 temp.*
 package
 package.zip
-alsiel.txt

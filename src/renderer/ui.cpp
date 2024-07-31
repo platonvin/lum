@@ -374,7 +374,7 @@ void Ui::setup(){
 	_renderer = renderer;
 	
 	sysInterface.SetWindow(renderer->window.pointer);
-    Rml::SetRenderInterface(renderer->UiRenderInterface);
+    Rml::SetRenderInterface(renderer->ui_render_interface);
     Rml::SetSystemInterface(&sysInterface);
 	sysInterface.SetWindow(renderer->window.pointer);
     Rml::Initialise();
@@ -397,9 +397,9 @@ void Ui::setup(){
 }
 
 void Ui::update(){
-	if(renderer->UiRenderInterface->default_image == NULL){
+	if(renderer->ui_render_interface->default_image == NULL){
 		byte def_img_src[4] = {(byte)255,(byte)255,(byte)255,(byte)255};
-		bool res = renderer->UiRenderInterface->GenerateTexture((Rml::TextureHandle&)(renderer->UiRenderInterface->default_image), (Rml::byte*)&def_img_src, (Rml::Vector2i){1,1});
+		bool res = renderer->ui_render_interface->GenerateTexture((Rml::TextureHandle&)(renderer->ui_render_interface->default_image), (Rml::byte*)&def_img_src, (Rml::Vector2i){1,1});
 		assert(res);
 	}
 	double xpos, ypos;
@@ -437,7 +437,7 @@ void Ui::update(){
 	if(upscale_counter_diff != 0){
 		renderer->_ratio += upscale_counter_diff;
 		renderer->_ratio = glm::clamp(renderer->_ratio, 1.0f, 3.0f);
-		renderer->is_resized = true;
+		renderer->resized = true;
 
 		my_model.DirtyVariable("upscaling_ratio");
 		upscale_counter_diff = 0;
@@ -457,6 +457,6 @@ void Ui::cleanup(){
 	// Rml::ReleaseCompiledGeometry();
 	// Rml::ReleaseMemoryPools();
 	Rml::Shutdown();
-	renderer->UiRenderInterface->ReleaseTexture((Rml::TextureHandle)renderer->UiRenderInterface->default_image);
+	renderer->ui_render_interface->ReleaseTexture((Rml::TextureHandle)renderer->ui_render_interface->default_image);
 		// context.
 }

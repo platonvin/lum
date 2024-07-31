@@ -34,13 +34,13 @@ srcs := \
 	common/ogt_voxel_meshify.cpp\
 	common/meshopt.cpp\
 
-headers:= \
-	src/renderer/render.hpp\
-	src/renderer/ui.hpp\
-	common/ogt_vox.hpp\
-	common/meshopt.hpp\
-	common/ogt_voxel_meshify.hpp\
-	common/engine.hpp\
+# headers:= \
+# 	src/renderer/render.hpp\
+# 	src/renderer/ui.hpp\
+# 	common/ogt_vox.hpp\
+# 	common/meshopt.hpp\
+# 	common/ogt_voxel_meshify.hpp\
+# 	common/engine.hpp\
 
 _shaders:= \
 	shaders/compiled/vert.spv\
@@ -86,15 +86,15 @@ obj/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp
 	g++ src/renderer/load_stuff.cpp -c -o obj/load_stuff.o $(Flags) $(I) $(args)
 obj/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp
 	g++ src/renderer/render_ui_interface.cpp -c -o obj/render_ui_interface.o $(Flags) $(I) $(args)
-obj/ui.o: src/renderer/ui.cpp src/renderer/render.hpp src/renderer/ui.hpp
+obj/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 	g++ src/renderer/ui.cpp -c -o obj/ui.o $(Flags) $(I) $(args)
-obj/main.o: src/main.cpp src/engine.hpp
+obj/main.o: src/main.cpp src/engine.hpp src/renderer/render.hpp
 	g++ src/main.cpp -c -o obj/main.o $(Flags) -pipe -fno-exceptions $(I) $(args)
 
 build: $(objs) $(_shaders)
 	g++ $(objs) -o client.exe $(Flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static $(args)
-client_opt:
-	g++ $(srcs) $(I) $(L) $(D) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlCore -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static -Os -pipe -fno-exceptions -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
+# client_opt:
+# 	g++ $(srcs) $(I) $(L) $(D) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlCore -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static -Os -pipe -fno-exceptions -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
 
 shaders/compiled/vert.spv: shaders/vert.vert
 	glslc shaders/vert.vert -o shaders/compiled/vert.spv $(SA)

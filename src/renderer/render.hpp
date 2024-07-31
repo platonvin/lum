@@ -1,24 +1,15 @@
 #pragma once
 
-#include <Volk/volk.h>
-#include <vulkan/vulkan.h>
 #include <climits>
 #include <cmath>
-// #include <cstddef>
-#include <string.h>
-#include <glm/fwd.hpp>
-#include <vector>
-#include <tuple>
-
-// #include <string.h>
 #include <optional>
+#include <vector>
+#include <string.h>
 #include <stdio.h>
-
-#include <vulkan/vk_enum_string_helper.h>
-#include <vma/vk_mem_alloc.h>
-// #define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
+#include <io.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdio.h>
 
 #include <glm/detail/qualifier.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
@@ -27,13 +18,14 @@
 #include <glm/ext/vector_int3.hpp>
 #include <glm/ext/vector_uint4.hpp>
 #include <glm/trigonometric.hpp>
-#include <stdio.h>
-#include <io.h>
-#include <limits.h>
-#include <stdio.h>
-
+#include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <Volk/volk.h>
+#include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
+#include <vma/vk_mem_alloc.h>
+#include <GLFW/glfw3.h>
 
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
@@ -52,8 +44,6 @@ const int BLOCK_PALETTE_SIZE_X = 64;
 const int BLOCK_PALETTE_SIZE_Y = 64;
 const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 
-// #define STENCIL
-
 // #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
 // #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
 #define RAYTRACED_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
@@ -67,52 +57,11 @@ const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 #define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
 #endif
 // #define ACCUMULATE_HIGHRES
-//should be 2 for temporal accumulation, but can be changed if rebind images
+//should be (at least) 2 for temporal accumulation, but can be changed if rebind images
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 using namespace std;
 using namespace glm;
-
-// extern VisualWorld world;
-#define STRINGIZE(x) STRINGIZE2(x)
-#define STRINGIZE2(x) #x
-#define __LINE_STRING__ STRINGIZE(__LINE__)
-
-#define crash(string) do {printf(KRED "l:%d %s\n" KEND, __LINE__, #string); exit(69);} while(0)
-
-// #define NDEBUG
-#ifdef NDEBUG
-// #define VMA_NAME(allocation) 
-#define VKNDEBUG
-#define VK_CHECK(func) do{\
-    VkResult result = func;\
-    if (result != VK_SUCCESS) {\
-        exit(result);\
-    }} while (0)
-#else
-#define VK_CHECK(func) do{\
-    VkResult result = (func);\
-    if (result != VK_SUCCESS) {\
-        fprintf(stderr, "LINE :%d Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
-        exit(1);\
-    }} while (0)
-#define malloc(x)   ({void* res_ptr =(malloc)(x  ); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
-#define calloc(x,y) ({void* res_ptr =(calloc)(x,y); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
-#endif
-
-// #define SET_ALLOC_NAMES
-#ifdef SET_ALLOC_NAMES
-#define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
-    VkResult res = (vmaCreateImage)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(allocator,* pAllocation, #pAllocation __LINE_STRING__);\
-    res;\
-    }
-#define vmaCreateBuffer(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\
-    VkResult res = (vmaCreateBuffer)(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo);\
-    vmaSetAllocationName(allocator,* pAllocation, #pAllocation " " __LINE_STRING__);\
-    res;\
-    }
-#endif
 
 typedef   u8 MatID_t;
 typedef  i16 BlockID_t;
@@ -128,11 +77,6 @@ typedef struct VoxelVertex {
     vec<3, unsigned char, defaultp> pos;
     vec<3,   signed char, defaultp> norm;
     MatID_t matID;
-
-    // vec3 pos;
-    // vec3 norm;
-    // MatID_t matID;
-
 } VoxelVertex;
 typedef struct PackedVoxelVertex {
     vec<3, unsigned char, defaultp> pos;
@@ -213,34 +157,53 @@ typedef struct AttrFormOffs{
     VkFormat format;
     uint32_t offset;
 }AttrFormOffs;
-typedef struct SimpleBlend{
-    bool enabled;
-}SimpleBlend;
+
+enum BlendAttachment{
+    DO_BLEND,
+    NO_BLEND,
+};
+enum DepthTesting{
+    DO_TEST,
+    NO_TEST,
+};
+
 typedef struct ShaderStage{
     const char* src;
     VkShaderStageFlagBits stage;
 }ShaderStage;
 //problem with such abstractions in vulkan is that they almost always have to be extended to a point where they make no sense
 typedef struct RasterPipe { 
-    VkPipeline pipe;
-    VkPipelineLayout pipeLayout;
+    VkPipeline line;
+    VkPipelineLayout lineLayout;
     
-    VkDescriptorSetLayout dsetLayout;
-    vector<VkDescriptorSet> descriptors;
+    vector<VkDescriptorSet> sets;
+    VkDescriptorSetLayout setLayout;
 
-    VkRenderPass rpass; //we dont really need to store it in here but why not
-    i32 subpass_id;
+    VkRenderPass renderPass; //we dont really need to store it in here but why not
+    i32 subpassId;
     // vksubn; //we dont really need to store it in here but why not
 } RasterPipe;
 typedef struct ComputePipe { 
-    VkPipeline pipe;
-    VkPipelineLayout pipeLayout;
+    VkPipeline line;
+    VkPipelineLayout lineLayout;
     
-    VkDescriptorSetLayout dsetLayout;
-    vector<VkDescriptorSet> descriptors;
+    vector<VkDescriptorSet> sets;
+    VkDescriptorSetLayout setLayout;
 } ComputePipe;
 
-typedef struct RenderPass { 
+/*
+we specify input images, output images
+then mathing renderpass + pipelines is created
+
+create subpass raster pipe
+create render pass (subpipe1 subpipe2)
+
+bind renderpass
+bind subpass raster pipe
+*/
+
+//pipeline with extra info for subpass creation
+typedef struct subPass { 
     VkPipeline pipe;
     VkPipelineLayout pipeLayout;
     
@@ -248,20 +211,7 @@ typedef struct RenderPass {
     vector<VkDescriptorSet> descriptors;
 
     VkRenderPass rpass; //we dont really need to store it in here but why not
-    i32 subpass_id;
-    // vksubn; //we dont really need to store it in here but why not
-} RenderPass;
-typedef struct SubPass { 
-    VkPipeline pipe;
-    VkPipelineLayout pipeLayout;
-    
-    VkDescriptorSetLayout dsetLayout;
-    vector<VkDescriptorSet> descriptors;
-
-    VkRenderPass rpass; //we dont really need to store it in here but why not
-    i32 subpass_id;
-    // vksubn; //we dont really need to store it in here but why not
-} SubPass;
+} subPass;
 
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
@@ -314,7 +264,6 @@ typedef struct Window{
 typedef struct QueueFamilyIndices {
     optional<u32> graphicalAndCompute;
     optional<u32> present;
-    // optional<u32> compute;
 
 public:
     bool isComplete(){
@@ -334,7 +283,6 @@ public:
 } SwapChainSupportDetails;
 
 //TODO:
-
 enum denoise_targets{
     DENOISE_TARGET_LOWRES,
     DENOISE_TARGET_HIGHRES,
@@ -349,24 +297,27 @@ enum RelativeDescriptorPos {
 #define NO_SAMPLER ((VkSampler)(0))
 #define NO_LAYOUT ((VkImageLayout)(0))
 typedef struct DescriptorInfo {
-    RelativeDescriptorPos relative_pos;
+    VkDescriptorType type;
+    RelativeDescriptorPos relativePos;
     vector<Buffer> buffers;
     vector<Image> images;
-    VkSampler image_sampler;
-    VkImageLayout image_layout; //ones that will be in use, not current
+    VkSampler imageSampler;
+    VkImageLayout imageLayout; //ones that will be in use, not current
 } DescriptorInfo;
 
 typedef struct DelayedDescriptorSetup {
-    VkDescriptorSetLayout* dsetLayout;
-    vector<VkDescriptorSet>* descriptors; 
-    vector<DescriptorInfo> description;
+    VkDescriptorSetLayout* setLayout;
+    vector<VkDescriptorSet>* sets; 
+    vector<DescriptorInfo> descriptions;
     VkShaderStageFlags stages;
 } DelayedDescriptorSetup;
+
+//forward declaration for pointer
 class MyRenderInterface;   
 
 class Renderer {
 public: 
-    void init(int x_size=8, int y_size=8, int z_size=8, int _static_block_palette_size=128, int max_particle_count=1024, float ratio = 1.5f, bool vsync=true, bool fullscreen = false);
+    void init(int xSize=8, int ySize=8, int zSize=8, int staticBlockPaletteSize=128, int maxParticleCount=1024, float ratio = 1.5f, bool vsync=true, bool fullscreen = false);
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -386,7 +337,7 @@ public:
     Material mat_palette[MATERIAL_PALETTE_SIZE];
     table3d<BlockID_t>  origin_world = {};
     table3d<BlockID_t> current_world = {};
-    MyRenderInterface* UiRenderInterface;
+    MyRenderInterface* ui_render_interface;
     int static_block_palette_size;
     ivec3 world_size;
     
@@ -396,60 +347,54 @@ public:
     float _ratio;
     // float fratio;
 private:
-    bool has_palette = false;
-    int _max_particle_count;
-    vector<VkImageCopy> copy_queue = {};
+    bool hasPalette = false;
+    int maxParticleCount;
+    vector<VkImageCopy> copyQueue = {};
 public:
-    double delta_time = 0;
+    double deltaTime = 0;
 
-    bool is_scaled = false;
-    bool is_vsync = false;
-    bool is_fullscreen = false;
+    bool scaled = false;
+    bool vsync = false;
+    bool fullscreen = false;
+    bool resized = false;
 
-    bool is_resized = false;
+    dvec3 cameraPos     = vec3(60, 0, 194);
+    dvec3 cameraPos_OLD = cameraPos;
+    dvec3 cameraDir     = normalize(vec3(0.6, 1.0, -0.8));
+    dvec3 cameraDir_OLD = normalize(vec3(0.6, 1.0, -0.8));
+    dmat4 cameraTransform     = identity<dmat4>();
+    dmat4 cameraTransform_OLD = identity<dmat4>();
 
-    dvec3     camera_pos = vec3(60, 0, 194);
-    dvec3 old_camera_pos = camera_pos;
-    dvec3     camera_dir = normalize(vec3(0.6, 1.0, -0.8));
-    dvec3 old_camera_dir = normalize(vec3(0.6, 1.0, -0.8));
-
-    dmat4 current_trans = identity<dmat4>();
-    dmat4     old_trans = identity<dmat4>();
-    // vec3 old_camera_pos = vec3(60, 0, 50);
-    // vec3 old_camera_dir = normalize(vec3(0.1, 1.0, -0.5));
-
-    void start_Frame();
-        void updateParticles();
-        void startRaygen();
-        void RaygenMesh(Mesh* mesh);
+    void start_frame();
+        void update_particles();
+        void start_raygen();
+        void raygen_mesh(Mesh* mesh);
         void inter();
-        void rayGenMapParticles();
-        void   endRaygen_first();
-        void   endRaygen();
-        // Start of computeCommandBuffer
-        void startCompute();
-                void startBlockify();
-                void blockifyMesh(Mesh* mesh);
-                    void blockifyCustom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
-                void   endBlockify();
-            void execCopies();
-                void startMap();
-                void mapMesh(Mesh* mesh);
-                void   endMap();
+        void raygen_map_particles();
+        void   end_raygen_first();
+        void   end_raygen();
+        void start_compute();
+                void start_blockify();
+                void blockify_mesh(Mesh* mesh);
+                    void blockify_custom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
+                void   end_blockify();
+            void exec_copies();
+                void start_map();
+                void map_mesh(Mesh* mesh);
+                void   end_map();
             void recalculate_df();
             void raytrace();
-            void updadeRadiance();
+            void updade_radiance();
             void diffuse();
             void glossy();
             void denoise(int iterations, int denoising_radius, denoise_targets target);
             void accumulate();
             void upscale();
-        void   endCompute();
-        // End of computeCommandBuffer
+        void   end_compute();
         void start_ui();
         void draw_ui();
         void   present();
-    void end_Frame();
+    void end_frame();
 
     template<class Vertex_T> vector<Buffer> create_elemBuffers(Vertex_T* vertices, u32 count, u32 buffer_usage = 0); 
     template<class Vertex_T> vector<Buffer> create_elemBuffers(vector<Vertex_T> vertices, u32 buffer_usage = 0); 
@@ -468,82 +413,56 @@ public:
         Image* image);
 private:
     //including fullscreen and scaled images
-    void  cleanup_SwapchainDependent();
+    void  cleanupSwapchainDependent();
     //including fullscreen and scaled images
-    void   create_SwapchainDependent();
+    void   createSwapchainDependent();
     //including fullscreen and scaled images
-    void  recreate_SwapchainDependent();
+    void  recreateSwapchainDependent();
 
-    void  cleanup_Images();
+    void  cleanupImages();
 
 
-    void create_Allocator();
-    
-    void create_Window();
-    void create_Instance();
-    void setup_Debug_Messenger();
-    void create_Surface();
-
-    SwapChainSupportDetails query_Swapchain_Support(VkPhysicalDevice);
-    QueueFamilyIndices find_Queue_Families(VkPhysicalDevice);
-    bool check_Format_Support(VkPhysicalDevice device, VkFormat format, VkFormatFeatureFlags features);
-    bool is_PhysicalDevice_Suitable(VkPhysicalDevice);
+    void createAllocator();
+    void createWindow();
+    void createInstance();
+    void setupDebug_Messenger();
+    void createSurface();
+    SwapChainSupportDetails querySwapchainSupport(VkPhysicalDevice);
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice);
+    bool checkFormatSupport(VkPhysicalDevice device, VkFormat format, VkFormatFeatureFlags features);
+    bool isPhysicalDeviceSuitable(VkPhysicalDevice);
     //call get_PhysicalDevice_Extensions first
-    bool check_PhysicalDevice_Extension_Support(VkPhysicalDevice);
-    void pick_Physical_Device();
-    void create_Logical_Device();
-    void create_Swapchain();
-    VkSurfaceFormatKHR choose_Swap_SurfaceFormat(vector<VkSurfaceFormatKHR> availableFormats);
-    VkPresentModeKHR choose_Swap_PresentMode(vector<VkPresentModeKHR> availablePresentModes);
-    VkExtent2D choose_Swap_Extent(VkSurfaceCapabilitiesKHR capabilities);
-    void create_Swapchain_Image_Views();
-    void create_RenderPass_Graphical();
-    void create_RenderPass_RayGen();
-    void create_RenderPass_RayGen_Particles();
-    void create_Graphics_Pipeline(); 
-    void create_RayGen_Pipeline();
-    void create_RayGen_Particles_Pipeline();
-    void create_Descriptor_Set_Layouts();
-    void create_Descriptor_Pool();
-    void allocate_Descriptors();
+    bool checkPhysicalDeviceExtensionSupport(VkPhysicalDevice);
+    void pickPhysicalDevice();
+    void createLogicalDevice();
+    void createSwapchain();
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(vector<VkSurfaceFormatKHR> availableFormats);
+    VkPresentModeKHR chooseSwapPresentMode(vector<VkPresentModeKHR> availablePresentModes);
+    VkExtent2D chooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities);
+    void createSwapchainImageViews();
+    void createRenderPassGraphical();
+    void createRenderPass1();
+    void createRenderPass2();
 
+    
     void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
-        VkExtent2D extent, vector<SimpleBlend> blends, u32 push_size, bool depthTest);
+        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest);
     void destroy_Raster_Pipeline(RasterPipe* pipe);
 
     void create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
     void destroy_Compute_Pipeline(ComputePipe* pipe);
-    //not possible without loosing perfomance
-    // void setup_descriptors_helper(vector<VkDescriptorSet>* descriptor_sets, vector<Buffers> buffers, vector<Images> images);
-    // void destroy_Compute_Pipeline(ComputePipe* pipe);
 
-    // void just_Count_Descriptors()
-    void defer_Descriptors_setup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
-    void setup_Descriptors(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
+    void createDescriptorPool();
+    void deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
+    void setupDescriptor(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
     vector<DelayedDescriptorSetup> delayed_descriptor_setups;
-    void flush_Descriptor_Setup();
+    void flushDescriptorSetup();
 
-    void setup_Blockify_Descriptors();
-    void setup_Copy_Descriptors();
-    void setup_Map_Descriptors();
-    void setup_Mipmap_Descriptors();
-    void setup_Df_Descriptors();
-    void setup_Raytrace_Descriptors();
-    void setup_Radiance_Cache_Descriptors();
-    void setup_Diffuse_Descriptors();
-    void setup_Glossy_Descriptors();
-    void setup_Denoise_Descriptors();
-    void setup_Accumulate_Descriptors();
-    void setup_Upscale_Descriptors();
-    void setup_Graphical_Descriptors();
-    void setup_RayGen_Descriptors();
-    void setup_RayGen_Particles_Descriptors();
-    void create_samplers();
-    // void update_Descriptors();
+    void createSamplers();
 
-    void delete_Images(vector<Image>* images);
-    void delete_Images(Image* images);
+    void deleteImages(vector<Image>* images);
+    void deleteImages(Image* images);
     void create_Image_Storages(vector<Image>* images, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
     uvec3 size, int mipmaps = 1, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
@@ -618,14 +537,17 @@ public:
     VkExtent2D swapChainExtent;
     VkExtent2D  raytraceExtent;
 
-    RasterPipe overlayPipe;
     RasterPipe raygenPipe;
     RasterPipe raygenParticlesPipe;
 
-    VkRenderPass             rayGenRenderPass;
-    VkRenderPass    rayGenParticlesRenderPass;
-    VkRenderPass            overlayRenderPass;
+    RasterPipe diffusePipe;
+    RasterPipe glossyPipe;
+    RasterPipe blurPipe; // i can use for both mirror and glow
 
+    RasterPipe overlayPipe;
+
+    VkRenderPass raygen2glossyRpass;
+    VkRenderPass  blur2presentRpass;
 
     vector<VkFramebuffer>  swapChainFramebuffers;
     vector<VkFramebuffer>     rayGenFramebuffers;
@@ -647,85 +569,56 @@ public:
     vector<VkFence>  raytraceInFlightFences;
     vector<VkFence>    frameInFlightFences;    
 
-           Image step_count;
-           Image radiance_cache;
-    #ifdef ACCUMULATE_HIGHRES
-            Image lowres_frame;
-        vector<Image> highres_frame;
-        #ifdef STENCIL
-        vector<VkImage> depthStencilImages; //used for depth testing
-        vector<VmaAllocation> depthStencilAllocs; //used for depth testing
-        vector<VkImageView>   depthViews; //used for depth testing
-        vector<VkImageView> stencilViews; //used for depth testing
-        #else
-        vector<Image> depthBuffer; //used for depth testing
-            Image  depthBuffer_downscaled; //used for depth testing
-        // vector<Image> depthBuffer; //used for depth testing
-        #endif
-        vector<Image> matNorm; //render always to one, other stored downscaled
-            Image  matNorm_downscaled;
-            Image oldUv;
+        // Image stepCount;
+        Image radianceCache;
+    // vector<Image> lowresFrames;
+        //    Image  frameMipmapped; //used for reflections
+    vector<Image> highresFrames;
+    vector<Image> depthHighres; //used for depth testing
+    // vector<Image> depthLowres; //used for depth testing
+        //    Image  depthMipmapped; //used for reflections
+    vector<Image> matNormHighres;
+    // vector<Image> matNormLowres; //render always to one, other stored downscaled
+        //    Image  oldUvHighres;
+        //    Image  oldUvLowres;
             //    Image oldUv_downscaled; //dont need it
-            Image mix_ratio;
-    #else
-        vector<Image> lowres_frames;
-               Image frame_mipmapped; //used for reflections
-        // vector<Image> lowres_sunlight;
-        vector<Image>  highres_frames;
-        #ifdef STENCIL
-        vector<VkImage> depthStencilImages; //used for depth testing
-        vector<VmaAllocation> depthStencilAllocs; //used for depth testing
-        vector<VkImageView>   depthViews; //used for depth testing
-        vector<VkImageView> stencilViews; //used for depth testing
-        #else
-        vector<Image>  depthBuffers_highres; //used for depth testing
-        vector<Image> depthBuffers_lowres; //used for depth testing
-               Image depth_mipmapped; //used for reflections
-        // vector<Image> depthBuffer; //used for depth testing
-        #endif
-        vector<Image> matNorm_highres;
-        vector<Image> matNorm_lowres; //render always to one, other stored downscaled
-               Image oldUv_highres;
-               Image oldUv_lowres;
-               //    Image oldUv_downscaled; //dont need it
-        vector<Image> mix_ratio;
-    #endif
-    vector<Image> swapchain_images;
+    // vector<Image> mixRatio;
+    vector<Image> swapchainImages;
     VkSampler  nearestSampler;
     VkSampler   linearSampler;
-    VkSampler   frameSampler;
+    // VkSampler   frameSampler;
     VkSampler  overlaySampler;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
-    vector<Buffer>      staging_world;
-    vector<void*>       staging_world_mapped;
-           Image                world; //can i really use just one?
+    vector<Buffer>      stagingWorld;
+    vector<void*>       stagingWorldMapped;
+           Image               world; //can i really use just one?
 
-    vector<Image> origin_block_palette;
+    vector<Image> originBlockPalette;
         //    Image        block_palette;
-    vector<Image> material_palette;
+    vector<Image> materialPalette;
     
     vector<Buffer>         uniform;
 
     vector<Particle>     particles;
-    vector<Buffer>   gpu_particles; //multiple because cpu-related work
-    vector<void* >   gpu_particles_mapped; //multiple because cpu-related work
-    vector<UiMeshDeletion>   ui_mesh_deletion_queue;
-    vector<UiImageDeletion>  ui_image_deletion_queue;
-    vector<UiBufferDeletion> ui_buffer_deletion_queue;
+    vector<Buffer>   gpuParticles; //multiple because cpu-related work
+    vector<void* >   gpuParticlesMapped; //multiple because cpu-related work
+    vector<UiMeshDeletion>   uiMeshDeletionQueue;
+    vector<UiImageDeletion>  uiImageDeletionQueue;
+    vector<UiBufferDeletion> uiBufferDeletionQueue;
 
 
     VkDescriptorPool descriptorPool;
     ComputePipe   raytracePipe;
     ComputePipe   radiancePipe;
-    ComputePipe    diffusePipe;
-    ComputePipe     glossyPipe;
-    ComputePipe    denoisePipe;
-    ComputePipe    denoisePipe_lowres;
-    ComputePipe accumulatePipe;
-    ComputePipe    upscalePipe;
     ComputePipe        mapPipe;
-    ComputePipe     mipmapPipe;
+    // ComputePipe    diffusePipe;
+    // ComputePipe     glossyPipe;
+    // ComputePipe    denoisePipe;
+    // ComputePipe    denoisePipeLowres;
+    // ComputePipe accumulatePipe;
+    // ComputePipe    upscalePipe;
+    // ComputePipe     mipmapPipe;
     // ComputePipe blockifyPipe;
     // ComputePipe     copyPipe;
     // ComputePipe       dfxPipe;
@@ -741,12 +634,11 @@ public:
     u32     nextFrame = 1;
 private:
     int itime = 0;
-    int palette_counter = 0;
-    // VisualWorld* _world = world;
-    VkDebugUtilsMessengerEXT debugMessenger;
+    int paletteCounter = 0;
+    #ifndef VKNDEBUG
+        VkDebugUtilsMessengerEXT debugMessenger;
+    #endif
 };
-
-// void a();1
 
 class MyRenderInterface : public Rml::RenderInterface{   
 public:
