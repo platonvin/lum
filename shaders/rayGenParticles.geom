@@ -5,14 +5,14 @@ layout (triangle_strip, max_vertices = 14) out;
 precision highp float;
 
 layout(location = 0) in VS_OUT {
-         vec2 old_uv;
+        //  vec2 old_uv;
         float size;
     flat uint mat;
 } gs_in[];
 
-layout(location = 0)      out vec2 old_uv;
-layout(location = 1) flat out vec3 norm;
-layout(location = 2) flat out uint mat;
+// layout(location = 0)      out vec2 old_uv;
+layout(location = 0) flat out vec3 norm;
+layout(location = 1) flat out uint mat;
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
@@ -75,7 +75,7 @@ void main() {
         // gl_Position.z = -.999;
         // gl_Position.z = +.999;
         
-        old_uv = gs_in[0].old_uv;
+        // old_uv = gs_in[0].old_uv;
         // old_uv = vec2(0);
         mat = gs_in[0].mat;
 

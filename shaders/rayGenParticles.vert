@@ -11,7 +11,7 @@ layout(location = 3) in  uint matIDIn;
 
 // layout(location = 0)      out float depth;
 layout(location = 0) out VS_OUT {
-         vec2 old_uv;
+        //  vec2 old_uv;
         float size; 
     flat uint mat;
 } vs_out;
@@ -49,13 +49,13 @@ void main() {
     
     // mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
 
-    vs_out.old_uv = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
+    // vs_out.old_uv = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     vs_out.mat = uint(matIDIn);
     float size = lifeTimeIn / 14.0;
     vs_out.size = size;
 
     bool should_map = false;
-    if(size > .3){
+    if(size > .1){
         ivec3 target_voxel_in_world = ivec3(posIn);
         ivec3 target_block_in_world = target_voxel_in_world / 16;
 
@@ -65,5 +65,5 @@ void main() {
             imageStore(blockPalette, target_voxel_in_palette, uvec4(matIDIn));
         }
     }
-    //LOL dont even need map_particles shader - can be done here
+    //LOL dont even need map_particles shader - can be done here. Price is compatibility
 }

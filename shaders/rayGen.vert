@@ -10,9 +10,9 @@ layout(location = 1) in varp ivec3 normIn;
 layout(location = 2) in varp uint MatIDIn;
 
 // layout(location = 0)      out float depth;
-layout(location = 0)      out varp vec2 uv_shift;
-layout(location = 1) flat out varp vec3 norm;
-layout(location = 2) flat out varp uint mat;
+// layout(location = 0)      out varp vec2 uv_shift;
+layout(location = 0) flat out varp vec3 norm;
+layout(location = 1) flat out varp uint mat;
 // layout(location = 3)      out float depth;
 
 const varp vec3 cameraRayDir = normalize(vec3(0.1, 1.0, -0.5));
@@ -72,7 +72,7 @@ void main() {
     
     // mat3 m2w_normals = transpose(inverse(mat3(pco.trans_m2w))); 
 
-    uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
+    // uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     
     norm = (qtransform(pco.rot,fnorm));
     // norm = normalize(cross(dFdx(world_pos.xyz), dFdy(world_pos.xyz)));

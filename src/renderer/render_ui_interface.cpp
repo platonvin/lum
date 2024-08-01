@@ -41,14 +41,14 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
         memcpy(data, indices, bufferSizeI);
         vmaUnmapMemory(render->VMAllocator, ui_mesh.indexes.alloc);
 
-    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->rayGenCommandBuffers[render->currentFrame];
 
         VkBuffer vertexBuffers[] = {ui_mesh.vertexes.buffer};
         VkDeviceSize offsets[] = {0};
     
     struct {vec4 shift; mat4 trans;} ui_pc = {vec4(translation.x, translation.y, render->swapChainExtent.width, render->swapChainExtent.height), current_transform};
     //TODO:
-    vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ui_pc), &ui_pc);
+    vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ui_pc), &ui_pc);
 
         Image* texture_image = (Image*)texture;
         VkDescriptorImageInfo
@@ -73,6 +73,8 @@ void MyRenderInterface::RenderGeometry(Rml::Vertex* vertices,
 
     vkCmdBindVertexBuffers(renderCommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(renderCommandBuffer, ui_mesh.indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+    // render->cmdPipelineBarrier(renderCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS);
     
     vkCmdDrawIndexed(renderCommandBuffer, ui_mesh.icount, 1, 0, 0, 0);
 
@@ -146,7 +148,7 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry(Rml::Vertex* vert
 
 // Called by RmlUi when it wants to render application-compiled geometry.
 void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation){
-    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->rayGenCommandBuffers[render->currentFrame];
     UiMesh* ui_mesh = (UiMesh*)geometry;
 
     VkBuffer vertexBuffers[] = {ui_mesh->vertexes.buffer};
@@ -154,7 +156,7 @@ void MyRenderInterface::RenderCompiledGeometry(Rml::CompiledGeometryHandle geome
     
     struct {vec4 shift; mat4 trans;} ui_pc = {vec4(translation.x, translation.y, render->swapChainExtent.width, render->swapChainExtent.height), current_transform};
     //TODO:
-    vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ui_pc), &ui_pc);
+    vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ui_pc), &ui_pc);
     // vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
 
     Image* texture_image = ui_mesh->image;
@@ -194,7 +196,7 @@ void MyRenderInterface::ReleaseCompiledGeometry(Rml::CompiledGeometryHandle geom
 
 // Called by RmlUi when it wants to enable or disable scissoring to clip content.
 void MyRenderInterface::EnableScissorRegion(bool enable){
-    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->rayGenCommandBuffers[render->currentFrame];
     if(true) {
         //do nothing...
         return;
@@ -209,7 +211,7 @@ void MyRenderInterface::EnableScissorRegion(bool enable){
 
 // Called by RmlUi when it wants to change the scissor region.
 void MyRenderInterface::SetScissorRegion(int x, int y, int width, int height){
-    VkCommandBuffer &renderCommandBuffer = render->renderOverlayCommandBuffers[render->currentFrame];
+    VkCommandBuffer &renderCommandBuffer = render->rayGenCommandBuffers[render->currentFrame];
     last_scissors = {};
         last_scissors.offset = {std::clamp(x,0,int(render->swapChainExtent.width -1)),
                                 std::clamp(y,0,int(render->swapChainExtent.height-1))};

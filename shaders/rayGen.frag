@@ -6,13 +6,13 @@ precision varp int;
 precision varp float;
 
 // layout(location = 0) in float depth;
-layout(location = 0)      in varp vec2 uv_shift;
-layout(location = 1) flat in varp vec3 norm;
-layout(location = 2) flat in varp uint mat;
+// layout(location = 0)      in varp vec2 uv_shift;
+layout(location = 0) flat in varp vec3 norm;
+layout(location = 1) flat in varp uint mat;
 // layout(location = 3)      in float depth; //uint8 thing. But in float
 
 layout(location = 0) out varp vec4 outMatNorm;
-layout(location = 1) out varp vec2 outOldUv;
+// layout(location = 1) out varp vec2 outOldUv;
 // layout(location = 2) out float outDepth;
 // layout(location = 2) out uvec4 outGbuffer_downscaled;
 // layout(location = 1) out vec3 outNorm;
@@ -21,7 +21,7 @@ layout(location = 1) out varp vec2 outOldUv;
 void main() {
     // uint uv_encoded = packUnorm2x16(old_uv);
 
-    outOldUv = uv_shift;
+    // outOldUv = uv_shift;
 
     outMatNorm.x = (float(mat)-127.0)/127.0;
     outMatNorm.gba = norm.xyz;

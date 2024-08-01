@@ -16,19 +16,21 @@ layout(push_constant) uniform constants{
     varp vec4 camera_direction;
 } PushConstants;
 
+layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput matNorm;
+layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput depthBuffer;
 
-layout(set = 0, binding = 0, rgba8_snorm) uniform image2D   matNorm; //in lowres gbuffer
-layout(set = 0, binding = 1, r16i       ) uniform iimage3D  blocks;
-layout(set = 0, binding = 2, r8ui       ) uniform uimage3D  blockPalette;
-layout(set = 0, binding = 3, r32f       ) uniform image2D   voxelPalette;
-layout(set = 0, binding = 4             ) uniform sampler2D depthBuffer; //in lowres gbuffer but with mipmaps
-layout(set = 0, binding = 5, rgba16     ) uniform image2D   out_frame; //out "reflections". resolve in here? 
-layout(set = 0, binding = 6, rgba16     ) uniform image3D   radianceCache;
+layout(set = 0, binding = 2, r16i       ) uniform iimage3D  blocks;
+layout(set = 0, binding = 3, r8ui       ) uniform uimage3D  blockPalette;
+layout(set = 0, binding = 4, r32f       ) uniform image2D   voxelPalette;
+layout(set = 0, binding = 5, rgba16     ) uniform image3D   radianceCache;
 
 layout(constant_id = 1) const int MAX_DEPTH = 1;
 layout(constant_id = 2) const int NUM_SAMPLES = 1; //for 4090 owners i guess
 layout(constant_id = 3) const int BLOCK_PALETTE_SIZE_X = 64;
 layout(constant_id = 4) const int size_height = (0);
+
+layout(location = 0) in vec2 non_clip_pos;
+layout(location = 0) out vec4 frame_color;
 
 varp vec3 globalLightDir;
 varp vec3 cameraRayDirPlane;
@@ -513,22 +515,24 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
 }
 
 
-varp vec3 load_norm(highp ivec2 pixel){
-    varp vec3 norm = (imageLoad(matNorm, pixel).gba);
+varp vec3 load_norm(){
+    // varp vec3 norm = (imageLoad(matNorm, pixel).gba);
+    varp vec3 norm = (subpassLoad(matNorm).gba);
+    // subpass
     return norm;
 }
-varp int load_mat(highp ivec2 pixel){
-    varp int mat = int(round(imageLoad(matNorm, pixel).x*127.0))+127;
+varp int load_mat(){
+    varp int mat = int(round(subpassLoad(matNorm).x*127.0))+127;
+    // varp int mat = int(subpassLoad(matNorm).x);
     return mat;
 }
-highp float load_depth(highp ivec2 pixel){
-    highp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
-    highp float depth_encoded = texture(depthBuffer, uv).x;
+highp float load_depth(){
+    // highp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
+    highp float depth_encoded = (subpassLoad(depthBuffer).x);
     return (1.0-depth_encoded)*1000.0;
 }
-
 bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smooth_intersection){
-    highp float depth = load_depth(ivec2(pix));
+    highp float depth = load_depth();
     varp float diff = test_depth - depth;
     bool ssr = false;
     smooth_intersection = false;
@@ -549,7 +553,7 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 sta
     fraction = 0.0;
     fraction = fraction_step;
 
-    highp vec2 ssr_pix = start_pix;
+    highp vec2 ssr_pix = vec2(0);
     highp float depth = 0;
     while(true){
         //TODO turn into cached step 
@@ -561,7 +565,7 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 sta
 
         if (ssr_intersects(depth, ssr_pix, smooth_intersection)) {
             if(smooth_intersection){
-                  normal =        load_norm(ivec2(ssr_pix));
+                  normal =        load_norm();
                 // material = GetMat(load_mat( ivec2(ssr_pix)));
                 return true;
             } else {
@@ -589,10 +593,10 @@ varp vec3 encode_color(varp vec3 color){
 }
 
 //TODO: balance
-layout(local_size_x = 8, local_size_y = 8) in;
+// layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
     //lowres resolution. out_frame cause in_frame is sampler
-    size = imageSize(out_frame);
+    // size = imageSize(out_frame);
 
     globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
 
@@ -603,21 +607,25 @@ void main(void){
     horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
     vertiline = normalize(cross(PushConstants.camera_direction.xyz, horizline));
     
-    pix = ivec2(gl_GlobalInvocationID.xy);
-    if (pix.x >= size.x || pix.y >= size.y) {return;}
-    const varp vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
+    // pix = ivec2(gl_FragCoord.xy);
+    // if (pix.x >= size.x || pix.y >= size.y) {return;}
+    // const varp vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
 
-          Material mat = GetMat(load_mat(pix));
+          Material mat = GetMat(load_mat());
     highp     vec3 direction = PushConstants.camera_direction.xyz;
-    highp     vec3 origin = get_origin_from_depth(load_depth(pix), pos);
-    varp      vec3 normal = load_norm(pix);
+    highp     vec3 origin = get_origin_from_depth(load_depth(), non_clip_pos);
+    varp      vec3 normal = load_norm();
 
     // vec3 direction = reflect(init_direction, normal); 
+    if(mat.roughness >.2){
+        frame_color = vec4(vec3(0),0);
+        return;
+    }
 
     vec3 accumulated_light = vec3(0);
     vec3 accumulated_reflection = vec3(1);
 
-    // origin += normal*0.01;
+    origin += normal*0.1;
     ProcessHit(origin, direction, 
             0, normal, mat, 
             accumulated_light, accumulated_reflection);
@@ -625,24 +633,24 @@ void main(void){
     Material ssr_mat;
     float ssr_fraction;
     vec3 ssr_normal;
-    bool ssr_hit = ssr_traceRay(origin, direction, vec2(pix), ssr_fraction, ssr_normal, ssr_mat);
+    // bool ssr_hit = ssr_traceRay(origin, direction, vec2(0), ssr_fraction, ssr_normal, ssr_mat);
     
-    origin += ssr_fraction * direction;
-    if(ssr_hit){
-        ProcessHit(origin, direction, 
-            0, normal, mat, 
-            accumulated_light, accumulated_reflection);
-    }
+    // origin += ssr_fraction * direction;
+    // if(ssr_hit){
+    //     ProcessHit(origin, direction, 
+    //         0, normal, mat, 
+    //         accumulated_light, accumulated_reflection);
+    // }
 
     vec3 traced_color = vec3(0);
-    if(mat.roughness >.2){
-        return;
-    }
     traced_color = trace_glossy_ray(origin, direction, accumulated_light, accumulated_reflection);
     
-    vec3 old_color = imageLoad(out_frame, pix).xyz;
+    // vec3 old_color = imageLoad(out_frame, pix).xyz;
 
     vec3 new_color = traced_color;
 
-    imageStore(out_frame, pix, vec4((new_color), 1));
+    // imageStore(out_frame, pix, vec4((new_color), 1));
+    frame_color = vec4(new_color,0.5);
+
+    // frame_color = vec4(.5,.6,.7, 1);
 }

@@ -364,47 +364,21 @@ void Engine::draw()
 {
 // println
     render.start_frame();
-        render.start_raygen();
-            for(auto b : que){
-                Mesh* block_mesh = NULL;
-                block_mesh = &block_palette[b.index]->mesh;
-                block_mesh->shift = vec3(b.pos);
-                block_mesh->old_shift = vec3(b.pos);
-
-                // printl(block_palette[b.index]->mesh.triangles.Pzz.icount);
-                
-                render.raygen_mesh(block_mesh);
-            }
-            
-            render.raygen_mesh(&tank_body);
-            render.raygen_mesh(&tank_head);
-            
-            render.raygen_mesh(&tank_rf_leg);
-            render.raygen_mesh(&tank_lb_leg);
-// println
-            render.raygen_mesh(&tank_lf_leg);
-            render.raygen_mesh(&tank_rb_leg);
-            render.raygen_map_particles();
-// println
-        render.end_raygen();
-// println
-
-        render.start_blockify();
-// println
-            render.blockify_mesh(&tank_body);
-            render.blockify_mesh(&tank_head);
-        
-            render.blockify_mesh(&tank_rf_leg);
-            render.blockify_mesh(&tank_lb_leg);
-            render.blockify_mesh(&tank_lf_leg);
-            render.blockify_mesh(&tank_rb_leg);
-        render.end_blockify();
-// println
-
-        render.update_particles();
 // println
 
         render.start_compute();
+            render.start_blockify();
+// println
+                render.blockify_mesh(&tank_body);
+                render.blockify_mesh(&tank_head);
+            
+                render.blockify_mesh(&tank_rf_leg);
+                render.blockify_mesh(&tank_lb_leg);
+                render.blockify_mesh(&tank_lf_leg);
+                render.blockify_mesh(&tank_rb_leg);
+            render.end_blockify();
+// println
+            render.updade_radiance();
 // println
             render.exec_copies();
 // println
@@ -412,7 +386,6 @@ void Engine::draw()
 // println
                     render.map_mesh(&tank_body);
                     render.map_mesh(&tank_head);
-                    
                     render.map_mesh(&tank_rf_leg);
 // println
                     render.map_mesh(&tank_lb_leg);
@@ -421,37 +394,67 @@ void Engine::draw()
 // println
                 render.end_map();
 // println
+                render.end_compute();
                 // render.raytrace();
-                render.updade_radiance();
 // println
+                render.start_raygen();
+// println
+                    for(auto b : que){
+                        Mesh* block_mesh = NULL;
+                        block_mesh = &block_palette[b.index]->mesh;
+                        block_mesh->shift = vec3(b.pos);
+                        block_mesh->old_shift = vec3(b.pos);
+
+                        // printl(block_palette[b.index]->mesh.triangles.Pzz.icount);
+                        
+                        render.raygen_mesh(block_mesh);
+                    }
+                    
+                    render.raygen_mesh(&tank_body);
+                    render.raygen_mesh(&tank_head);
+                    
+                    render.raygen_mesh(&tank_rf_leg);
+                    render.raygen_mesh(&tank_lb_leg);
+// println
+                    render.raygen_mesh(&tank_lf_leg);
+                    render.raygen_mesh(&tank_rb_leg);
+
+// println
+                render.update_particles();
+// println
+                render.raygen_map_particles();
+// println
+                render.end_raygen();
+// println
+
                 render.diffuse();
 // println
                 render.glossy();
 // println
-                if(render.pre_denoiser_count > 0)
-                    render.denoise(render.pre_denoiser_count, 1, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                // if(render.pre_denoiser_count > 0)
+                //     render.denoise(render.pre_denoiser_count, 1, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
-                render.accumulate();
+                // render.accumulate();
 // println
-                if(render.post_denoiser_count > 0)
-                    render.denoise(render.post_denoiser_count, 2, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                // if(render.post_denoiser_count > 0)
+                //     render.denoise(render.post_denoiser_count, 2, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
 // println
                 // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
                 // render.denoise(5, 2, DENOISE_TARGET_LOWRES);
-                if(render.scaled){
+                // if(render.scaled){
                     // render.denoise(9, 3, DENOISE_TARGET_LOWRES);
                     // render.denoise(5, 1, DENOISE_TARGET_LOWRES);
-                    render.upscale();
-                }
+                    // render.upscale();
+                // }
 // println
-                if(render.final_denoiser_count > 0)
-                    render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
+                // if(render.final_denoiser_count > 0)
+                //     render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
                 // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
 // println
-        render.end_compute();
 
+        render.blur(); 
 // println
         render.start_ui(); 
 // println

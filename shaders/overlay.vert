@@ -3,16 +3,10 @@
 layout(location = 0) in vec2 posIn;
 layout(location = 1) in vec4 colorIn;
 layout(location = 2) in vec2 UvIn;
-
-// layout(location = 0) out vec3 fragColor;
 layout(location = 0) out vec2 fragUV;
 layout(location = 1) out vec4 fragColor;
 
-// vec2 positions[3] = vec2[](
-//     vec2(-5, +5),
-//     vec2(+5, +5),
-//     vec2(+0, -5)
-// );
+
 
 layout(push_constant) uniform constant {
     vec4 shift_size;

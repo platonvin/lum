@@ -387,6 +387,7 @@ public:
             void updade_radiance();
             void diffuse();
             void glossy();
+            void blur();
             void denoise(int iterations, int denoising_radius, denoise_targets target);
             void accumulate();
             void upscale();
@@ -513,7 +514,8 @@ private:
     u32 STORAGE_BUFFER_DESCRIPTOR_COUNT = 0;
     u32 STORAGE_IMAGE_DESCRIPTOR_COUNT = 0;
     u32 COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT = 0;
-    u32 UNIFORM_BUFFER_DESCRIPTOR_COUNT = 0;
+    u32 UNIFORM_BUFFER_DESCRIPTOR_COUNT = 0; 
+    u32 INPUT_ATTACHMENT_DESCRIPTOR_COUNT = 0;
     void count_Descriptor(const VkDescriptorType type);
     void create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags stageFlags, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
 public:
@@ -549,7 +551,8 @@ public:
     VkRenderPass raygen2glossyRpass;
     VkRenderPass  blur2presentRpass;
 
-    vector<VkFramebuffer>  swapChainFramebuffers;
+    // vector<VkFramebuffer>  swapChainFramebuffers;
+    vector<VkFramebuffer>     overlayFramebuffers;
     vector<VkFramebuffer>     rayGenFramebuffers;
     // vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
 
@@ -595,6 +598,7 @@ public:
            Image               world; //can i really use just one?
 
     vector<Image> originBlockPalette;
+    // vector<Image> TBP;
         //    Image        block_palette;
     vector<Image> materialPalette;
     
