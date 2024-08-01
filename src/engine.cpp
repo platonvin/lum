@@ -423,7 +423,13 @@ void Engine::draw()
                 render.update_particles();
 // println
                 render.raygen_map_particles();
-// println
+// println      
+                render.raygen_start_grass();
+                // render.raygen_map_grass(vec4(32,32,32,0), 10);
+                // render.raygen_map_grass(vec4(0,0,16,0), 10);
+                render.raygen_map_grass(vec4(128+16*2,128+16*2,16,0), 100);
+                // render.raygen_map_grass(vec4(8,8,8,0), 10);
+
                 render.end_raygen();
 // println
 

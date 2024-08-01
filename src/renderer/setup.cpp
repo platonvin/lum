@@ -166,7 +166,12 @@ void Renderer::createRenderPass1(){
         raygen_particles_subpass.pDepthStencilAttachment = &aref_depth; //Q
         raygen_particles_subpass.colorAttachmentCount = 1;
         raygen_particles_subpass.pColorAttachments = &aref_mat_norm;
-
+    VkSubpassDescription 
+        raygen_grass_subpass = {};
+        raygen_grass_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        raygen_grass_subpass.pDepthStencilAttachment = &aref_depth; //Q
+        raygen_grass_subpass.colorAttachmentCount = 1;
+        raygen_grass_subpass.pColorAttachments = &aref_mat_norm;
     //uses mat+norm for diffuse coloring via fullscreen triag
     //they both use depth, normal and material
     vector<VkAttachmentReference> diffuse_input_attachment_refs = {aref_mat_norm, aref_depth};
@@ -264,6 +269,12 @@ void Renderer::createRenderPass1(){
     dependencies.push_back(full_wait_color);
     dependencies.push_back(full_wait_depth);
 
+    full_wait_color.srcSubpass = full_wait_depth.srcSubpass = 0;
+    full_wait_color.dstSubpass = full_wait_depth.dstSubpass = 4;
+    dependencies.push_back(full_wait_color);
+    dependencies.push_back(full_wait_depth);
+
+
     full_wait_color.srcSubpass = full_wait_depth.srcSubpass = 1;
     full_wait_color.dstSubpass = full_wait_depth.dstSubpass = 2;
     dependencies.push_back(full_wait_color);
@@ -274,8 +285,23 @@ void Renderer::createRenderPass1(){
     dependencies.push_back(full_wait_color);
     dependencies.push_back(full_wait_depth);
 
+    full_wait_color.srcSubpass = full_wait_depth.srcSubpass = 1;
+    full_wait_color.dstSubpass = full_wait_depth.dstSubpass = 4;
+    dependencies.push_back(full_wait_color);
+    dependencies.push_back(full_wait_depth);
+
     full_wait_color.srcSubpass = full_wait_depth.srcSubpass = 2;
     full_wait_color.dstSubpass = full_wait_depth.dstSubpass = 3;
+    dependencies.push_back(full_wait_color);
+    dependencies.push_back(full_wait_depth);
+
+    full_wait_color.srcSubpass = full_wait_depth.srcSubpass = 2;
+    full_wait_color.dstSubpass = full_wait_depth.dstSubpass = 4;
+    dependencies.push_back(full_wait_color);
+    dependencies.push_back(full_wait_depth);
+
+    full_wait_color.srcSubpass = full_wait_depth.srcSubpass = 3;
+    full_wait_color.dstSubpass = full_wait_depth.dstSubpass = 4;
     dependencies.push_back(full_wait_color);
     dependencies.push_back(full_wait_depth);
 
@@ -289,7 +315,7 @@ void Renderer::createRenderPass1(){
 		sync_bp_writes.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
     dependencies.push_back(sync_bp_writes);
 
-    vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, diffuse_fs, glossy_fs};
+    vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, raygen_grass_subpass, diffuse_fs, glossy_fs};
 
     VkRenderPassCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;

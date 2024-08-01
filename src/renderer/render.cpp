@@ -186,7 +186,7 @@ println
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
 println
-    deferDescriptorsetup(&raygenPipe.setLayout, &raygenPipe.sets, {
+    deferDescriptorsetup(&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
     // setup_RayGen_Particles_Descriptors();
@@ -195,7 +195,12 @@ println
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST   , {/*empty*/}, {world},                NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT , {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
 
+    deferDescriptorsetup(&raygenGrassPipe.setLayout, &raygenGrassPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST   , {/*empty*/}, {world},                NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT , {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
 
 println
@@ -206,8 +211,9 @@ println
     createRenderPass1();
     createRenderPass2();
 
-    raygenPipe.renderPass = raygen2glossyRpass;
+    raygenBlocksPipe.renderPass = raygen2glossyRpass;
     raygenParticlesPipe.renderPass = raygen2glossyRpass;
+    raygenGrassPipe.renderPass = raygen2glossyRpass;
     diffusePipe.renderPass = raygen2glossyRpass;
     glossyPipe.renderPass = raygen2glossyRpass;
     blurPipe.renderPass = blur2presentRpass;
@@ -216,8 +222,8 @@ println
     //that is why NOT abstracting vulkan is also an option
     //if you cannot guess what things mean by just looking at them maybe read old (0.0.3) release src
 println
-    raygenPipe.subpassId = 0;
-    create_Raster_Pipeline(&raygenPipe, {
+    raygenBlocksPipe.subpassId = 0;
+    create_Raster_Pipeline(&raygenBlocksPipe, {
             {"shaders/compiled/rayGenVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{
@@ -242,9 +248,16 @@ println
         }, 
         sizeof(Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
         swapChainExtent, {NO_BLEND}, 0, DO_TEST);
-
+    raygenGrassPipe.subpassId = 2;
+    create_Raster_Pipeline(&raygenGrassPipe, {
+            {"shaders/compiled/grass.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        },{/*empty*/}, 
+        0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, DO_TEST);
+    
 println
-    diffusePipe.subpassId = 2;
+    diffusePipe.subpassId = 3;
     create_Raster_Pipeline(&diffusePipe, {
             {"shaders/compiled/diffuseVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/diffuseFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -253,7 +266,7 @@ println
         swapChainExtent, {NO_BLEND}, sizeof(ivec4) + sizeof(vec4)*4, NO_TEST);
 
 println
-    glossyPipe.subpassId = 3;
+    glossyPipe.subpassId = 4;
     create_Raster_Pipeline(&glossyPipe, {
             {"shaders/compiled/glossyVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/glossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -363,7 +376,7 @@ void Renderer::cleanup() {
     // destroy_Compute_Pipeline(   &upscalePipe);
     // destroy_Compute_Pipeline(&accumulatePipe);
 
-    destroy_Raster_Pipeline(&raygenPipe);
+    destroy_Raster_Pipeline(&raygenBlocksPipe);
     destroy_Raster_Pipeline(&raygenParticlesPipe);
     destroy_Raster_Pipeline(&overlayPipe);
 
@@ -731,8 +744,8 @@ void Renderer::start_raygen() {
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenPipe.line);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenPipe.lineLayout, 0, 1, &raygenPipe.sets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.lineLayout, 0, 1, &raygenBlocksPipe.sets[currentFrame], 0, 0);
 
     VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -761,7 +774,7 @@ void Renderer::raygen_mesh(Mesh *mesh) {
     
     struct {quat r1,r2; vec4 s1,s2;} raygen_pushconstant = {(*mesh).rot, (*mesh).old_rot, vec4((*mesh).shift,0), vec4((*mesh).old_shift,0)};
     //TODO:
-    vkCmdPushConstants(commandBuffer, raygenPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
+    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
     (*mesh).old_rot   = (*mesh).rot;
     (*mesh).old_shift = (*mesh).shift;
@@ -827,7 +840,39 @@ void Renderer::raygen_map_particles() {
         vkCmdDraw(commandBuffer, particles.size(), 1, 0, 0);
     }
 }
+void Renderer::raygen_start_grass(){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
 
+    vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.lineLayout, 0, 1, &raygenParticlesPipe.sets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.lineLayout, 0, 1, &raygenGrassPipe.sets[currentFrame], 0, 0);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+void Renderer::raygen_map_grass(vec4 shift, int size){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
+    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, itime};
+    vkCmdPushConstants(commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
+
+    const int verts_per_blade = 4*6 + 3; 
+    vkCmdDraw(commandBuffer, verts_per_blade*size*size, 1, 0, 0);
+}
 void Renderer::end_raygen() {
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
  }

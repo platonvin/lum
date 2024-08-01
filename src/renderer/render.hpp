@@ -371,6 +371,9 @@ public:
         void raygen_mesh(Mesh* mesh);
         void inter();
         void raygen_map_particles();
+        void raygen_start_grass();
+        void raygen_map_grass(vec4 shift, int size);
+        void raygen_end_grass();
         void   end_raygen_first();
         void   end_raygen();
         void start_compute();
@@ -539,8 +542,9 @@ public:
     VkExtent2D swapChainExtent;
     VkExtent2D  raytraceExtent;
 
-    RasterPipe raygenPipe;
+    RasterPipe raygenBlocksPipe;
     RasterPipe raygenParticlesPipe;
+    RasterPipe raygenGrassPipe;
 
     RasterPipe diffusePipe;
     RasterPipe glossyPipe;
