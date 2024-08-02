@@ -1,10 +1,11 @@
-obj/*.o
-obj/*.gch
+obj
 
 *.exe
+
 # compiled shaders
 shaders/*.spv
 shaders/compiled/*.spv
+
 # IDE things
 # compile_flags.txt
 *.txt

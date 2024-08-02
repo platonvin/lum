@@ -232,7 +232,7 @@ println
             {VK_FORMAT_R8_UINT, offsetof(VoxelVertex, matID)},
         }, 
         sizeof(VoxelVertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4))*2, DO_TEST);
+        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4))*2, DO_TEST, VK_CULL_MODE_NONE);
 
 println
     raygenParticlesPipe.subpassId = 1;
@@ -247,14 +247,14 @@ println
             {VK_FORMAT_R8_UINT, offsetof(Particle, matID)},
         }, 
         sizeof(Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
-        swapChainExtent, {NO_BLEND}, 0, DO_TEST);
+        swapChainExtent, {NO_BLEND}, 0, DO_TEST, VK_CULL_MODE_NONE);
     raygenGrassPipe.subpassId = 2;
     create_Raster_Pipeline(&raygenGrassPipe, {
-            {"shaders/compiled/grass.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
-            {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+            {"shaders/compiled/grassVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
-        0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, DO_TEST);
+        0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, DO_TEST, VK_CULL_MODE_NONE);
     
 println
     diffusePipe.subpassId = 3;
@@ -263,7 +263,7 @@ println
             {"shaders/compiled/diffuseFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, sizeof(ivec4) + sizeof(vec4)*4, NO_TEST);
+        swapChainExtent, {NO_BLEND}, sizeof(ivec4) + sizeof(vec4)*4, NO_TEST, VK_CULL_MODE_NONE);
 
 println
     glossyPipe.subpassId = 4;
@@ -272,7 +272,7 @@ println
             {"shaders/compiled/glossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {DO_BLEND}, sizeof(vec4) + sizeof(vec4), NO_TEST);
+        swapChainExtent, {DO_BLEND}, sizeof(vec4) + sizeof(vec4), NO_TEST, VK_CULL_MODE_NONE);
 
 println
     blurPipe.subpassId = 0;
@@ -281,7 +281,7 @@ println
             {"shaders/compiled/blurFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, 0, NO_TEST);
+        swapChainExtent, {NO_BLEND}, 0, NO_TEST, VK_CULL_MODE_NONE);
 
 println
     overlayPipe.subpassId = 1;
@@ -294,30 +294,12 @@ println
             {VK_FORMAT_R32G32_SFLOAT, offsetof(Rml::Vertex, tex_coord)},
         }, 
         sizeof(Rml::Vertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {DO_BLEND}, sizeof(vec4)+sizeof(mat4), NO_TEST);
+        swapChainExtent, {DO_BLEND}, sizeof(vec4)+sizeof(mat4), NO_TEST, VK_CULL_MODE_NONE);
 
-println
-    // create_Compute_Pipeline(
-
-    // );
-    // create_compute_pipelines();
 println
     create_Compute_Pipeline(&mapPipe,        "shaders/compiled/map.spv",        sizeof(mat4) + sizeof(ivec4),   0);
-    // create_Compute_Pipeline(&mipmapPipe,     "shaders/compiled/mipmap.spv",     0,                              VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
-println
-    // create_Compute_Pipeline(&raytracePipe,   "shaders/compiled/raytrace.spv",   sizeof(ivec4) + sizeof(vec4)*4, 0);
-println
     create_Compute_Pipeline(&radiancePipe,   "shaders/compiled/radiance.spv",   sizeof(int)*2,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
-    // create_Compute_Pipeline(&diffusePipe,    "shaders/compiled/diffuse.spv",    sizeof(ivec4) + sizeof(vec4)*4, 0);
-    // create_Compute_Pipeline(&glossyPipe,     "shaders/compiled/glossy.spv",     sizeof(vec4) + sizeof(vec4),    0);
-println
-    // create_Compute_Pipeline(&denoisePipe,    "shaders/compiled/denoise.spv",    sizeof(int)*2,                  0);
-    // create_Compute_Pipeline(&accumulatePipe, "shaders/compiled/accumulate.spv", 0,                              0);
-    // if(scaled) {
-        // create_Compute_Pipeline(&upscalePipe, "shaders/compiled/upscale.spv", 0, 0);
-    // }
     create_Sync_Objects();
-println
 }
 void Renderer::deleteImages(vector<Image>* images) {
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
@@ -864,14 +846,23 @@ void Renderer::raygen_start_grass(){
         scissor.extent = swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
+//blade is hardcoded but it does not really increase perfomance
+//done this way for simplicity, can easilly be replaced
 void Renderer::raygen_map_grass(vec4 shift, int size){
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
 
-    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, itime};
+    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
     vkCmdPushConstants(commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
-    const int verts_per_blade = 4*6 + 3; 
-    vkCmdDraw(commandBuffer, verts_per_blade*size*size, 1, 0, 0);
+    // const int verts_per_blade = 4*6 + 3; //for triangle list
+    // const int verts_per_blade = 11+3; //for triangle strip
+    // const int blade_per_instance = 2; //for triangle strip
+    const int verts_per_blade = 11; //for triangle strip
+    const int blade_per_instance = 1; //for triangle strip
+    vkCmdDraw(commandBuffer, 
+        verts_per_blade*blade_per_instance, 
+        (size*size + (blade_per_instance-1))/blade_per_instance, 
+        0, 0);
 }
 void Renderer::end_raygen() {
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
@@ -1288,7 +1279,7 @@ void Renderer::updade_radiance() {
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     
-    int magic_number = itime % 2;
+    int magic_number = iFrame % 2;
         
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.line);
 
@@ -1296,7 +1287,7 @@ void Renderer::updade_radiance() {
 
         cameraPos_OLD = cameraPos;
         cameraDir_OLD = cameraDir;
-        struct rtpc {int time; int iters;} pushconstant = {itime, 0};
+        struct rtpc {int time; int iters;} pushconstant = {iFrame, 0};
         vkCmdPushConstants(commandBuffer, radiancePipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
         
         // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, world_size.z);
@@ -1395,7 +1386,7 @@ void Renderer::diffuse() {
 
         cameraPos_OLD = cameraPos;
         cameraDir_OLD = cameraDir;
-        struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,intBitsToFloat(itime)), vec4(cameraDir,0)};
+        struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,intBitsToFloat(iFrame)), vec4(cameraDir,0)};
         vkCmdPushConstants(commandBuffer, diffusePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
         
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
@@ -1838,7 +1829,7 @@ void Renderer::end_frame() {
     previousFrame = currentFrame;
      currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     nextFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-    itime++;
+    iFrame++;
     process_ui_deletion_queue();
 }
 

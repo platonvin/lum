@@ -451,7 +451,7 @@ private:
     
     void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
-        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest);
+        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling);
     void destroy_Raster_Pipeline(RasterPipe* pipe);
 
     void create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
@@ -641,7 +641,7 @@ public:
     u32 previousFrame = MAX_FRAMES_IN_FLIGHT-1;
     u32     nextFrame = 1;
 private:
-    int itime = 0;
+    int iFrame = 0;
     int paletteCounter = 0;
     #ifndef VKNDEBUG
         VkDebugUtilsMessengerEXT debugMessenger;

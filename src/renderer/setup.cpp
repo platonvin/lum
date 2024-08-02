@@ -447,7 +447,7 @@ void Renderer::destroy_Raster_Pipeline(RasterPipe* pipe){
 
 void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
-        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest){
+        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling){
     
     // vector<vector<char>> shader_codes(shader_stages.size());
     vector<VkShaderModule > shader_modules(shader_stages.size());
@@ -528,6 +528,8 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         rasterizer.depthBiasConstantFactor = 0.0f;
         rasterizer.depthBiasClamp = 0.0f;
         rasterizer.depthBiasSlopeFactor = 0.0f;
+        rasterizer.cullMode = culling;
+        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
     VkPipelineMultisampleStateCreateInfo 
         multisampling = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
@@ -591,7 +593,7 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         depthStencil = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};    
         depthStencil.depthTestEnable = VK_TRUE;
         depthStencil.depthWriteEnable = VK_TRUE;
-        depthStencil.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+        depthStencil.depthCompareOp = VK_COMPARE_OP_GREATER;
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f;
         depthStencil.maxDepthBounds = 1.0f;

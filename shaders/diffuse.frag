@@ -184,7 +184,7 @@ void main(void){
 
     vec3 incoming_light = sample_radiance(stored_origin + 0.1*stored_normal, stored_normal);
 
-    final_color = 2.0* incoming_light * stored_mat.color;
+    final_color = (2.0*incoming_light+stored_mat.emmitance) * stored_mat.color ;
     // final_color = stored_mat.color;
     // final_color = incoming_light;
     // final_color = stored_origin;
@@ -193,10 +193,10 @@ void main(void){
     // imageStore(outFrame, pix, vec4((stored_normal), 1));
     // final_color = stored_normal;
     // final_color = abs(final_color);
-    // float ma = max(final_color.x, max(final_color.y, final_color.z));
+    float ma = max(final_color.x, max(final_color.y, final_color.z));
     // float mi = min(final_color.x, min(final_color.y, final_color.z));
-    // if(ma>1) 
-    //     final_color /= ma;
+    if(ma>1) 
+        final_color /= ma;
     // else final_color /= mi;
     frame_color = vec4((final_color),1);
 }

@@ -17,7 +17,7 @@ layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // layout(constant_id = 0) const int RAYS_PER_PROBE = 32;
 layout(constant_id = 1) const int BLOCK_PALETTE_SIZE_X = 64;
 layout(constant_id = 2) const int MAX_DEPTH = 5;
-layout(constant_id = 3) const float REACTIVNESS = 0.02;
+layout(constant_id = 3) const float REACTIVNESS = 0.01;
 
 layout(push_constant) uniform constants{
     varp int timeSeed;

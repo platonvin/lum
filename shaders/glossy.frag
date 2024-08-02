@@ -625,7 +625,7 @@ void main(void){
     vec3 accumulated_light = vec3(0);
     vec3 accumulated_reflection = vec3(1);
 
-    origin += normal*0.1;
+    origin += normal*1.5;
     ProcessHit(origin, direction, 
             0, normal, mat, 
             accumulated_light, accumulated_reflection);
