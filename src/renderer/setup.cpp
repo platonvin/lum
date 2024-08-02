@@ -134,7 +134,7 @@ void Renderer::createRenderPass1(){
         ca_depth.format = DEPTH_FORMAT;
         ca_depth.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        ca_depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        ca_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
         ca_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         ca_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         ca_depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -334,19 +334,19 @@ void Renderer::createRenderPass2(){
         ca_mat_norm.format = VK_FORMAT_R8G8B8A8_SNORM;
         ca_mat_norm.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_mat_norm.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
-        ca_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        ca_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
         ca_mat_norm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         ca_mat_norm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         ca_mat_norm.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
         ca_mat_norm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
-            ca_frame = {};
-            ca_frame.format = VK_FORMAT_R16G16B16A16_UNORM;
-            ca_frame.samples = VK_SAMPLE_COUNT_1_BIT;
-            ca_frame.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
-            ca_frame.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
-            ca_frame.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            ca_frame.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        ca_frame = {};
+        ca_frame.format = VK_FORMAT_R16G16B16A16_UNORM;
+        ca_frame.samples = VK_SAMPLE_COUNT_1_BIT;
+        ca_frame.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        ca_frame.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        ca_frame.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        ca_frame.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         ca_frame.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
         ca_frame.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 

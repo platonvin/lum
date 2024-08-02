@@ -394,7 +394,7 @@ void Engine::draw()
 // println
                 render.end_map();
 // println
-                render.end_compute();
+            render.end_compute();
                 // render.raytrace();
 // println
                 render.start_raygen();
@@ -412,7 +412,7 @@ void Engine::draw()
                     
                     render.raygen_mesh(&tank_body);
                     render.raygen_mesh(&tank_head);
-                    
+                     
                     render.raygen_mesh(&tank_rf_leg);
                     render.raygen_mesh(&tank_lb_leg);
 // println

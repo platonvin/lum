@@ -6,11 +6,12 @@ precision highp float;
 triagnle strip version. Same blade drawn.
 as we all (should) know, gpu's do work in workgroups (wavegronts)
 and they are typically 32/64
-thus if we have 11 vertices, we waste a lot of perfomance
+thus if we have 11 vertices, we may be*(1) wasting a lot of perfomance
 this can be fixed by simply packing multiple blades in same instance
 but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 
-89.6 idle to
+*1) Measurements showed that i was clearly was wrong. But strip still faster
+
 */
 
 layout(push_constant) uniform constants{
