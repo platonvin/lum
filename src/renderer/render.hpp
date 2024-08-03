@@ -372,8 +372,11 @@ public:
         void inter();
         void raygen_map_particles();
         void raygen_start_grass();
-        void raygen_map_grass(vec4 shift, int size);
+            void raygen_map_grass(vec4 shift, int size);
         void raygen_end_grass();
+        void raygen_start_water();
+            void raygen_map_water(vec4 shift, int size);
+        void raygen_end_water();
         void   end_raygen_first();
         void   end_raygen();
         void start_compute();
@@ -545,6 +548,7 @@ public:
     RasterPipe raygenBlocksPipe;
     RasterPipe raygenParticlesPipe;
     RasterPipe raygenGrassPipe;
+    RasterPipe raygenWaterPipe;
 
     RasterPipe diffusePipe;
     RasterPipe glossyPipe;

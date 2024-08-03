@@ -203,6 +203,13 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT , {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
 
+    deferDescriptorsetup(&raygenWaterPipe.setLayout, &raygenWaterPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST   , {/*empty*/}, {world},                NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT , {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
+
+
 println
     flushDescriptorSetup();
 println
@@ -214,6 +221,7 @@ println
     raygenBlocksPipe.renderPass = raygen2glossyRpass;
     raygenParticlesPipe.renderPass = raygen2glossyRpass;
     raygenGrassPipe.renderPass = raygen2glossyRpass;
+    raygenWaterPipe.renderPass = raygen2glossyRpass;
     diffusePipe.renderPass = raygen2glossyRpass;
     glossyPipe.renderPass = raygen2glossyRpass;
     blurPipe.renderPass = blur2presentRpass;
@@ -255,9 +263,15 @@ println
         },{/*empty*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
         swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, DO_TEST, VK_CULL_MODE_NONE);
-    
+    raygenWaterPipe.subpassId = 3;
+    create_Raster_Pipeline(&raygenWaterPipe, {
+            {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        },{/*empty*/}, 
+        0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, DO_TEST, VK_CULL_MODE_NONE);
 println
-    diffusePipe.subpassId = 3;
+    diffusePipe.subpassId = 4;
     create_Raster_Pipeline(&diffusePipe, {
             {"shaders/compiled/diffuseVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/diffuseFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -266,7 +280,7 @@ println
         swapChainExtent, {NO_BLEND}, sizeof(ivec4) + sizeof(vec4)*4, NO_TEST, VK_CULL_MODE_NONE);
 
 println
-    glossyPipe.subpassId = 4;
+    glossyPipe.subpassId = 5;
     create_Raster_Pipeline(&glossyPipe, {
             {"shaders/compiled/glossyVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/glossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -827,8 +841,6 @@ void Renderer::raygen_start_grass(){
 
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.line);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.lineLayout, 0, 1, &raygenParticlesPipe.sets[currentFrame], 0, 0);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.line);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.lineLayout, 0, 1, &raygenGrassPipe.sets[currentFrame], 0, 0);
 
@@ -864,6 +876,42 @@ void Renderer::raygen_map_grass(vec4 shift, int size){
         (size*size + (blade_per_instance-1))/blade_per_instance, 
         0, 0);
 }
+void Renderer::raygen_start_water(){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
+    vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.lineLayout, 0, 1, &raygenWaterPipe.sets[currentFrame], 0, 0);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+void Renderer::raygen_map_water(vec4 shift, int size){
+    VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
+
+    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
+    vkCmdPushConstants(commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
+
+    const int verts_per_water_tape = 32;
+    const int tapes_per_block = 16;
+    vkCmdDraw(commandBuffer, 
+        verts_per_water_tape, 
+        tapes_per_block, 
+        0, 0);
+}
+
 void Renderer::end_raygen() {
     VkCommandBuffer &commandBuffer = rayGenCommandBuffers[currentFrame];
  }

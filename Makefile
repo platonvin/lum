@@ -78,6 +78,7 @@ _shaders:= \
 	shaders/compiled/overlayFrag.spv\
 	shaders/compiled/grassVert.spv\
 	shaders/compiled/grassFrag.spv\
+	shaders/compiled/waterVert.spv\
 
 # flags = 
 all: Flags=$(release_specific_flags)
@@ -161,6 +162,8 @@ shaders/compiled/overlayFrag.spv: shaders/overlay.frag
 	glslc shaders/overlay.frag -o shaders/compiled/overlayFrag.spv $(SHADER_FLAGS)
 shaders/compiled/grassVert.spv: shaders/grass.vert
 	glslc shaders/grass.vert -o shaders/compiled/grassVert.spv $(SHADER_FLAGS)
+shaders/compiled/waterVert.spv: shaders/water.vert
+	glslc shaders/water.vert -o shaders/compiled/waterVert.spv $(SHADER_FLAGS)
 shaders/compiled/grassFrag.spv: shaders/grass.vert
 	glslc shaders/grass.frag -o shaders/compiled/grassFrag.spv $(SHADER_FLAGS)
 

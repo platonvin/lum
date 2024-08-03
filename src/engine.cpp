@@ -430,6 +430,11 @@ void Engine::draw()
                 render.raygen_map_grass(vec4(128+16*2,128+16*2,16,0), 90);
                 // render.raygen_map_grass(vec4(8,8,8,0), 10);
 
+                render.raygen_start_water();
+                // render.raygen_map_grass(vec4(32,32,32,0), 10);
+                // render.raygen_map_grass(vec4(0,0,16,0), 10);
+                render.raygen_map_water(vec4(128,128,16+5,0), 16);
+
                 render.end_raygen();
 // println
 
