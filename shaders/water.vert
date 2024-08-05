@@ -20,8 +20,8 @@ layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
     mat4 trans_w2s_old; //just leave it
 } ubo;
-layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
-layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
+layout(set = 0, binding = 1) uniform sampler2D state;
+// layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
 
 layout(location = 0) flat out vec3 norm;
 layout(location = 1) flat out uint mat;

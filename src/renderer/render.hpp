@@ -133,24 +133,37 @@ typedef struct Mesh {
     ivec3 size;
     // Voxel* host_voxels; // single copy of voxel memory on cpu. If NULL then you store your data yourself
 } Mesh;
+// typedef struct GrassState {
+//     //2ch image stored sampled wind and physical contact impact 
+//     Image marks; //RENAME ME PLEASE SOMEONE
+// } GrassState;
+// typedef struct WaterState {
+//     //2ch image stored sampled waves height and (possibly) foam
+//     Image waves;
+// } WaterState;
+// typedef struct GrassUpdateReqest {
+//     float dTime;
+//     vec2 windDirection, collsionPoint;
+// } GrassUpdateReqest;
+// typedef struct WaterUpdateReqest {
+//     float dTime;
+//     vec2 windDirection, collsionPoint;
+// } WaterUpdateReqest;
+
 typedef struct UiMesh {
     Buffer vertexes;
     Buffer indexes;
     u32 icount;
     Image* image;
 } UiMesh;
-typedef struct UiMeshDeletion {
-    UiMesh mesh;
-    int life_counter;
-} UiMeshDeletion;
-typedef struct UiImageDeletion {
+typedef struct ImageDeletion {
     Image image;
     int life_counter;
-} UiImageDeletion;
-typedef struct UiBufferDeletion {
+} ImageDeletion;
+typedef struct BufferDeletion {
     Buffer buffer;
     int life_counter;
-} UiBufferDeletion;
+} BufferDeletion;
 
 //used for configuring raster pipeline
 typedef struct AttrFormOffs{
@@ -310,6 +323,7 @@ typedef struct DelayedDescriptorSetup {
     vector<VkDescriptorSet>* sets; 
     vector<DescriptorInfo> descriptions;
     VkShaderStageFlags stages;
+    VkDescriptorSetLayoutCreateFlags createFlags;
 } DelayedDescriptorSetup;
 
 //forward declaration for pointer
@@ -366,42 +380,44 @@ public:
     dmat4 cameraTransform_OLD = identity<dmat4>();
 
     void start_frame();
-        void update_particles();
-        void start_raygen();
-        void raygen_mesh(Mesh* mesh);
-        void inter();
-        void raygen_map_particles();
-        void raygen_start_grass();
-            void raygen_map_grass(vec4 shift, int size);
-        void raygen_end_grass();
-        void raygen_start_water();
-            void raygen_map_water(vec4 shift, int size);
-        void raygen_end_water();
-        void   end_raygen_first();
-        void   end_raygen();
         void start_compute();
-                void start_blockify();
+            void start_blockify();
                 void blockify_mesh(Mesh* mesh);
-                    void blockify_custom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
-                void   end_blockify();
+            void end_blockify();
+            void blockify_custom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
             void exec_copies();
-                void start_map();
+            void start_map();
                 void map_mesh(Mesh* mesh);
-                void   end_map();
-            void recalculate_df();
-            void raytrace();
+            void end_map();
             void updade_radiance();
+            void updade_grass(vec2 windDirection);
+            void updade_water();
+        void end_compute();
+        void start_raygen();
+            void raygen_mesh(Mesh* mesh);
+            void update_particles();
+            void raygen_map_particles();
+            void raygen_start_grass();
+                void raygen_map_grass(vec4 shift, int size);
+            void raygen_end_grass();
+                void raygen_start_water();
+                    void raygen_map_water(vec4 shift, int size);
+                void raygen_end_water();
+            // void end_raygen_first();
             void diffuse();
             void glossy();
+        void end_raygen();
             void blur();
-            void denoise(int iterations, int denoising_radius, denoise_targets target);
-            void accumulate();
-            void upscale();
-        void   end_compute();
-        void start_ui();
-        void draw_ui();
-        void   present();
+            void start_ui();
+            void end_ui();
+        void present();
     void end_frame();
+        // void inter();
+            // void recalculate_df();
+            // void raytrace();
+            // void denoise(int iterations, int denoising_radius, denoise_targets target);
+            // void accumulate();
+            // void upscale();
 
     template<class Vertex_T> vector<Buffer> create_elemBuffers(Vertex_T* vertices, u32 count, u32 buffer_usage = 0); 
     template<class Vertex_T> vector<Buffer> create_elemBuffers(vector<Vertex_T> vertices, u32 buffer_usage = 0); 
@@ -461,7 +477,7 @@ private:
     void destroy_Compute_Pipeline(ComputePipe* pipe);
 
     void createDescriptorPool();
-    void deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
+    void deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages, VkDescriptorSetLayoutCreateFlags createFlags = 0);
     void setupDescriptor(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
     vector<DelayedDescriptorSetup> delayed_descriptor_setups;
     void flushDescriptorSetup();
@@ -481,6 +497,9 @@ private:
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access, 
     uvec3 size);
 // #endif
+    // public: void create_grass_state(GrassState* state);
+    // public: void create_water_state(WaterState* state);
+// private:
     void generateMipmaps(VkCommandBuffer commandBuffer, VkImage image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, VkImageAspectFlags aspect);
     // void destroy_images
     void create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
@@ -504,7 +523,6 @@ private:
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
     void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size); 
     void copy_Buffer(VkBuffer srcBuffer, Image* image, uvec3 size);
-    u32 find_Memory_Type(u32 typeFilter, VkMemoryPropertyFlags properties);
     VkCommandBuffer begin_Single_Time_Commands();
     void end_Single_Time_Commands(VkCommandBuffer commandBuffer);
     void transition_Image_Layout_Singletime(Image* image, VkImageLayout newLayout, int mipmaps = 1);
@@ -552,32 +570,27 @@ public:
 
     RasterPipe diffusePipe;
     RasterPipe glossyPipe;
-    RasterPipe blurPipe; // i can use for both mirror and glow
+    RasterPipe blurPipe; // i can use it for both mirror and glow
 
     RasterPipe overlayPipe;
 
-    VkRenderPass raygen2glossyRpass;
-    VkRenderPass  blur2presentRpass;
+    VkRenderPass raygen2glossyRpass;//name me pleeeeese
+    VkRenderPass  blur2presentRpass;//name me pleeeeese
 
-    // vector<VkFramebuffer>  swapChainFramebuffers;
-    vector<VkFramebuffer>     overlayFramebuffers;
-    vector<VkFramebuffer>     rayGenFramebuffers;
-    // vector<VkFramebuffer>    rayGenFramebuffers_downscaled;
+    vector<VkFramebuffer>      rayGenFramebuffers; //for 1st rpass
+    vector<VkFramebuffer>     overlayFramebuffers; //for 2st rpass.
 
-    // vector<VkCommandBuffer>    rayGenSecondaryCommandBuffer;
-    //It is so because they are too similar and easy to record (TODO: make concurent)
-    vector<VkCommandBuffer>        rayGenCommandBuffers;
     vector<VkCommandBuffer>       computeCommandBuffers; 
-    vector<VkCommandBuffer>       overlayCommandBuffers;
-    vector<VkCommandBuffer>   copyOverlayCommandBuffers;
-    vector<VkCommandBuffer> renderOverlayCommandBuffers;
+    vector<VkCommandBuffer>      graphicsCommandBuffers;
+    // vector<VkCommandBuffer>       overlayCommandBuffers; //separate so in theory you could run it on separate thread
+    vector<VkCommandBuffer>          copyCommandBuffers; //runtime copies for ui and runtime grass/water creation. Also does first frame resources
 
     vector<VkSemaphore>   imageAvailableSemaphores;
-    vector<VkSemaphore>   renderFinishedSemaphores;
-    vector<VkSemaphore> raytraceFinishedSemaphores;
-    vector<VkSemaphore>   rayGenFinishedSemaphores;
-    vector<VkFence> graphicalInFlightFences;
-    vector<VkFence>  raytraceInFlightFences;
+    vector<VkSemaphore>   renderFinishedSemaphores; //to sync renering with presenting
+    // vector<VkSemaphore> raytraceFinishedSemaphores;
+    // vector<VkSemaphore>   rayGenFinishedSemaphores;
+    // vector<VkFence> graphicalInFlightFences;
+    // vector<VkFence>  raytraceInFlightFences;
     vector<VkFence>    frameInFlightFences;    
 
         // Image stepCount;
@@ -597,6 +610,7 @@ public:
     vector<Image> swapchainImages;
     VkSampler  nearestSampler;
     VkSampler   linearSampler;
+    VkSampler   linearSampler_tiled;
     // VkSampler   frameSampler;
     VkSampler  overlaySampler;
 
@@ -615,15 +629,22 @@ public:
     vector<Particle>     particles;
     vector<Buffer>   gpuParticles; //multiple because cpu-related work
     vector<void* >   gpuParticlesMapped; //multiple because cpu-related work
-    vector<UiMeshDeletion>   uiMeshDeletionQueue;
-    vector<UiImageDeletion>  uiImageDeletionQueue;
-    vector<UiBufferDeletion> uiBufferDeletionQueue;
+
+    Image perlinNoise; //full-world grass shift (~direction) texture sampled in grass
+    Image grassState; //full-world grass shift (~direction) texture sampled in grass
+    Image waterState; //~same but water
+
+    vector<ImageDeletion>  imageDeletionQueue;  //cpu side  image abstractions deletion queue. Exists for delayed copies
+    vector<BufferDeletion> bufferDeletionQueue; //cpu side buffer abstractions deletion queue. Exists for delayed copies
 
 
     VkDescriptorPool descriptorPool;
     ComputePipe   raytracePipe;
     ComputePipe   radiancePipe;
     ComputePipe        mapPipe;
+    ComputePipe        updateGrassPipe;
+    ComputePipe        updateWaterPipe;
+    ComputePipe        genPerlinPipe; //generate noise for grass 
     // ComputePipe    diffusePipe;
     // ComputePipe     glossyPipe;
     // ComputePipe    denoisePipe;

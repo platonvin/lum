@@ -12,6 +12,7 @@
 struct block_render_request{
     ivec3 pos;
     int index;
+    float cam_dist;
 };
 
 class Engine {

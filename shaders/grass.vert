@@ -22,10 +22,9 @@ layout(push_constant) uniform constants{
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
-    mat4 trans_w2s_old;
+    mat4 trans_w2s_old; //just leave it
 } ubo;
-layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
-layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
+layout(set = 0, binding = 1) uniform sampler2D state;
 
 layout(location = 0) flat out vec3 norm;
 layout(location = 1) flat out uint mat;
@@ -33,6 +32,7 @@ layout(location = 1) flat out uint mat;
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 const float PI = 3.1415926535;
+const ivec3 world_size = ivec3(48,48,16);
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -115,6 +115,20 @@ void curve_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
 
     return;
 }
+
+//local_pos is in [0,1]
+//returns sampled global offset
+vec2 load_offset(vec2 local_pos){
+    vec2 offset;
+
+    vec2 world_pos = local_pos*16.0 + pco.shift.xy;
+    vec2 state_pos = world_pos / vec2(world_size.xy*16);
+
+    offset = texture(state, state_pos).xy;
+
+    return offset;
+}
+
 void wiggle_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal, in vec2 pos){
     //own ~random wiggling
     // vertex.y += 0.1*sin(float(pco.time)/200.0 + (rnd01*2.0*PI));
@@ -123,15 +137,25 @@ void wiggle_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal, in vec
     vec2 direction = vec2(sin(pco.time / 600.0), cos(pco.time / 600.0));
     
     //global wave wiggling from wind
-    vec2 offset = vec2(0);
-    //yeah ~32 iteration, but this will be offloaded to compute shader+texture soon
-    for(float freq=3.0; freq < 100.0; freq *= 1.15){
-        float ampl = 0.3 / freq;
-        float t = pco.time / 300.0;
-        offset += sin((t + dot(pos,direction)/400.0)*freq) * ampl;
+    vec2 global_offset = load_offset(pos);
+
+    //per-blade unique shift
+    vec2 local_offset = vec2(0);
+    for(float freq=1.0; freq < 4.0; freq += 1.2){
+        float ampl = 0.05;
+        float t = pco.time / 200.0;
+        local_offset += sin(t*freq + rnd01*400.0*freq) * ampl;
     }
 
-    vertex.xy += offset * vertex.z;
+    vec2 offset = local_offset + global_offset;
+    vertex.xy += offset * vertex.z * 1.0;
+
+    //makes it rotate, not STRETCH
+    float old_size = (vertex.z*vertex.z);
+    float new_size = (vertex.z*vertex.z) + dot(vertex.xy, vertex.xy);
+    // float len
+    float descale = sqrt(new_size / old_size);
+    vertex /= descale;
 
 
     return;
@@ -201,13 +225,13 @@ void main() {
     
     int blade_x = blade_id % pco.size;
     int blade_y = blade_id / pco.size;
-    vec2 relative_pos = (vec2(blade_x, blade_y) / vec2(pco.size));
-    vec2 rel2tile_shift = relative_pos * 128.0; //for visibility
+    vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(pco.size));
 
     vec3 normal;
-    float rand01 = rand(rel2tile_shift);
-    vec3 rel2world = get_blade_vert(blade_vertex_id, normal, rand01, rel2tile_shift);
+    float rand01 = rand(relative_pos);
+    vec3 rel2world = get_blade_vert(blade_vertex_id, normal, rand01, relative_pos);
 
+    vec2 rel2tile_shift = relative_pos * 16.0; //for visibility
     vec3 rel2tile = rel2world + vec3(rel2tile_shift,0);
 
     vec4 world_pos = vec4(rel2tile,1) + pco.shift;

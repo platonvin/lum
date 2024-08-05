@@ -79,6 +79,8 @@ _shaders:= \
 	shaders/compiled/grassVert.spv\
 	shaders/compiled/grassFrag.spv\
 	shaders/compiled/waterVert.spv\
+	shaders/compiled/updateGrass.spv\
+	shaders/compiled/perlin.spv\
 
 # flags = 
 all: Flags=$(release_specific_flags)
@@ -162,10 +164,14 @@ shaders/compiled/overlayFrag.spv: shaders/overlay.frag
 	glslc shaders/overlay.frag -o shaders/compiled/overlayFrag.spv $(SHADER_FLAGS)
 shaders/compiled/grassVert.spv: shaders/grass.vert
 	glslc shaders/grass.vert -o shaders/compiled/grassVert.spv $(SHADER_FLAGS)
+shaders/compiled/grassFrag.spv: shaders/grass.frag
+	glslc shaders/grass.frag -o shaders/compiled/grassFrag.spv $(SHADER_FLAGS)
 shaders/compiled/waterVert.spv: shaders/water.vert
 	glslc shaders/water.vert -o shaders/compiled/waterVert.spv $(SHADER_FLAGS)
-shaders/compiled/grassFrag.spv: shaders/grass.vert
-	glslc shaders/grass.frag -o shaders/compiled/grassFrag.spv $(SHADER_FLAGS)
+shaders/compiled/updateGrass.spv: shaders/updateGrass.comp
+	glslc shaders/updateGrass.comp -o shaders/compiled/updateGrass.spv $(SHADER_FLAGS)
+shaders/compiled/perlin.spv: shaders/perlin.comp
+	glslc shaders/perlin.comp -o shaders/compiled/perlin.spv $(SHADER_FLAGS)
 
 debug: Flags=$(debug_flags) 
 # debug: objs=$(deb_objs)

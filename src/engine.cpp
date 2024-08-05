@@ -30,7 +30,8 @@ vec3 rnVec3(float minValue, float maxValue) {
 }
 
 bool sort_blocks(struct block_render_request const& lhs, struct block_render_request const& rhs){
-    return lhs.index < rhs.index;
+    // return lhs.index < rhs.index;
+    return lhs.cam_dist > rhs.cam_dist; //what state is more important and does it even matter?
 }
 
 quat find_quat(vec3 v1, vec3 v2){
@@ -127,6 +128,10 @@ void Engine::setup_graphics(){
     render.update_Block_Palette(block_palette);
 // println
     render.update_Material_Palette(render.mat_palette);
+
+    // render.create_grass_state(&grass);
+    // render.create_water_state(&water);
+
     vkDeviceWaitIdle(render.device);
 // println
 }
@@ -351,6 +356,12 @@ void Engine::cull_meshes(){
             struct block_render_request /*goes*/ brr = {}; //
             brr.pos = ivec3(xx*16,yy*16, zz*16);
             brr.index = block_id;
+
+            vec3 clip_coords = (render.cameraTransform * vec4(brr.pos,1));
+                clip_coords.z = -clip_coords.z;
+
+            brr.cam_dist = clip_coords.z;
+
             if(is_block_visible(render.cameraTransform, dvec3(brr.pos))){
                 que.push_back(brr);
             }
@@ -379,6 +390,9 @@ void Engine::draw()
             render.end_blockify();
 // println
             render.updade_radiance();
+
+            render.updade_grass({});
+            // render.updade_water(&water, {}, {});
 // println
             render.exec_copies();
 // println
@@ -425,57 +439,37 @@ void Engine::draw()
                 render.raygen_map_particles();
 // println      
                 render.raygen_start_grass();
-                // render.raygen_map_grass(vec4(32,32,32,0), 10);
-                // render.raygen_map_grass(vec4(0,0,16,0), 10);
-                render.raygen_map_grass(vec4(128+16*2,128+16*2,16,0), 90);
-                // render.raygen_map_grass(vec4(8,8,8,0), 10);
+                    for(int xx=0; xx<16;xx++){
+                    for(int yy=0; yy<16;yy++){
+                        if(render.current_world(4+xx,4+yy,1) == 0){
+                            render.raygen_map_grass(vec4(64+xx*16,64+yy*16,16,0), 16);
+                        }
+                    }}
+                    // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*1,16,0), 16);
+                    // render.raygen_map_grass(&grass, vec4(128+16*1,128+16*2,16,0), 16);
+                    // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*2,16,0), 16);
 
                 render.raygen_start_water();
-                // render.raygen_map_grass(vec4(32,32,32,0), 10);
-                // render.raygen_map_grass(vec4(0,0,16,0), 10);
-                render.raygen_map_water(vec4(128,128,16+5,0), 16);
-
-                render.end_raygen();
+                    // render.raygen_map_water(&water, vec4(128,128,16+5,0), 16);
 // println
-
                 render.diffuse();
 // println
                 render.glossy();
 // println
-                // if(render.pre_denoiser_count > 0)
-                //     render.denoise(render.pre_denoiser_count, 1, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+                render.end_raygen();
 // println
-                // render.accumulate();
+            render.blur(); 
 // println
-                // if(render.post_denoiser_count > 0)
-                //     render.denoise(render.post_denoiser_count, 2, render.scaled? DENOISE_TARGET_LOWRES : DENOISE_TARGET_HIGHRES);
+            render.start_ui(); 
 // println
-                // render.denoise(7, 2, DENOISE_TARGET_LOWRES);
-                // render.denoise(6, 2, DENOISE_TARGET_LOWRES);
-                // render.denoise(5, 2, DENOISE_TARGET_LOWRES);
-                // if(render.scaled){
-                    // render.denoise(9, 3, DENOISE_TARGET_LOWRES);
-                    // render.denoise(5, 1, DENOISE_TARGET_LOWRES);
-                    // render.upscale();
-                // }
+                ui.update();
+    // println
+                ui.draw();
 // println
-                // if(render.final_denoiser_count > 0)
-                //     render.denoise(render.final_denoiser_count, 2, DENOISE_TARGET_HIGHRES);
-                // render.denoise(1, 2, DENOISE_TARGET_HIGHRES);
-                // render.denoise(3, 2, DENOISE_TARGET_HIGHRES);
+        render.end_ui(); 
 // println
-
-        render.blur(); 
+       render.present();
 // println
-        render.start_ui(); 
-// println
-            ui.update();
-// println
-            ui.draw();
-// println
-        render.draw_ui(); 
-// println
-        render.present();
     render.end_frame();
 }
 

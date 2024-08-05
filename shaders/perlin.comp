@@ -1,0 +1,465 @@
+#version 450 core
+
+precision highp int;
+precision highp float;
+
+layout(set = 0, binding = 0, r16_snorm) uniform image2D noise_image;
+
+uint ihash1D(uint q)
+{
+    // hash by Hugo Elias, Integer Hash - I, 2017
+    q = q * 747796405u + 2891336453u;
+    q = (q << 13u) ^ q;
+    return q * (q * q * 15731u + 789221u) + 1376312589u;
+}
+
+uvec2 ihash1D(uvec2 q)
+{
+    // hash by Hugo Elias, Integer Hash - I, 2017
+    q = q * 747796405u + 2891336453u;
+    q = (q << 13u) ^ q;
+    return q * (q * q * 15731u + 789221u) + 1376312589u;
+}
+
+uvec4 ihash1D(uvec4 q)
+{
+    // hash by Hugo Elias, Integer Hash - I, 2017
+    q = q * 747796405u + 2891336453u;
+    q = (q << 13u) ^ q;
+    return q * (q * q * 15731u + 789221u) + 1376312589u;
+}
+
+// @return Value of the noise, range: [0, 1]
+float hash1D(float x)
+{
+    // based on: pcg by Mark Jarzynski: http://www.jcgt.org/published/0009/03/02/
+    uint state = uint(x * 8192.0) * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return float((word >> 22u) ^ word) * (1.0 / float(0xffffffffu));;
+}
+
+// @return Value of the noise, range: [0, 1]
+float hash1D(vec2 x)
+{
+    // hash by Inigo Quilez, Integer Hash - III, 2017
+    uvec2 q = uvec2(x * 8192.0);
+    q = 1103515245u * ((q >> 1u) ^ q.yx);
+    uint n = 1103515245u * (q.x ^ (q.y >> 3u));
+    return float(n) * (1.0 / float(0xffffffffu));
+}
+
+// @return Value of the noise, range: [0, 1]
+float hash1D(vec3 x)
+{
+    // based on: pcg3 by Mark Jarzynski: http://www.jcgt.org/published/0009/03/02/
+    uvec3 v = uvec3(x * 8192.0) * 1664525u + 1013904223u;
+    v += v.yzx * v.zxy;
+    v ^= v >> 16u;
+    return float(v.x + v.y * v.z) * (1.0 / float(0xffffffffu));
+}
+
+// @return Value of the noise, range: [0, 1]
+vec2 hash2D(vec2 x)
+{
+    // based on: Inigo Quilez, Integer Hash - III, 2017
+    uvec4 q = uvec2(x * 8192.0).xyyx + uvec2(0u, 3115245u).xxyy;
+    q = 1103515245u * ((q >> 1u) ^ q.yxwz);
+    uvec2 n = 1103515245u * (q.xz ^ (q.yw >> 3u));
+    return vec2(n) * (1.0 / float(0xffffffffu));
+}
+
+// @return Value of the noise, range: [0, 1]
+vec3 hash3D(vec2 x) 
+{
+    // based on: pcg3 by Mark Jarzynski: http://www.jcgt.org/published/0009/03/02/
+    uvec3 v = uvec3(x.xyx * 8192.0) * 1664525u + 1013904223u;
+    v += v.yzx * v.zxy;
+    v ^= v >> 16u;
+
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    return vec3(v) * (1.0 / float(0xffffffffu));
+}
+
+// @return Value of the noise, range: [0, 1]
+vec3 hash3D(vec3 x) 
+{
+    // based on: pcg3 by Mark Jarzynski: http://www.jcgt.org/published/0009/03/02/
+    uvec3 v = uvec3(x * 8192.0) * 1664525u + 1013904223u;
+    v += v.yzx * v.zxy;
+    v ^= v >> 16u;
+
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    return vec3(v) * (1.0 / float(0xffffffffu));
+}
+
+// @return Value of the noise, range: [0, 1]
+vec4 hash4D(vec2 x)
+{
+    // based on: pcg4 by Mark Jarzynski: http://www.jcgt.org/published/0009/03/02/
+    uvec4 v = uvec4(x.xyyx * 8192.0) * 1664525u + 1013904223u;
+
+    v += v.yzxy * v.wxyz;
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+    
+    v.x += v.y * v.w;
+    v.w += v.y * v.z;
+    
+    v ^= v >> 16u;
+
+    return vec4(v ^ (v >> 16u)) * (1.0 / float(0xffffffffu));
+}
+
+// @return Value of the noise, range: [0, 1]
+vec4 hash4D(vec4 x)
+{
+    // based on: pcg4 by Mark Jarzynski: http://www.jcgt.org/published/0009/03/02/
+    uvec4 v = uvec4(x * 8192.0) * 1664525u + 1013904223u;
+
+    v += v.yzxy * v.wxyz;
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+    
+    v.x += v.y * v.w;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.w += v.y * v.z;
+
+    v ^= v >> 16u;
+
+    return vec4(v ^ (v >> 16u)) * (1.0 / float(0xffffffffu));
+}
+
+// based on GPU Texture-Free Noise by Brian Sharpe: https://archive.is/Hn54S
+vec3 permutePrepareMod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permutePrepareMod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permuteResolve(vec4 x) { return fract( x * (7.0 / 288.0 )); }
+vec4 permuteHashInternal(vec4 x) { return fract(x * ((34.0 / 289.0) * x + (1.0 / 289.0))) * 289.0; }
+
+// generates a random number for each of the 4 cell corners
+vec4 permuteHash2D(vec4 cell)    
+{
+    cell = permutePrepareMod289(cell * 32.0);
+    return permuteResolve(permuteHashInternal(permuteHashInternal(cell.xzxz) + cell.yyww));
+}
+
+// generates 2 random numbers for each of the 4 cell corners
+void permuteHash2D(vec4 cell, out vec4 hashX, out vec4 hashY)
+{
+    cell = permutePrepareMod289(cell);
+    hashX = permuteHashInternal(permuteHashInternal(cell.xzxz) + cell.yyww);
+    hashY = permuteResolve(permuteHashInternal(hashX));
+    hashX = permuteResolve(hashX);
+}
+
+// generates 2 random numbers for the coordinate
+vec2 betterHash2D(vec2 x)
+{
+    uvec2 q = uvec2(x);
+    uint h0 = ihash1D(ihash1D(q.x) + q.y);
+    uint h1 = h0 * 1933247u + ~h0 ^ 230123u;
+    return vec2(h0, h1)  * (1.0 / float(0xffffffffu));
+}
+
+// generates a random number for each of the 4 cell corners
+vec4 betterHash2D(vec4 cell)    
+{
+    uvec4 i = uvec4(cell);
+    uvec4 hash = ihash1D(ihash1D(i.xzxz) + i.yyww);
+    return vec4(hash) * (1.0 / float(0xffffffffu));
+}
+
+// generates 2 random numbers for each of the 4 cell corners
+void betterHash2D(vec4 cell, out vec4 hashX, out vec4 hashY)
+{
+    uvec4 i = uvec4(cell);
+    uvec4 hash0 = ihash1D(ihash1D(i.xzxz) + i.yyww);
+    uvec4 hash1 = ihash1D(hash0 ^ 1933247u);
+    hashX = vec4(hash0) * (1.0 / float(0xffffffffu));
+    hashY = vec4(hash1) * (1.0 / float(0xffffffffu));
+}
+
+// generates 2 random numbers for each of the 2D coordinates
+vec4 betterHash2D(vec2 coords0, vec2 coords1)
+{
+    uvec4 i = uvec4(coords0, coords1);
+    uvec4 hash = ihash1D(ihash1D(i.xz) + i.yw).xxyy;
+    hash.yw = hash.yw * 1933247u + ~hash.yw ^ 230123u;
+    return vec4(hash) * (1.0 / float(0xffffffffu));;
+}
+
+// generates 2 random numbers for each of the four 2D coordinates
+void betterHash2D(vec4 coords0, vec4 coords1, out vec4 hashX, out vec4 hashY)
+{
+    uvec4 hash0 = ihash1D(ihash1D(uvec4(coords0.xz, coords1.xz)) + uvec4(coords0.yw, coords1.yw));
+    uvec4 hash1 = hash0 * 1933247u + ~hash0 ^ 230123u;
+    hashX = vec4(hash0) * (1.0 / float(0xffffffffu));
+    hashY = vec4(hash1) * (1.0 / float(0xffffffffu));
+} 
+
+// 3D
+
+// generates a random number for each of the 8 cell corners
+void permuteHash3D(vec3 cell, vec3 cellPlusOne, out vec4 lowHash, out vec4 highHash)     
+{
+    cell = permutePrepareMod289(cell);
+    cellPlusOne = step(cell, vec3(287.5)) * cellPlusOne;
+
+    highHash = permuteHashInternal(permuteHashInternal(vec2(cell.x, cellPlusOne.x).xyxy) + vec2(cell.y, cellPlusOne.y).xxyy);
+    lowHash = permuteResolve(permuteHashInternal(highHash + cell.zzzz));
+    highHash = permuteResolve(permuteHashInternal(highHash + cellPlusOne.zzzz));
+}
+
+// generates a random number for each of the 8 cell corners
+void fastHash3D(vec3 cell, vec3 cellPlusOne, out vec4 lowHash, out vec4 highHash)
+{
+    // based on: https://archive.is/wip/7j1wv
+    const vec2 kOffset = vec2(50.0, 161.0);
+    const float kDomainScale = 289.0;
+    const float kLargeValue = 635.298681;
+    const float kk = 48.500388;
+    
+    //truncate the domain, equivalant to mod(cell, kDomainScale)
+    cell -= floor(cell.xyz * (1.0 / kDomainScale)) * kDomainScale;
+    cellPlusOne = step(cell, vec3(kDomainScale - 1.5)) * cellPlusOne;
+
+    vec4 r = vec4(cell.xy, cellPlusOne.xy) + kOffset.xyxy;
+    r *= r;
+    r = r.xzxz * r.yyww;
+    highHash.xy = vec2(1.0 / (kLargeValue + vec2(cell.z, cellPlusOne.z) * kk));
+    lowHash = fract(r * highHash.xxxx);
+    highHash = fract(r * highHash.yyyy);
+}
+
+// generates a random number for each of the 8 cell corners
+void betterHash3D(vec3 cell, vec3 cellPlusOne, out vec4 lowHash, out vec4 highHash)
+{
+    uvec4 cells = uvec4(cell.xy, cellPlusOne.xy);  
+    uvec4 hash = ihash1D(ihash1D(cells.xzxz) + cells.yyww);
+    
+    lowHash = vec4(ihash1D(hash + uint(cell.z))) * (1.0 / float(0xffffffffu));
+    highHash = vec4(ihash1D(hash + uint(cellPlusOne.z))) * (1.0 / float(0xffffffffu));
+}
+
+// @note Can change to (faster to slower order): permuteHash2D, betterHash2D
+// Each has a tradeoff between quality and speed, some may also experience artifacts for certain ranges and are not realiable.
+#define multiHash2D betterHash2D
+
+// @note Can change to (faster to slower order): fastHash3D, permuteHash3D, betterHash3D
+// Each has a tradeoff between quality and speed, some may also experience artifacts for certain ranges and are not realiable.
+#define multiHash3D betterHash3D
+
+void smultiHash2D(vec4 cell, out vec4 hashX, out vec4 hashY)
+{
+    multiHash2D(cell, hashX, hashY);
+    hashX = hashX * 2.0 - 1.0; 
+    hashY = hashY * 2.0 - 1.0;
+}
+
+// 2D Perlin noise.
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return Value of the noise, range: [-1, 1]
+float perlinNoise(vec2 pos, vec2 scale, float seed)
+{
+    // based on Modifications to Classic Perlin Noise by Brian Sharpe: https://archive.is/cJtlS
+    pos *= scale;
+    vec4 i = floor(pos).xyxy + vec2(0.0, 1.0).xxyy;
+    vec4 f = (pos.xyxy - i.xyxy) - vec2(0.0, 1.0).xxyy;
+    i = mod(i, scale.xyxy) + seed;
+
+    // grid gradients
+    vec4 gradientX, gradientY;
+    multiHash2D(i, gradientX, gradientY);
+    gradientX -= 0.49999;
+    gradientY -= 0.49999;
+
+    // perlin surflet
+    vec4 gradients = inversesqrt(gradientX * gradientX + gradientY * gradientY) * (gradientX * f.xzxz + gradientY * f.yyww);
+    // normalize: 1.0 / 0.75^3
+    gradients *= 2.3703703703703703703703703703704;
+    vec4 lengthSq = f * f;
+    lengthSq = lengthSq.xzxz + lengthSq.yyww;
+    vec4 xSq = 1.0 - min(vec4(1.0), lengthSq); 
+    xSq = xSq * xSq * xSq;
+    return dot(xSq, gradients);
+}
+
+// 2D Perlin noise with gradients transform (i.e. can be used to rotate the gradients).
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param transform transform matrix for the noise gradients.
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return Value of the noise, range: [-1, 1]
+float perlinNoise(vec2 pos, vec2 scale, mat2 transform, float seed)
+{
+    // based on Modifications to Classic Perlin Noise by Brian Sharpe: https://archive.is/cJtlS
+    pos *= scale;
+    vec4 i = floor(pos).xyxy + vec2(0.0, 1.0).xxyy;
+    vec4 f = (pos.xyxy - i.xyxy) - vec2(0.0, 1.0).xxyy;
+    i = mod(i, scale.xyxy) + seed;
+
+    // grid gradients
+    vec4 gradientX, gradientY;
+    multiHash2D(i, gradientX, gradientY);
+    gradientX -= 0.49999;
+    gradientY -= 0.49999;
+
+    // transform gradients
+    vec4 mt = vec4(transform);
+    vec4 rg = vec4(gradientX.x, gradientY.x, gradientX.y, gradientY.y);
+    rg = rg.xxzz * mt.xyxy + rg.yyww * mt.zwzw;
+    gradientX.xy = rg.xz;
+    gradientY.xy = rg.yw;
+
+    rg = vec4(gradientX.z, gradientY.z, gradientX.w, gradientY.w);
+    rg = rg.xxzz * mt.xyxy + rg.yyww * mt.zwzw;
+    gradientX.zw = rg.xz;
+    gradientY.zw = rg.yw;
+
+    // perlin surflet
+    vec4 gradients = inversesqrt(gradientX * gradientX + gradientY * gradientY) * (gradientX * f.xzxz + gradientY * f.yyww);
+    // normalize: 1.0 / 0.75^3
+    gradients *= 2.3703703703703703703703703703704;
+    f = f * f;
+    f = f.xzxz + f.yyww;
+    vec4 xSq = 1.0 - min(vec4(1.0), f); 
+    return dot(xSq * xSq * xSq, gradients);
+}
+
+// 2D Perlin noise with gradients rotation.
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param rotation Rotation for the noise gradients, useful to animate flow, range: [0, PI]
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return Value of the noise, range: [-1, 1]
+float perlinNoise(vec2 pos, vec2 scale, float rotation, float seed) 
+{
+    vec2 sinCos = vec2(sin(rotation), cos(rotation));
+    return perlinNoise(pos, scale, mat2(sinCos.y, sinCos.x, sinCos.x, sinCos.y), seed);
+}
+
+// 2D Perlin noise with derivatives.
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return x = value of the noise, yz = derivative of the noise, range: [-1, 1]
+vec3 perlinNoised(vec2 pos, vec2 scale, float seed)
+{
+    // based on Modifications to Classic Perlin Noise by Brian Sharpe: https://archive.is/cJtlS
+    pos *= scale;
+    vec4 i = floor(pos).xyxy + vec2(0.0, 1.0).xxyy;
+    vec4 f = (pos.xyxy - i.xyxy) - vec2(0.0, 1.0).xxyy;
+    i = mod(i, scale.xyxy) + seed;
+
+    // grid gradients
+    vec4 gradientX, gradientY;
+    multiHash2D(i, gradientX, gradientY);
+    gradientX -= 0.49999;
+    gradientY -= 0.49999;
+
+    // perlin surflet
+    vec4 gradients = inversesqrt(gradientX * gradientX + gradientY * gradientY) * (gradientX * f.xzxz + gradientY * f.yyww);
+    vec4 m = f * f;
+    m = m.xzxz + m.yyww;
+    m = max(1.0 - m, 0.0);
+    vec4 m2 = m * m;
+    vec4 m3 = m * m2;
+    // compute the derivatives
+    vec4 m2Gradients = -6.0 * m2 * gradients;
+    vec2 grad = vec2(dot(m2Gradients, f.xzxz), dot(m2Gradients, f.yyww)) + vec2(dot(m3, gradientX), dot(m3, gradientY));
+    // sum the surflets and normalize: 1.0 / 0.75^3
+    return vec3(dot(m3, gradients), grad) * 2.3703703703703703703703703703704;
+}
+
+// 2D Perlin noise with derivatives and gradients transform (i.e. can be used to rotate the gradients).
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param rotation Rotation for the noise gradients, useful to animate flow, range: [0, PI]
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return x = value of the noise, yz = derivative of the noise, range: [-1, 1]
+vec3 perlinNoised(vec2 pos, vec2 scale, mat2 transform, float seed)
+{
+    // based on Modifications to Classic Perlin Noise by Brian Sharpe: https://archive.is/cJtlS
+    pos *= scale;
+    vec4 i = floor(pos).xyxy + vec2(0.0, 1.0).xxyy;
+    vec4 f = (pos.xyxy - i.xyxy) - vec2(0.0, 1.0).xxyy;
+    i = mod(i, scale.xyxy) + seed;
+
+    // grid gradients
+    vec4 gradientX, gradientY;
+    multiHash2D(i, gradientX, gradientY);
+    gradientX -= 0.49999;
+    gradientY -= 0.49999;
+
+    // transform gradients
+    vec4 mt = vec4(transform);
+    vec4 rg = vec4(gradientX.x, gradientY.x, gradientX.y, gradientY.y);
+    rg = rg.xxzz * mt.xyxy + rg.yyww * mt.zwzw;
+    gradientX.xy = rg.xz;
+    gradientY.xy = rg.yw;
+
+    rg = vec4(gradientX.z, gradientY.z, gradientX.w, gradientY.w);
+    rg = rg.xxzz * mt.xyxy + rg.yyww * mt.zwzw;
+    gradientX.zw = rg.xz;
+    gradientY.zw = rg.yw;
+
+    // perlin surflet
+    vec4 gradients = inversesqrt(gradientX * gradientX + gradientY * gradientY) * (gradientX * f.xzxz + gradientY * f.yyww);
+    vec4 m = f * f;
+    m = m.xzxz + m.yyww;
+    m = max(1.0 - m, 0.0);
+    vec4 m2 = m * m;
+    vec4 m3 = m * m2;
+    // compute the derivatives
+    vec4 m2Gradients = -6.0 * m2 * gradients;
+    vec2 grad = vec2(dot(m2Gradients, f.xzxz), dot(m2Gradients, f.yyww)) + vec2(dot(m3, gradientX), dot(m3, gradientY));
+    // sum the surflets and normalize: 1.0 / 0.75^3
+    return vec3(dot(m3, gradients), grad) * 2.3703703703703703703703703703704;
+}
+
+// 2D Perlin noise with derivatives and gradients rotation.
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param rotation Rotation for the noise gradients, useful to animate flow, range: [0, PI]
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return x = value of the noise, yz = derivative of the noise, range: [-1, 1]
+vec3 perlinNoised(vec2 pos, vec2 scale, float rotation, float seed) 
+{
+    vec2 sinCos = vec2(sin(rotation), cos(rotation));
+    return perlinNoised(pos, scale, mat2(sinCos.y, sinCos.x, sinCos.x, sinCos.y), seed);
+}
+
+// 2D Variant of Perlin noise that produces and organic-like noise.
+// @param scale Number of tiles, must be  integer for tileable results, range: [2, inf]
+// @param density The density of the lower frequency details, range: [0, 1], default: 1.0
+// @param phase The phase of the noise, range: [-inf, inf], default: {0, 0}
+// @param contrast Controls the contrast of the result, range: [0, 1], default: 0.0
+// @param highlights Controls the highlights of the , range: [0, 1], default: 0.25
+// @param shift Shifts the angle of the highlights, range: [0, 1], default: 0.5
+// @param seed Seed to randomize result, range: [0, inf], default: 0.0
+// @return Value of the noise, range: [0, 1]
+float organicNoise(vec2 pos, vec2 scale, float density, vec2 phase, float contrast, float highlights, float shift, float seed)
+{
+    vec2 s = mix(vec2(1.0), scale - 1.0, density);
+    float nx = perlinNoise(pos + phase, scale, seed);
+    float ny = perlinNoise(pos, s, seed);
+
+    float n = length(vec2(nx, ny) * mix(vec2(2.0, 0.0), vec2(0.0, 2.0), shift));
+    n = pow(n, 1.0 + 8.0 * contrast) + (0.15 * highlights) / n;
+    return n * 0.5;
+}
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+void main(){
+	 vec2 fpix = gl_GlobalInvocationID.xy + 0.5;
+	ivec2 ipix = ivec2(fpix);
+	// float noise_val = cnoise(fpix / 48.0); 
+	float noise_val = perlinNoise(fpix/48.0, vec2(2), 0); 
+// mult
+	
+	imageStore(noise_image, ipix, vec4(noise_val));
+}

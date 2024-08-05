@@ -148,7 +148,8 @@ void Renderer::save_scene(const char* vox_file){
     fwrite(origin_world.data(), sizeof(BlockID_t), world_size.x*world_size.y*world_size.z, fp);
     fclose(fp);
 }
-//TODO: alloca
+
+//size limited by 256^3 
 void Renderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette){
     size_t buffer_size;
     char* buffer = readFileBuffer(vox_file, &buffer_size);

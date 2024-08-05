@@ -57,12 +57,12 @@ void Renderer::create_Command_Buffers(vector<VkCommandBuffer>* commandBuffers, u
 void Renderer::create_Sync_Objects(){
     imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    raytraceFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    rayGenFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    // raytraceFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    // rayGenFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 
        frameInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-    graphicalInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-      raytraceInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    // graphicalInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    //   raytraceInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo semaphoreInfo = {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -73,10 +73,10 @@ void Renderer::create_Sync_Objects(){
     for (i32 i=0; i < MAX_FRAMES_IN_FLIGHT; i++){
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &imageAvailableSemaphores[i]));
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &renderFinishedSemaphores[i]));
-        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL, &raytraceFinishedSemaphores[i]));
-        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &rayGenFinishedSemaphores[i]));
-        VK_CHECK(vkCreateFence(device, &fenceInfo, NULL, &graphicalInFlightFences[i]));
-        VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,   &raytraceInFlightFences[i]));
+        // VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL, &raytraceFinishedSemaphores[i]));
+        // VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, NULL,  &rayGenFinishedSemaphores[i]));
+        // VK_CHECK(vkCreateFence(device, &fenceInfo, NULL, &graphicalInFlightFences[i]));
+        // VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,   &raytraceInFlightFences[i]));
         VK_CHECK(vkCreateFence(device, &fenceInfo, NULL,    &frameInFlightFences[i]));
     }
 }
