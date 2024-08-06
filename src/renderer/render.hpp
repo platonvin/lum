@@ -503,6 +503,7 @@ private:
     void generateMipmaps(VkCommandBuffer commandBuffer, VkImage image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, VkImageAspectFlags aspect);
     // void destroy_images
     void create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
+    void create_Buffer_Storages(Buffer* buffer, VkBufferUsageFlags usage, u32 size, bool host = false);
     void create_compute_pipelines_helper(const char* name, VkDescriptorSetLayout  descriptorSetLayout, VkPipelineLayout* pipelineLayout, VkPipeline* pipeline, u32 push_size, u32 flags = 0);
     void create_compute_pipelines();
     // void create_Blockify_Pipeline();
@@ -520,6 +521,7 @@ private:
     void record_Command_Buffer_Compute  (VkCommandBuffer commandBuffer);
     void create_Sync_Objects();
 
+public:
     void create_Buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
     void copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size); 
     void copy_Buffer(VkBuffer srcBuffer, Image* image, uvec3 size);
@@ -625,6 +627,8 @@ public:
     vector<Image> materialPalette;
     
     vector<Buffer>         uniform;
+    Buffer gpuRadianceUpdates;
+    vector<ivec4> radianceUpdates;
 
     vector<Particle>     particles;
     vector<Buffer>   gpuParticles; //multiple because cpu-related work

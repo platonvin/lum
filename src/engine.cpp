@@ -91,6 +91,45 @@ void Engine::setup_graphics(){
     vkDeviceWaitIdle(render.device);
 
     render.load_scene("assets/scene");
+
+
+    for(int xx = 0; xx < render.world_size.x; xx++) {
+    for(int yy = 0; yy < render.world_size.y; yy++) {
+    for(int zz = 0; zz < render.world_size.z; zz++) {
+        int block_id = render.origin_world(xx,yy,zz);
+
+        //yeah kinda slow... but who cares on less then a million blocks?
+        int sum_of_neighbours = 0;
+        for(int dx=-1; dx<=+1; dx++) {
+        for(int dy=-1; dy<=+1; dy++) {
+        for(int dz=-1; dz<=+1; dz++) {
+            sum_of_neighbours += render.origin_world(xx+dx,yy+dy,zz+dz); 
+        }}}
+
+        // TODO: finish dynamic update system, integrate with RaVE
+        if(sum_of_neighbours != 0) {
+            render.radianceUpdates.push_back(ivec4(xx,yy,zz,0));
+        }
+    }}}
+    printl(render.radianceUpdates.size())
+    VkDeviceSize bufferSize = sizeof(ivec4)*render.radianceUpdates.size();
+    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingBufferInfo.size = bufferSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBuffer stagingBuffer = {};
+    VmaAllocation stagingAllocation = {};
+    vmaCreateBuffer(render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
+    void* data;
+    vmaMapMemory(render.VMAllocator, stagingAllocation, &data);
+        memcpy(data, render.radianceUpdates.data(), bufferSize);
+    vmaUnmapMemory(render.VMAllocator, stagingAllocation);
+    render.copy_Buffer(stagingBuffer, render.gpuRadianceUpdates.buffer, bufferSize);
+    vmaDestroyBuffer(render.VMAllocator, stagingBuffer, stagingAllocation);
+    
     // render.origin_world.set(0);
     // Mesh tank_head = {};
         render.load_mesh(&tank_body, "assets/tank_body.vox");

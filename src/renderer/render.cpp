@@ -147,6 +147,10 @@ println
     create_Buffer_Storages(&uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         sizeof(mat4)*2, false);
+
+    create_Buffer_Storages(&gpuRadianceUpdates,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        sizeof(ivec4)*64000, false);
     // staging_uniform_mapped.resize(MAX_FRAMES_IN_FLIGHT);
     stagingWorldMapped.resize(MAX_FRAMES_IN_FLIGHT);
     gpuParticlesMapped.resize(MAX_FRAMES_IN_FLIGHT);
@@ -211,6 +215,7 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,RD_FIRST  , {gpuRadianceUpdates}, {},          NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
@@ -375,12 +380,11 @@ println
 
 println
     create_Compute_Pipeline(&mapPipe,      "shaders/compiled/map.spv",      sizeof(mat4) + sizeof(ivec4),   0);
-    create_Compute_Pipeline(&radiancePipe, "shaders/compiled/radiance.spv", sizeof(int)*2,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
+    create_Compute_Pipeline(&radiancePipe, "shaders/compiled/radiance.spv", sizeof(int)*4,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     create_Compute_Pipeline(&updateGrassPipe, "shaders/compiled/updateGrass.spv", sizeof(vec2)*2 + sizeof(float), 0);
     create_Compute_Pipeline(&genPerlinPipe, "shaders/compiled/perlin.spv", 0, 0);
     // create_Compute_Pipeline(&updateWaterPipe, "shaders/compiled/updateWater.spv", sizeof(float) + sizeof(vec2)*2, 0);
     create_Sync_Objects();
-
 
     VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
 
@@ -411,7 +415,24 @@ println
         0, NULL,
         1, &barrier
     );
+    // vkCmdUpdateBuffer(commandBuffer, gpuRadianceUpdates.buffer, 0, radianceUpdates.size()*sizeof(ivec4), radianceUpdates.data());
     
+    VkBufferMemoryBarrier staging_barrier{};
+        staging_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        staging_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        staging_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        staging_barrier.buffer = gpuRadianceUpdates.buffer;
+        staging_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
+        staging_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        staging_barrier.size = VK_WHOLE_SIZE;
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0, NULL,
+        0, &staging_barrier,
+        0, NULL
+    );
     end_Single_Time_Commands(commandBuffer);
 
 println
@@ -419,7 +440,7 @@ println
         query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
         query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
         query_pool_info.queryCount = 2;
-    VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &queryPoolTimestamps));
+    VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &queryPoolTimestamps));    
 }
 void Renderer::deleteImages(vector<Image>* images) {
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
@@ -930,12 +951,31 @@ void Renderer::updade_radiance() {
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.lineLayout, 0, 1, &radiancePipe.sets[currentFrame], 0, 0);
 
+        int magic_number = iFrame % 2;
+        if(timeTakenByRadiance < 0.8){
+            magicSize --;
+        } else if(timeTakenByRadiance > 1.2) {
+            magicSize ++;
+        }
+        magicSize = glm::max(magicSize,1);
+        magic_number = iFrame % magicSize;
+
         cameraPos_OLD = cameraPos;
         cameraDir_OLD = cameraDir;
-        struct rtpc {int time; int iters;} pushconstant = {iFrame, 0};
+        struct rtpc {int time, iters, size, shift;} pushconstant = {iFrame, 0, magicSize, iFrame % magicSize};
         vkCmdPushConstants(commandBuffer, radiancePipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
+
+        int wg_count = radianceUpdates.size();
+
+        // for(auto a: radianceUpdates){
+        //     printl(a.x)
+        //     printl(a.y)
+        //     printl(a.z)
+        //     printl(a.w)
+        // }
         
-        // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, world_size.z);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 0);
+        vkCmdDispatch(commandBuffer, wg_count, 1, 1);
         // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
         // ivec3 fullsize = ivec3(RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
         // ivec3 partial_dispatch_size;
@@ -959,40 +999,6 @@ void Renderer::updade_radiance() {
                 _barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
                 _barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT; 
         // for(int i=0; i<4; i++) {
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 0);
-
-            int magic_number = iFrame % 2;
-
-            if(timeTakenByRadiance < 0.8){
-                magicSize ++;
-            } else if(timeTakenByRadiance > 1.2) {
-                magicSize --;
-            }
-            magicSize = glm::max(magicSize,1);
-            magic_number = iFrame % magicSize;
-            
-            for(int xx = 0; xx <= world_size.x; xx++) {
-            for(int yy = 0; yy <= world_size.y; yy++) {
-            for(int zz = 0; zz <= world_size.z; zz++) {
-                int block_id = current_world(xx,yy,zz);
-
-                //yeah kinda slow... but who cares on less then a million blocks?
-                int sum_of_neighbours = 0;
-                for(int dx=-1; dx<=+1; dx++) {
-                for(int dy=-1; dy<=+1; dy++) {
-                for(int dz=-1; dz<=+1; dz++) {
-                    sum_of_neighbours += current_world(xx+dx,yy+dy,zz+dz); 
-                }}}
-
-                //TODO: finish dynamic update system, integrate with RaVE
-                if(((block_id > static_block_palette_size) || (sum_of_neighbours != 0)) && ((xx+yy+zz) % magicSize == magic_number)) {
-                    vkCmdDispatchBase(
-                        commandBuffer,
-                        xx  ,yy  ,zz  ,
-                        1,1,1);
-                        //lol it was xx+1,yy+1,zz+1);
-                }
-            }}}
         
                     // vkCmdDispatchBase(
                     //     commandBuffer,
@@ -1836,7 +1842,7 @@ void Renderer::end_frame() {
 
     float timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
     timeTakenByRadiance = float(timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
-    printl(timeTakenByRadiance)
+    // printl(timeTakenByRadiance)
 }
 
 void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier) {
@@ -2064,6 +2070,22 @@ void Renderer::create_Buffer_Storages(vector<Buffer>* buffers, VkBufferUsageFlag
             allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
         VK_CHECK(vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &(*buffers)[i].buffer, &(*buffers)[i].alloc, NULL));
     }
+}
+void Renderer::create_Buffer_Storages(Buffer* buffer, VkBufferUsageFlags usage, u32 size, bool host) {
+    VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.size = size;
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.usage = usage;
+    VmaAllocationCreateInfo allocInfo = {};
+        // if (required_flags == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        // }
+        // allocInfo.requiredFlags = required_flags;
+        if(host) {
+            allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+            allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        }
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    VK_CHECK(vmaCreateBuffer(VMAllocator, &bufferInfo, &allocInfo, &(*buffer).buffer, &(*buffer).alloc, NULL));
 }
 
 vector<Image> Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size) {

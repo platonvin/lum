@@ -13,6 +13,9 @@ layout(set = 0, binding = 0, r16i       ) uniform iimage3D blocks;
 layout(set = 0, binding = 1, r8ui       ) uniform uimage3D blockPalette;
 layout(set = 0, binding = 2, r32f       ) uniform image2D voxelPalette;
 layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
+layout(std430,set = 0, binding = 4) buffer ReqBuffer{
+	ivec4 updateReqests[];
+} reqBuffer;
 
 // layout(constant_id = 0) const int RAYS_PER_PROBE = 32;
 layout(constant_id = 1) const int BLOCK_PALETTE_SIZE_X = 64;
@@ -22,9 +25,11 @@ layout(constant_id = 3) const float REACTIVNESS = 0.01;
 layout(push_constant) uniform constants{
     varp int timeSeed;
     varp int iters;
+    varp int size;
+    varp int sihft;
 } PushConstants;
 
-#define SUBGROUPS_PER_WORKGROUP 4
+#define SUBGROUPS_PER_WORKGROUP 1
 #define RAYS_PER_PROBE (32*SUBGROUPS_PER_WORKGROUP) //TODO: change to spec const
 //funniest thing is that it should even work on amd, tho _light might take twice more
 
@@ -318,33 +323,43 @@ vec3 trace_ray(vec3 ray_pos, vec3 ray_dir){
 
 void store_probe(int probe_id, ivec3 probe_pos, vec3 accumulated_light){
     //probes are stored as 32-wide lines for x in world_size 3d images
-    ivec3 subprobe_pos;
-          subprobe_pos.x  = probe_pos.x; //same as local_pos actually but its optimized away and worth it for modularity
-          subprobe_pos.yz = probe_pos.yz; //reuses but its optimized away
+    // ivec3 subprobe_pos;
+    //       subprobe_pos.x  = probe_pos.x; //same as local_pos actually but its optimized away and worth it for modularity
+    //       subprobe_pos.yz = probe_pos.yz; //reuses but its optimized away
 
-    vec3 old_light = clamp(imageLoad(radianceCache, subprobe_pos).xyz, 0, 1);
+    vec3 old_light = clamp(imageLoad(radianceCache, probe_pos).xyz, 0, 1);
 
     vec3 new_light = mix(old_light, accumulated_light, REACTIVNESS);
 
     // new_light = vec3(probe_pos) / vec3(world_size);
     // imageAtomicDiv
-    imageStore(radianceCache, subprobe_pos, vec4(new_light,1));
+    imageStore(radianceCache, probe_pos, vec4(new_light,1));
 }
 
 //im tired of naming things, no one is gonna read this anyways
 shared vec3 _light[SUBGROUPS_PER_WORKGROUP];
 
-layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;
+// layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 1, local_size_y = RAYS_PER_PROBE, local_size_z = 1) in;
 void main(){
     ivec3 local_pos = ivec3(gl_GlobalInvocationID.xyz);
 
     float seed = float(PushConstants.timeSeed);
     random_storage = vec2(sin(local_pos.x*seed*5.12315), sin(local_pos.y*seed*7.7343));
     
-    int probe_id = local_pos.x % RAYS_PER_PROBE;
+    int probe_id = local_pos.y % RAYS_PER_PROBE;
+    // int probe_id = local_pos.x % RAYS_PER_PROBE;
 
-    ivec3 probe_pos = ivec3(local_pos);
-          probe_pos.x /= RAYS_PER_PROBE;
+    ivec4 _t = reqBuffer.updateReqests[local_pos.x];
+    ivec3 probe_pos = _t.xyz;
+    // if(probe_pos == ivec3(0)) {
+    // if(any(notEqual(probe_pos,ivec3(0)))) {
+        // store_probe(probe_id, ivec3(local_pos.x, local_pos.y, 1), vec3(1));
+    //     store_probe(probe_id, ivec3(probe_pos.x,probe_pos.y, local_pos.y), vec3(1));
+    //     return;
+    // }
+    // ivec3 probe_pos = ivec3(local_pos);
+    //       probe_pos.y /= RAYS_PER_PROBE;
 
     vec3 block_center = vec3(probe_pos) * 16.0 + 8.0;
     vec3 ray_pos = block_center;
