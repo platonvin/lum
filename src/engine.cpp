@@ -86,7 +86,7 @@ static double delt_time = 0;
 static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 15, 8128, float(1.000001), false, false);
+    render.init(48, 48, 16, 15, 8128, float(1), false, false);
 // println
     vkDeviceWaitIdle(render.device);
 

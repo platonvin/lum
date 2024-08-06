@@ -24,6 +24,7 @@ const vector<const char*> instanceLayers = {
 const vector<const char*>   deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+    VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME,
     // VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME
     // VK_NV_device_diagnostic_checkpoints
     // "VK_KHR_shader_non_semantic_info"
@@ -839,6 +840,8 @@ void Renderer::pickPhysicalDevice(){
         cout << KRED "no suitable physical device\n" KEND;
         exit(1);
     }
+
+    vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
 }
 
 void Renderer::createLogicalDevice(){

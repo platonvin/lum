@@ -413,6 +413,13 @@ println
     );
     
     end_Single_Time_Commands(commandBuffer);
+
+println
+    VkQueryPoolCreateInfo query_pool_info{};
+        query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+        query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        query_pool_info.queryCount = 2;
+    VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &queryPoolTimestamps));
 }
 void Renderer::deleteImages(vector<Image>* images) {
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
@@ -916,8 +923,8 @@ void Renderer::updade_radiance() {
     
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    
-    int magic_number = iFrame % 2;
+    vkCmdResetQueryPool(commandBuffer, queryPoolTimestamps, 0, 2);
+
         
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.line);
 
@@ -952,6 +959,18 @@ void Renderer::updade_radiance() {
                 _barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
                 _barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT; 
         // for(int i=0; i<4; i++) {
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 0);
+
+            int magic_number = iFrame % 2;
+
+            if(timeTakenByRadiance < 0.8){
+                magicSize ++;
+            } else if(timeTakenByRadiance > 1.2) {
+                magicSize --;
+            }
+            magicSize = glm::max(magicSize,1);
+            magic_number = iFrame % magicSize;
+            
             for(int xx = 0; xx <= world_size.x; xx++) {
             for(int yy = 0; yy <= world_size.y; yy++) {
             for(int zz = 0; zz <= world_size.z; zz++) {
@@ -966,7 +985,7 @@ void Renderer::updade_radiance() {
                 }}}
 
                 //TODO: finish dynamic update system, integrate with RaVE
-                if(((block_id > static_block_palette_size) || (sum_of_neighbours != 0)) && ((xx+yy+zz) % 2 == magic_number)) {
+                if(((block_id > static_block_palette_size) || (sum_of_neighbours != 0)) && ((xx+yy+zz) % magicSize == magic_number)) {
                     vkCmdDispatchBase(
                         commandBuffer,
                         xx  ,yy  ,zz  ,
@@ -980,6 +999,8 @@ void Renderer::updade_radiance() {
                     //     // (world_size.x /2) * magic_number, 0, 0,
                     //     0, 0, 0,
                     //     (world_size.x /2), world_size.y/2, 7);
+            vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 1);
+
             cmdPipelineBarrier(commandBuffer, 
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -1802,6 +1823,20 @@ void Renderer::end_frame() {
     nextFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     iFrame++;
     process_ui_deletion_queue();
+
+    vkGetQueryPoolResults(
+        device,
+        queryPoolTimestamps,
+        0,
+        2,
+        2 * sizeof(uint64_t),
+        timestamps,
+        sizeof(uint64_t),
+	    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+
+    float timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
+    timeTakenByRadiance = float(timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
+    printl(timeTakenByRadiance)
 }
 
 void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier) {

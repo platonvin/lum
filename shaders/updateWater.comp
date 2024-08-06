@@ -1,0 +1,50 @@
+#version 450 core
+
+/*
+wow, this quickly turned overcomplicated
+I wanted water that has no visible repetions
+this code basically generates several heightmaps used to later lift vertices 
+multiple heightmaps is like inverse fourier but for different frequancy and amplitude tiles mixed together
+its dft cause gpus are fast.
+*/
+//rotate, add deriv
+
+precision highp int;
+precision highp float;
+
+//32x32x6
+layout(set = 0, binding = 0, rg16f) uniform image2D heighmap;
+
+layout(push_constant) uniform constants{
+    vec2 windDirection;
+    float time;
+} pco;
+
+const ivec3 world_size = ivec3(48,48,16);
+const float PI = 3.1415926535;
+const int lods = 6;
+
+float calculate_height(vec2 local_pos){
+    float height = 0.0;
+    
+    vec2 direction = pco.windDirection;
+    float ampl = 1.0;
+    for (float freq = 1.0; freq<100.0; freq *= 1.15){
+        ampl *= 0.85;
+        direction.x += 0.1;
+        direction = normalize(direction);
+        float T = pco.time;
+
+        height += ampl*sin(T*freq + dot(direction, local_pos)*2*PI);
+    }
+    return height;
+}
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+void main(){
+    ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
+    vec2 pos = (vec2(pix) + 0.5) /32.0;
+
+    float height = calculate_height(pos);
+
+    imageStore(heighmap, pix, vec4(height,0,0,0));
+}

@@ -671,6 +671,11 @@ private:
     #ifndef VKNDEBUG
         VkDebugUtilsMessengerEXT debugMessenger;
     #endif
+    VkQueryPool queryPoolTimestamps;
+    uint64_t timestamps[2];
+    VkPhysicalDeviceProperties physicalDeviceProperties;
+    float timeTakenByRadiance = 0.0;
+    int magicSize = 2;
 };
 
 class MyRenderInterface : public Rml::RenderInterface{   

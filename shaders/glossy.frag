@@ -617,10 +617,10 @@ void main(void){
     varp      vec3 normal = load_norm();
 
     // vec3 direction = reflect(init_direction, normal); 
-    if(mat.roughness >.2){
-        frame_color = vec4(vec3(0),0);
-        return;
-    }
+    // if(mat.roughness >.2){
+    //     frame_color = vec4(vec3(0),0);
+    //     return;
+    // }
 
     vec3 accumulated_light = vec3(0);
     vec3 accumulated_reflection = vec3(1);
@@ -647,10 +647,12 @@ void main(void){
     
     // vec3 old_color = imageLoad(out_frame, pix).xyz;
 
-    vec3 new_color = traced_color;
+    // vec3 new_color = traced_color;
 
     // imageStore(out_frame, pix, vec4((new_color), 1));
-    frame_color = vec4(new_color,0.5);
+
+    //than blurs to imitate real roughness
+    frame_color = vec4(traced_color, 1.0-mat.roughness);
 
     // frame_color = vec4(.5,.6,.7, 1);
 }

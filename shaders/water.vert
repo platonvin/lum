@@ -3,8 +3,7 @@
 precision highp float;
 
 /*
-water is basically blue contiguous grass
-it is basically heightmap
+it is basically cascade heightmap sampling
 renderer via instanced triangle strips that represent long thin rectangles
 instancing
 can probably be optimized by few times
@@ -29,6 +28,8 @@ layout(location = 1) flat out uint mat;
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 const float PI = 3.1415926535;
+const ivec3 world_size = ivec3(48,48,16);
+const int lods = 6;
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
