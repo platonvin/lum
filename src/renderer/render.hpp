@@ -698,7 +698,7 @@ private:
     #ifndef VKNDEBUG
         VkDebugUtilsMessengerEXT debugMessenger;
     #endif
-    VkQueryPool queryPoolTimestamps;
+    vector<VkQueryPool> queryPoolTimestamps;
 public:
     int currentTimestamp = 0;
     // #ifdef MEASURE_PERFOMANCE

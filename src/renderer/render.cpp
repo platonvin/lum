@@ -48,7 +48,7 @@ void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize,
     // createRenderPassGraphical();
     createRenderPass1();
     createRenderPass2();
-println
+// println
 
     createSamplers();
 
@@ -72,7 +72,7 @@ println
     // VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderOverlayCommandBuffers.data())); 
     
     createSwapchainDependent();
-println
+// println
 
     create_Buffer_Storages(&stagingWorld,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -197,7 +197,7 @@ println
         VK_SHADER_STAGE_FRAGMENT_BIT, &overlayPipe.setLayout,
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
 
-println
+// println
     deferDescriptorsetup(&radiancePipe.setLayout, &radiancePipe.sets, {
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -205,7 +205,7 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,RD_FIRST  , {gpuRadianceUpdates}, {},          NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
-println
+// println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_CURRENT, {/*empty*/}, (matNormHighres), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_CURRENT, {/*empty*/}, (depthHighres),   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -214,7 +214,7 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+// println
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_CURRENT, {/*empty*/}, (matNormHighres), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_CURRENT, {/*empty*/}, (highresFrames),  NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -226,17 +226,17 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+// println
     deferDescriptorsetup(&blurPipe.setLayout, &blurPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_CURRENT, {/*empty*/}, (matNormHighres), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_CURRENT, {/*empty*/}, (highresFrames),  NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+// println
     deferDescriptorsetup(&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
     // setup_RayGen_Particles_Descriptors();
-println
+// println
     deferDescriptorsetup(&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST   , {/*empty*/}, {world},                NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -295,9 +295,9 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
-println
+// println
     flushDescriptorSetup();
-println
+// println
 
     //not worth abstracting
     // createRenderPass1();
@@ -314,7 +314,7 @@ println
 
     //that is why NOT abstracting vulkan is also an option
     //if you cannot guess what things mean by just looking at them maybe read old (0.0.3) release src
-println
+// println
     raygenBlocksPipe.subpassId = 0;
     create_Raster_Pipeline(&raygenBlocksPipe, {
             {"shaders/compiled/rayGenVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -327,7 +327,7 @@ println
         sizeof(PackedVoxelVertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)*2), DO_TEST, VK_CULL_MODE_NONE);
 
-println
+// println
     raygenParticlesPipe.subpassId = 1;
     create_Raster_Pipeline(&raygenParticlesPipe, {
             {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -341,7 +341,7 @@ println
         }, 
         sizeof(Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
         swapChainExtent, {NO_BLEND}, 0, DO_TEST, VK_CULL_MODE_NONE);
-println
+// println
     raygenGrassPipe.subpassId = 2;
     create_Raster_Pipeline(&raygenGrassPipe, {
             {"shaders/compiled/grassVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -356,7 +356,7 @@ println
         },{/*empty*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
         swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, DO_TEST, VK_CULL_MODE_NONE);
-println
+// println
     diffusePipe.subpassId = 4;
     create_Raster_Pipeline(&diffusePipe, {
             {"shaders/compiled/diffuseVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -365,7 +365,7 @@ println
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {NO_BLEND}, sizeof(ivec4) + sizeof(vec4)*4, NO_TEST, VK_CULL_MODE_NONE);
 
-println
+// println
     glossyPipe.subpassId = 5;
     create_Raster_Pipeline(&glossyPipe, {
             {"shaders/compiled/glossyVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -374,7 +374,7 @@ println
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {DO_BLEND}, sizeof(vec4) + sizeof(vec4), NO_TEST, VK_CULL_MODE_NONE);
 
-println
+// println
     blurPipe.subpassId = 0;
     create_Raster_Pipeline(&blurPipe, {
             {"shaders/compiled/blurVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -383,7 +383,7 @@ println
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {NO_BLEND}, 0, NO_TEST, VK_CULL_MODE_NONE);
 
-println
+// println
     overlayPipe.subpassId = 1;
     create_Raster_Pipeline(&overlayPipe, {
             {"shaders/compiled/overlayVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
@@ -396,7 +396,7 @@ println
         sizeof(Rml::Vertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {DO_BLEND}, sizeof(vec4)+sizeof(mat4), NO_TEST, VK_CULL_MODE_NONE);
 
-println
+// println
     create_Compute_Pipeline(&radiancePipe, "shaders/compiled/radiance.spv", sizeof(int)*4,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     create_Compute_Pipeline(&updateGrassPipe, "shaders/compiled/updateGrass.spv", sizeof(vec2)*2 + sizeof(float), 0);
     create_Compute_Pipeline(&genPerlinPipe, "shaders/compiled/perlin.spv", 0, 0);
@@ -491,7 +491,7 @@ println
     );
     end_Single_Time_Commands(commandBuffer);
 
-println
+// println
     assert(timestampCount!=0);
     timestampNames.resize(timestampCount);
     timestamps.resize(timestampCount);
@@ -502,7 +502,11 @@ println
         query_pool_info.queryCount = timestampCount;
     
     // #ifdef MEASURE_PERFOMANCE
-    VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &queryPoolTimestamps));    
+    queryPoolTimestamps.resize(MAX_FRAMES_IN_FLIGHT);
+    for (auto &q : queryPoolTimestamps){
+        VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &q));    
+    }
+        
     // #endif
 }
 void Renderer::deleteImages(vector<Image>* images) {
@@ -589,11 +593,11 @@ void Renderer::cleanup() {
         // cout << dump << std::fflush(stdout);
         // fflush(stdout);
         // vmaFreeStatsString(VMAllocator, dump);
+        vkDestroyQueryPool(device, queryPoolTimestamps[i], NULL);
     }
     //do before destroyDevice
     vmaDestroyAllocator(VMAllocator);
 
-    vkDestroyQueryPool(device, queryPoolTimestamps, NULL);
     
     vkDestroyDevice(device, NULL);
     //"unpicking" physical device is unnessesary :)
@@ -720,12 +724,12 @@ void Renderer::createSwapchainDependent() {
         blurVeiws[1].push_back(highresFrames[i].view);
     }
     
-println
+// println
     create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, raygen2glossyRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
     
-println
+// println
     create_N_Framebuffers(&overlayFramebuffers, &blurVeiws, blur2presentRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
-println
+// println
 }
 void Renderer::recreateSwapchainDependent() {
     int width = 0, height = 0;
@@ -889,7 +893,7 @@ void Renderer::start_compute() {
   
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     // #ifdef MEASURE_PERFOMANCE
-    vkCmdResetQueryPool(commandBuffer, queryPoolTimestamps, 0, timestampCount);
+    vkCmdResetQueryPool(commandBuffer, queryPoolTimestamps[currentFrame], 0, timestampCount);
     // #endif
     currentTimestamp = 0;
 }
@@ -1833,6 +1837,22 @@ void Renderer::present() {
 }
 
 void Renderer::end_frame() {
+    if(iFrame != 0){
+        vkGetQueryPoolResults(
+            device,
+            queryPoolTimestamps[previousFrame],
+            0,
+            timestampCount,
+            timestampCount * sizeof(uint64_t),
+            timestamps.data(),
+            sizeof(uint64_t),
+            VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    }
+
+    float timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
+    timeTakenByRadiance = float(timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
+    
+    
     previousFrame = currentFrame;
      currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     nextFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -1840,18 +1860,6 @@ void Renderer::end_frame() {
     process_ui_deletion_queue();
 
     // #ifdef MEASURE_PERFOMANCE
-    vkGetQueryPoolResults(
-        device,
-        queryPoolTimestamps,
-        0,
-        timestampCount,
-        timestampCount * sizeof(uint64_t),
-        timestamps.data(),
-        sizeof(uint64_t),
-	    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-
-    float timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
-    timeTakenByRadiance = float(timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
     // #endif
     // printl(timeTakenByRadiance)
 }

@@ -99,15 +99,15 @@ obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.h
 obj/meshopt.o: common/meshopt.cpp common/meshopt.hpp
 	g++ common/meshopt.cpp -Ofast -c -o obj/meshopt.o -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero $(I) $(args)
 
-obj/deb/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp
+obj/deb/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
 	g++ src/engine.cpp $(Flags) obj/deb/engine.o
-obj/deb/render.o: src/renderer/render.cpp src/renderer/render.hpp
+obj/deb/render.o: src/renderer/render.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/render.cpp $(Flags) obj/deb/render.o 
-obj/deb/setup.o: src/renderer/setup.cpp src/renderer/render.hpp
+obj/deb/setup.o: src/renderer/setup.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/setup.cpp $(Flags) obj/deb/setup.o
-obj/deb/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp
+obj/deb/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/load_stuff.cpp $(Flags) obj/deb/load_stuff.o
-obj/deb/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp
+obj/deb/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/render_ui_interface.cpp $(Flags) obj/deb/render_ui_interface.o
 obj/deb/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 	g++ src/renderer/ui.cpp $(Flags) obj/deb/ui.o
@@ -115,19 +115,20 @@ obj/deb/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 obj/deb/main.o:
 	g++ src/main.cpp $(Flags) obj/deb/main.o
 
-obj/rel/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp
+obj/rel/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
 	g++ src/engine.cpp $(Flags) obj/rel/engine.o
-obj/rel/render.o: src/renderer/render.cpp src/renderer/render.hpp
+obj/rel/render.o: src/renderer/render.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/render.cpp $(Flags) obj/rel/render.o
-obj/rel/setup.o: src/renderer/setup.cpp src/renderer/render.hpp
+obj/rel/setup.o: src/renderer/setup.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/setup.cpp $(Flags) obj/rel/setup.o
-obj/rel/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp
+obj/rel/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/load_stuff.cpp $(Flags) obj/rel/load_stuff.o
-obj/rel/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp
+obj/rel/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/render_ui_interface.cpp $(Flags) obj/rel/render_ui_interface.o
 obj/rel/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 	g++ src/renderer/ui.cpp $(Flags) obj/rel/ui.o
-obj/rel/main.o: src/main.cpp src/engine.hpp src/renderer/render.hpp
+.PHONY: obj/rel/main.o
+obj/rel/main.o:
 	g++ src/main.cpp $(Flags) obj/rel/main.o
 
 

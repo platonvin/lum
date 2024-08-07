@@ -1,4 +1,5 @@
 #version 450
+layout(early_fragment_tests) in;
 
 #define varp highp
 

@@ -44,6 +44,7 @@
 #define VK_CHECK(func) do{\
     VkResult result = func;\
     if (result != VK_SUCCESS) {\
+        fprintf(stderr, "LINE :%d Vulkan call failed: %s\n", __LINE__, string_VkResult(result));\
         exit(result);\
     }} while (0)
 #else
@@ -60,13 +61,13 @@
 #define PLACE_TIMESTAMP() do {\
     if(measureAll){\
         timestampNames[currentTimestamp] = __func__;\
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, currentTimestamp++);\
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps[currentFrame], currentTimestamp++);\
     }\
 } while(0)
 
 #define PLACE_TIMESTAMP_ALWAYS() do {\
     timestampNames[currentTimestamp] = __func__;\
-    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, currentTimestamp++);\
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps[currentFrame], currentTimestamp++);\
 } while(0)
 
 // #define SET_ALLOC_NAMES
