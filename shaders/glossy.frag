@@ -23,6 +23,9 @@ layout(set = 0, binding = 2, r16i       ) uniform iimage3D  blocks;
 layout(set = 0, binding = 3, r8ui       ) uniform uimage3D  blockPalette;
 layout(set = 0, binding = 4, r32f       ) uniform image2D   voxelPalette;
 layout(set = 0, binding = 5, rgba16     ) uniform image3D   radianceCache;
+layout(set = 0, binding = 6, r8ui       ) uniform uimage3D distancePalette;
+// layout(set = 0, binding = 6             ) uniform sampler3D distancePalette;
+layout(set = 0, binding = 7, r8ui       ) uniform uimage3D bitPalette;
 
 layout(constant_id = 1) const int MAX_DEPTH = 1;
 layout(constant_id = 2) const int NUM_SAMPLES = 1; //for 4090 owners i guess
@@ -79,16 +82,21 @@ varp ivec3 voxel_in_palette(varp ivec3 relative_voxel_pos, varp int block_id) {
 
     return relative_voxel_pos + ivec3(16*block_x, 16*block_y, 0);
 }
+
+ivec3 voxel_in_bit_palette(ivec3 relative_voxel_pos, int block_id) {
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+2*block_x, 0+16*block_y,0);
+}
+
 varp int GetVoxel(in varp ivec3 pos){
-    varp int voxel;
 
     // if(((pos.x + pos.y)%2)==0) return 2;
     // if(((pos.x + pos.y)%5)==0) return 5;
     // if(((pos.x + pos.y)%7)==1) return 7;
     // if(((pos.x + pos.y)%9)==0) return 9;
 
-    varp ivec3 block_pos = pos / 16;
-    varp ivec3 relative_voxel_pos = pos % 16;
 
     // if(((block_pos.x + block_pos.y)%2)==0) return 1;
     // if(((block_pos.x + block_pos.y)%5)==0) return 2;
@@ -96,66 +104,35 @@ varp int GetVoxel(in varp ivec3 pos){
     // if(((block_pos.x + block_pos.y)%9)==0) return 4;
     // if(((block_pos.x + block_pos.y)%13)==0) return 5;
 
-    varp int block_id = GetBlock(block_pos);
-    varp ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
 
     // voxel_pos /= (1 << lod);
     // voxel_pos.z += get_lod_shift(lod);
     
-    voxel = int(imageLoad(blockPalette, voxel_pos).r);
-
-    return voxel;
-}
-
-int get_lod(int depth){
-    // int lod;
-
-    if(depth < 16) return 0;
-    if(depth < 16+8) return 1;
-    if(depth < 16+8+4) return 2;
-    if(depth < 16+8+4+2) return 3;
-    if(depth < 16+8+4+2+1) return 4;
-    
-    return 0;
-}
-int get_lod_shift(int lod){
-    // iтt lod;
-
-    if(lod == 0) return 0;
-    if(lod == 1) return 16;
-    if(lod == 2) return 16+8;
-    if(lod == 3) return 16+8+4;
-    if(lod == 4) return 16+8+4+2;
-    
-    return 0;
-}
-//lod should be in [0, 4]
-varp int GetVoxel(in varp ivec3 pos, int lod){
     varp int voxel;
-
-    // if(((pos.x + pos.y)%2)==0) return 2;
-    // if(((pos.x + pos.y)%5)==0) return 5;
-    // if(((pos.x + pos.y)%7)==1) return 7;
-    // if(((pos.x + pos.y)%9)==0) return 9;
-
     varp ivec3 block_pos = pos / 16;
     varp ivec3 relative_voxel_pos = pos % 16;
-
-    // if(((block_pos.x + block_pos.y)%2)==0) return 1;
-    // if(((block_pos.x + block_pos.y)%5)==0) return 2;
-    // if(((block_pos.x + block_pos.y)%7)==1) return 3;
-    // if(((block_pos.x + block_pos.y)%9)==0) return 4;
-    // if(((block_pos.x + block_pos.y)%13)==0) return 5;
-
     varp int block_id = GetBlock(block_pos);
     varp ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-
-    voxel_pos /= (1 << lod);
-    voxel_pos.z += get_lod_shift(lod);
-    
     voxel = int(imageLoad(blockPalette, voxel_pos).r);
 
     return voxel;
+}
+
+bool checkVoxel(in varp ivec3 pos){    
+    varp ivec3 block_pos = pos / 16;
+    varp int block_id = GetBlock(block_pos);
+
+    varp ivec3 relative_voxel_pos = pos % 16;
+    ivec3 bit_pos = relative_voxel_pos;
+          bit_pos.x /= 8;
+    int bit_num = relative_voxel_pos.x%8;
+
+    varp ivec3 voxel_pos = voxel_in_bit_palette(bit_pos, block_id);
+    uint voxel = (imageLoad(bitPalette, voxel_pos).x);
+
+    bool has_voxel = ((voxel & (1 << bit_num))!=0);
+    
+    return has_voxel;
 }
 
 void SetVoxel(in varp ivec3 pos, in varp uint voxel){
@@ -302,8 +279,151 @@ bool initTvals(out varp vec3 tMax, out varp vec3 tDelta, out varp ivec3 blockPos
 
     return true;
 }
+// vec2 intersectAABB(vec3 rayOrigin, vec3 rayDir, vec3 boxMin, vec3 boxMax) {
+//     vec3 tMin = (boxMin - rayOrigin) / rayDir;
+//     vec3 tMax = (boxMax - rayOrigin) / rayDir;
+//     vec3 t1 = min(tMin, tMax);
+//     vec3 t2 = max(tMin, tMax);
+//     float tNear = max(max(t1.x, t1.y), t1.z);
+//     float tFar = min(min(t2.x, t2.y), t2.z);
+//     return vec2(tNear, tFar);
+// }
 
-//is actually precise
+bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection, 
+        out varp float fraction, out varp vec3 normal, out Material material,
+        out bool left_bounds){
+    bool block_hit = false;
+
+    varp ivec3 voxel_pos = ivec3(0);
+    // vec3 orig = vec3(0);
+    bvec3 currentStepDiretion = bvec3(false);
+
+    // int max_steps = 128;
+    float max_dist = 16.0*8.0;
+    bool current_voxel = checkVoxel(voxel_pos);
+
+    vec3 one_div_dir = 1.0 / rayDirection;    
+
+    varp int iterations = 0;
+    fraction = 0;
+    while (true) {
+        fraction += 0.5;
+
+        vec3 pos = rayOrigin + rayDirection*fraction;
+        voxel_pos = ivec3(pos);
+
+        // orig += dot(tDelta, vec3(currentStepDiretion)) * rayDirection;
+        // current_voxel = GetVoxel(voxel_pos);
+            varp int voxel;
+            varp ivec3 block_pos = voxel_pos / 16;
+            varp ivec3 relative_voxel_pos = voxel_pos % 16;
+            varp int block_id = GetBlock(block_pos);
+            varp ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+            voxel = int(imageLoad(blockPalette, _voxel_pos).r);
+            current_voxel = voxel!=0;
+            // ivec3 bit_pos = relative_voxel_pos;
+            //     bit_pos.x /= 8;
+            // int bit_num = relative_voxel_pos.x%8;
+
+            // varp ivec3 _voxel_pos = voxel_in_bit_palette(bit_pos, block_id);
+            // uint _voxel = (imageLoad(bitPalette, _voxel_pos).x);
+            // bool has_voxel = ((_voxel & (1 << bit_num))!=0);
+            // current_voxel = has_voxel;
+            // current_voxel = (checkVoxel(voxel_pos));
+
+            // float distance_from_df = sqrt(float(int(imageLoad(distancePalette, _voxel_pos).r)));
+            // fraction += distance_from_df;
+            // if(distance_from_df == 0){
+            //     fraction += 10;
+            // }
+            float distance_from_df = 0;
+            // float distance_from_df = texture(distancePalette, _voxel_pos).r));
+
+            // if block_id is zero - teleport to border
+            if(block_id == 0){
+                vec3 box_min = vec3(block_pos)*16.0;
+                vec3 box_max = box_min+16.0;
+
+                    vec3 temp = - pos*one_div_dir;
+                    
+                    varp vec3 block_corner1 = box_min*one_div_dir + temp; //now corners are relative vectors
+                    varp vec3 block_corner2 = box_max*one_div_dir + temp;
+                    
+                    vec3 _t;
+                    _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+                    _t.y = max(block_corner1.y, block_corner2.y);
+                    _t.z = max(block_corner1.z, block_corner2.z);
+                    // _t = block_corner1;                    
+
+                    float _f = min(_t.x, min(_t.y, _t.z));
+                    float f = max(_f,0.001); //safity
+
+                    fraction += max(f, distance_from_df);
+            }
+        
+        if (current_voxel){
+            block_hit = true;
+            break;
+        }
+        if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
+            block_hit = false;
+            left_bounds = true;
+            break;
+        }
+        // if (iterations++ >= max_steps) {
+        if (fraction >= max_dist) {
+            block_hit = false;
+            left_bounds = true;
+            break;
+        }
+    }
+
+    vec3 before_hit = rayOrigin + rayDirection*(fraction-1.0);
+
+//todo:
+    if(current_voxel){
+
+        ivec3 steps = ivec3(greaterThan(rayDirection, vec3(0)));
+        steps = 2 * steps + (-1);
+
+        vec3 tMax, tDelta;
+        ivec3 voxel_pos;
+        
+        vec3 block_corner1 = (floor(before_hit) - before_hit)/rayDirection; //now corners are relative vectors
+        vec3 block_corner2 = (floor(before_hit) - before_hit)/rayDirection  + 1.0/rayDirection;
+        tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+        tMax.y = max(block_corner1.y, block_corner2.y);
+        tMax.z = max(block_corner1.z, block_corner2.z);
+
+        tDelta = 1.0 / abs(rayDirection); //how many dir vectors needeed to move 1.0 across each axys
+        voxel_pos = ivec3(before_hit); //round origin to block pos
+
+        vec3 fcurrentStepDiretion = vec3(0);
+        int current_voxel_id = GetVoxel(voxel_pos);
+        int iterations = 0;
+        while ((iterations++ <= 2) && (current_voxel_id == 0)) {
+            // initTvals(tMax, tDelta, voxel_pos, rayOrigin+dot(tMax - tDelta, fcurrentStepDiretion)*rayDirection, rayDirection); //does not intersect with scene
+            // fstep_Diretion =  vec3(0);
+            fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));
+            fcurrentStepDiretion.y = float(int((tMax.x >= tMax.y) && (tMax.y <= tMax.z)));
+            fcurrentStepDiretion.z = float(int((tMax.z <= tMax.x) && (tMax.z <= tMax.y)));
+
+            voxel_pos += steps * ivec3(fcurrentStepDiretion);
+            tMax += tDelta * fcurrentStepDiretion;
+
+            current_voxel_id = GetVoxel(voxel_pos);
+        }
+
+        normal = -(vec3(steps) * fcurrentStepDiretion);
+        vec3 tFinal = tMax - tDelta;
+        fraction = dot(tFinal, fcurrentStepDiretion);
+
+        material = GetMat(current_voxel_id);
+    }
+
+    return (block_hit);
+}
+
 bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection, 
         out varp float fraction, out varp vec3 normal, out Material material,
         out bool left_bounds){
@@ -315,12 +435,13 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
     varp vec3 fsteps = vec3(steps);
 
+    // varp ivec3 i_tMax = ivec3(0);
     varp vec3 tMax = vec3(0);
     varp vec3 tDelta = vec3(0);
     varp ivec3 voxel_pos = ivec3(0);
     varp float block_fraction = 0.0;
-
-    varp ivec3 fcurrentStepDiretion = ivec3(0);
+    vec3 orig = vec3(0);
+    bvec3 currentStepDiretion = bvec3(false);
 
     initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
 
@@ -328,22 +449,81 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
     varp int current_voxel = GetVoxel(voxel_pos);
 
     varp int iterations = 0;
+    // float _fraction = 0;
     while (true) {
-
-
         bool xLy = tMax.x <= tMax.y;
-        bool xLz = tMax.x <= tMax.z;
+        bool zLx = tMax.z <= tMax.x;
         bool yLz = tMax.y <= tMax.z;
 
+        // ivec3 bools_xyz =    ivec3(xLy, yLz, zLx);
+        // ivec3 bools_n_zxy = ~ivec3((zLx, xLy, yLz));
+
         //LOL no perfomance benefit currently but it was there last time i tested it TODO
-        fcurrentStepDiretion.x = int(int(( xLy) && ( xLz)));
-        fcurrentStepDiretion.y = int(int((!xLy) && ( yLz)));
-        fcurrentStepDiretion.z = int(int((!xLz) && (!yLz)));
+        // currentStepDiretion = ivec3(bools_xyz & bools_n_zxy);
+        currentStepDiretion.x = ((( xLy) && (!zLx)));
+        currentStepDiretion.y = ((( yLz) && (!xLy)));
+        currentStepDiretion.z = ((( zLx) && (!yLz)));
 
-        voxel_pos += steps * ivec3(fcurrentStepDiretion);
-        tMax += tDelta * fcurrentStepDiretion;
+        tMax += tDelta * vec3(currentStepDiretion);
 
-        current_voxel = GetVoxel(voxel_pos);
+        // _fraction += dot(tDelta, vec3(currentStepDiretion));
+
+        voxel_pos += steps * ivec3(currentStepDiretion);
+
+        // orig += dot(tDelta, vec3(currentStepDiretion)) * rayDirection;
+        // current_voxel = GetVoxel(voxel_pos);
+            varp int voxel;
+            varp ivec3 block_pos = voxel_pos / 16;
+            varp ivec3 relative_voxel_pos = voxel_pos % 16;
+            varp int block_id = GetBlock(block_pos);
+            //if block_id is zero - teleport to border
+            varp ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+            voxel = int(imageLoad(blockPalette, _voxel_pos).r);
+            current_voxel = voxel;
+
+            // if(block_id == 0){
+            //         varp vec3 tFinal = tMax - tDelta;
+            //         // block_fraction += dot(tFinal, vec3(currentStepDiretion));
+            //     vec3 orig = rayOrigin+_fraction*rayDirection;
+
+            //     vec3 box_min = vec3((voxel_pos/16)*16);
+            //     vec3 box_max = vec3((voxel_pos/16)*16+16);
+            //     // vec2 skip;
+
+            //         varp vec3 block_corner1 = (box_min - orig)/rayDirection; //now corners are relative vectors
+            //         varp vec3 block_corner2 = (box_max - orig)/rayDirection;
+            //         vec3 _t;
+            //         _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+            //         _t.y = max(block_corner1.y, block_corner2.y);
+            //         _t.z = max(block_corner1.z, block_corner2.z);
+
+            //         _fraction += min(_t.x, min(_t.y, _t.z))-0.0001;
+                    
+            //         // tMax += _t;
+            //         initTvals(tMax, tDelta, voxel_pos, rayOrigin+_fraction*rayDirection, rayDirection); //does not intersect with scene
+            //         // {
+            //         //     varp vec3 block_corner1 = (floor(effective_origin) - effective_origin)/rayDirection; //now corners are relative vectors
+            //         //     varp vec3 block_corner2 = (floor(effective_origin) - effective_origin)/rayDirection  + 1.0/rayDirection;
+            //         //     tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+            //         //     tMax.y = max(block_corner1.y, block_corner2.y);
+            //         //     tMax.z = max(block_corner1.z, block_corner2.z);
+
+            //         //     blockPos = ivec3(effective_origin); //round origin to block pos
+            //         // }
+            //         // initTvals()
+            //     // block_fraction += skip.x;
+            //         varp int voxel;
+            //         varp ivec3 block_pos = voxel_pos / 16;
+            //         varp ivec3 relative_voxel_pos = voxel_pos % 16;
+            //         varp int block_id = GetBlock(block_pos);
+            //         //if block_id is zero - teleport to border
+            //         varp ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+            //         voxel = int(imageLoad(blockPalette, _voxel_pos).r);
+            //         current_voxel = voxel;
+            //     // tMax = vec3(0);
+            // }
+            
+
         
         if (current_voxel != 0){
             block_hit = true;
@@ -361,25 +541,28 @@ bool CastRay_precise(in varp vec3 rayOrigin, in varp vec3 rayDirection,
         }
     }
 
-    normal = -(fsteps * fcurrentStepDiretion);
+    // tMax = i_tMax * tDelta;
+
+    normal = -(fsteps * vec3(currentStepDiretion));
     varp vec3 tFinal = tMax - tDelta;
-    // block_fraction += dot(tFinal, fcurrentStepDiretion);
-    block_fraction = dot(tFinal, fcurrentStepDiretion);
+    block_fraction = dot(tFinal, vec3(currentStepDiretion));
+    // block_fraction += dot(tFinal, vec3(currentStepDiretion));
 
     material = GetMat(current_voxel);
     // vec3 diffuse_light = sample_radiance(rayOrigin + rayDirection*block_fraction, normal);
 
     fraction = block_fraction;
+    // fraction = _fraction;
 
     return (block_hit);
 }
-
 
 void ProcessHit(inout varp vec3 origin, inout varp vec3 direction, 
                 in varp float fraction, in varp vec3 normal, in Material material, 
                 inout varp vec3 accumulated_light, inout varp vec3 accumulated_reflection){
 
             varp vec3 new_origin = origin + (fraction * direction);
+            // varp vec3 new_origin = origin;
 
             varp vec3 new_direction;
 
@@ -465,7 +648,8 @@ vec3 trace_glossy_ray(in vec3 rayOrigin, in vec3 rayDirection, in vec3 accumulat
     for (int i = 0; (i < MAX_DEPTH); i++)
     {
         // left_bounds = false;
-        hit = CastRay_precise(origin, direction, fraction, normal, material, left_bounds);
+        // hit = CastRay_precise(origin, direction, fraction, normal, material, left_bounds);
+        hit = CastRay_fast(origin, direction, fraction, normal, material, left_bounds);
         // hit = CastRay_fast(rayOrigin, direction, fraction, normal, material, 9999.0, cone_diameter, cone_angle, left_bounds);
         // dir_before_hit = direction;
         // material.roughness = 0;
@@ -617,7 +801,8 @@ void main(void){
     varp      vec3 normal = load_norm();
 
     // vec3 direction = reflect(init_direction, normal); 
-    // if(mat.roughness >.2){
+
+    // if(mat.roughness >.5){
     //     frame_color = vec4(vec3(0),0);
     //     return;
     // }

@@ -386,10 +386,14 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_NONE;
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    
+        
+    texture_image->aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 
     VkCommandBuffer &copyCommandBuffer = render->copyCommandBuffers[render->currentFrame];
-    render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, &barrier);
+    render->cmdTransLayoutBarrier(copyCommandBuffer,  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+        VK_ACCESS_NONE, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+        texture_image);
 
     VkBufferImageCopy staging_copy = {};
         staging_copy.imageExtent  = {(u32)source_dimensions.x, (u32)source_dimensions.y, 1};
@@ -402,7 +406,12 @@ bool MyRenderInterface::GenerateTexture(Rml::TextureHandle& texture_handle,
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier);
+    // render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier);
+
+    render->cmdTransLayoutBarrier(copyCommandBuffer,  VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, 
+        texture_image);
 
     render->bufferDeletionQueue.push_back({{stagingBuffer, stagingAllocation}, MAX_FRAMES_IN_FLIGHT});
 

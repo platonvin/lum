@@ -81,6 +81,10 @@ _shaders:= \
 	shaders/compiled/waterVert.spv\
 	shaders/compiled/updateGrass.spv\
 	shaders/compiled/perlin.spv\
+	shaders/compiled/dfx.spv\
+	shaders/compiled/dfy.spv\
+	shaders/compiled/dfz.spv\
+	shaders/compiled/bitmask.spv\
 
 # flags = 
 all: Flags=$(release_specific_flags)
@@ -172,6 +176,14 @@ shaders/compiled/updateGrass.spv: shaders/updateGrass.comp
 	glslc shaders/updateGrass.comp -o shaders/compiled/updateGrass.spv $(SHADER_FLAGS)
 shaders/compiled/perlin.spv: shaders/perlin.comp
 	glslc shaders/perlin.comp -o shaders/compiled/perlin.spv $(SHADER_FLAGS)
+shaders/compiled/dfx.spv: shaders/dfx.comp
+	glslc shaders/dfx.comp -o shaders/compiled/dfx.spv $(SHADER_FLAGS)
+shaders/compiled/dfy.spv: shaders/dfy.comp
+	glslc shaders/dfy.comp -o shaders/compiled/dfy.spv $(SHADER_FLAGS)
+shaders/compiled/dfz.spv: shaders/dfz.comp
+	glslc shaders/dfz.comp -o shaders/compiled/dfz.spv $(SHADER_FLAGS)
+shaders/compiled/bitmask.spv: shaders/bitmask.comp
+	glslc shaders/bitmask.comp -o shaders/compiled/bitmask.spv $(SHADER_FLAGS)
 
 debug: Flags=$(debug_flags) 
 # debug: objs=$(deb_objs)

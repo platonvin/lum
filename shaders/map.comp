@@ -12,10 +12,11 @@ layout(push_constant) uniform constants{
     ivec4 shift;
 } PushConstants;
 
-layout(set = 0, binding = 0, r8ui)  readonly uniform uimage3D modelVoxels;
 //blocks and blockPalettes are copies 
-layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
-layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
+layout(set = 0, binding = 0, r16i)  uniform iimage3D blocks;
+layout(set = 0, binding = 1, r8ui) uniform uimage3D blockPalette;
+
+layout(set = 1, binding = 0, r8ui) readonly uniform uimage3D modelVoxels;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT

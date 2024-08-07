@@ -9,6 +9,8 @@ using namespace glm;
 
 tuple<int, int> get_block_xy(int N);
 
+vector<char> read_Shader(const char* filename);
+
 void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize, int maxParticleCount, float ratio, bool vsync, bool fullscreen) {
     this->world_size = ivec3(xSize, ySize, zSize);
      origin_world.allocate(world_size);
@@ -100,6 +102,22 @@ println
         VK_IMAGE_ASPECT_COLOR_BIT,
         // {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 32}); //TODO: dynamic
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
+    create_Image_Storages(&distancePalette,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R8_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
+    create_Image_Storages(&bitPalette,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R8_UINT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {(16/8)*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
     create_Image_Storages(&materialPalette,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
@@ -146,33 +164,32 @@ println
     //     sizeof(mat4)*2, true);
     create_Buffer_Storages(&uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        sizeof(mat4)*2, false);
+        sizeof(mat4), false);
 
     create_Buffer_Storages(&gpuRadianceUpdates,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        sizeof(ivec4)*64000, false);
+        sizeof(ivec4)*world_size.x*world_size.y*world_size.z, false); //TODO test extra mem
+    create_Buffer_Storages(&stagingRadianceUpdates,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        sizeof(ivec4)*world_size.x*world_size.y*world_size.z, true); //TODO test extra mem
     // staging_uniform_mapped.resize(MAX_FRAMES_IN_FLIGHT);
     stagingWorldMapped.resize(MAX_FRAMES_IN_FLIGHT);
     gpuParticlesMapped.resize(MAX_FRAMES_IN_FLIGHT);
+    stagingRadianceUpdatesMapped.resize(MAX_FRAMES_IN_FLIGHT);
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         vmaMapMemory(VMAllocator, gpuParticles[i].alloc, &gpuParticlesMapped[i]);
         vmaMapMemory(VMAllocator, stagingWorld[i].alloc, &stagingWorldMapped[i]);
+        vmaMapMemory(VMAllocator, stagingRadianceUpdates[i].alloc, &stagingRadianceUpdatesMapped[i]);
     }
     transition_Image_Layout_Singletime(&world, VK_IMAGE_LAYOUT_GENERAL);
     transition_Image_Layout_Singletime(&radianceCache, VK_IMAGE_LAYOUT_GENERAL);
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         transition_Image_Layout_Singletime(&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
-        transition_Image_Layout_Singletime(&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
+        transition_Image_Layout_Singletime(&bitPalette, VK_IMAGE_LAYOUT_GENERAL);
+        transition_Image_Layout_Singletime(&distancePalette, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&materialPalette[i], VK_IMAGE_LAYOUT_GENERAL);
     }
     //this have to sets allocated
-    create_DescriptorSetLayout({
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // modelVoxels
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // blocks
-        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // blockPalette
-        }, 
-        VK_SHADER_STAGE_COMPUTE_BIT, &mapPipe.setLayout, 
-        VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
         
     create_DescriptorSetLayout({
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //in texture (ui)
@@ -180,35 +197,6 @@ println
         VK_SHADER_STAGE_FRAGMENT_BIT, &overlayPipe.setLayout,
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
 
-    // create_DescriptorSetLayout({
-    //     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    //     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    //     // VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    //     }, 
-    //     VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, &raygenGrassPipe.setLayout,
-    //     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-
-    // create_DescriptorSetLayout({
-    //     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    //     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    //     }, 
-    //     VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, &raygenWaterPipe.setLayout,
-    //     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-
-println
-    // create_DescriptorSetLayout({
-    //     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    //     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    //     }, 
-    //     VK_SHADER_STAGE_COMPUTE_BIT, &updateGrassPipe.setLayout,
-    //     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-
-    // create_DescriptorSetLayout({
-    //     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        // }, 
-        // VK_SHADER_STAGE_COMPUTE_BIT, &updateWaterPipe.setLayout,
-        // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
-    
 println
     deferDescriptorsetup(&radiancePipe.setLayout, &radiancePipe.sets, {
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -235,6 +223,8 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     deferDescriptorsetup(&blurPipe.setLayout, &blurPipe.sets, { 
@@ -277,6 +267,34 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {perlinNoise}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 
+    create_DescriptorSetLayout({
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // model voxels
+        }, 
+        VK_SHADER_STAGE_COMPUTE_BIT, &mapPushLayout, 
+        VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+        // 0);
+    deferDescriptorsetup(&mapPipe.setLayout, &mapPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {world}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {}, originBlockPalette, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_COMPUTE_BIT);
+
+
+    deferDescriptorsetup(&dfxPipe.setLayout, &dfxPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_COMPUTE_BIT);
+    deferDescriptorsetup(&dfyPipe.setLayout, &dfyPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_COMPUTE_BIT);
+    deferDescriptorsetup(&dfzPipe.setLayout, &dfzPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_COMPUTE_BIT);
+    deferDescriptorsetup(&bitmaskPipe.setLayout, &bitmaskPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_COMPUTE_BIT);
 println
     flushDescriptorSetup();
 println
@@ -302,12 +320,12 @@ println
             {"shaders/compiled/rayGenVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{
-            {VK_FORMAT_R8G8B8_UINT, offsetof(VoxelVertex, pos)},
-            {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
-            {VK_FORMAT_R8_UINT, offsetof(VoxelVertex, matID)},
+            {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelVertex, pos)},
+            // {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
+            {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
         }, 
-        sizeof(VoxelVertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4))*2, DO_TEST, VK_CULL_MODE_NONE);
+        sizeof(PackedVoxelVertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)*2), DO_TEST, VK_CULL_MODE_NONE);
 
 println
     raygenParticlesPipe.subpassId = 1;
@@ -379,12 +397,50 @@ println
         swapChainExtent, {DO_BLEND}, sizeof(vec4)+sizeof(mat4), NO_TEST, VK_CULL_MODE_NONE);
 
 println
-    create_Compute_Pipeline(&mapPipe,      "shaders/compiled/map.spv",      sizeof(mat4) + sizeof(ivec4),   0);
     create_Compute_Pipeline(&radiancePipe, "shaders/compiled/radiance.spv", sizeof(int)*4,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     create_Compute_Pipeline(&updateGrassPipe, "shaders/compiled/updateGrass.spv", sizeof(vec2)*2 + sizeof(float), 0);
     create_Compute_Pipeline(&genPerlinPipe, "shaders/compiled/perlin.spv", 0, 0);
     // create_Compute_Pipeline(&updateWaterPipe, "shaders/compiled/updateWater.spv", sizeof(float) + sizeof(vec2)*2, 0);
+    create_Compute_Pipeline(&dfxPipe, "shaders/compiled/dfx.spv", 0, 0);
+    create_Compute_Pipeline(&dfyPipe, "shaders/compiled/dfy.spv", 0, 0);
+    create_Compute_Pipeline(&dfzPipe, "shaders/compiled/dfz.spv", 0, 0);
+    create_Compute_Pipeline(&bitmaskPipe, "shaders/compiled/bitmask.spv", 0, 0);
     create_Sync_Objects();
+
+    // create_Compute_Pipeline(&mapPipe,      "shaders/compiled/map.spv",      sizeof(mat4) + sizeof(ivec4),   0);
+    auto compShaderCode = read_Shader("shaders/compiled/map.spv");
+
+    VkShaderModule module = create_Shader_Module(&compShaderCode);
+    
+    // VkSpecializationInfo specConstants = {};
+    VkPipelineShaderStageCreateInfo 
+        compShaderStageInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        compShaderStageInfo.module = module;
+        compShaderStageInfo.pName = "main";
+
+    VkPushConstantRange     
+        pushRange = {};
+        pushRange.size = sizeof(mat4) + sizeof(ivec4);
+        pushRange.offset = 0;
+        pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    vector<VkDescriptorSetLayout> mapSetLayouts = {mapPipe.setLayout, mapPushLayout};
+    // vector<VkDescriptorSetLayout> mapSetLayouts = {mapPipe.setLayout};
+    VkPipelineLayoutCreateInfo 
+        pipelineLayoutInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        pipelineLayoutInfo.setLayoutCount = mapSetLayouts.size();
+        pipelineLayoutInfo.pSetLayouts = mapSetLayouts.data();
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+    VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL, &mapPipe.lineLayout));
+
+    VkComputePipelineCreateInfo 
+        pipelineInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        pipelineInfo.stage = compShaderStageInfo;
+        pipelineInfo.layout = mapPipe.lineLayout;
+        pipelineInfo.flags = 0;
+    VK_CHECK(vkCreateComputePipelines(device, NULL, 1, &pipelineInfo, NULL, &mapPipe.line));
+    vkDestroyShaderModule(device, module, NULL);
 
     VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
 
@@ -805,15 +861,15 @@ void Renderer::start_frame() {
 void Renderer::start_compute() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
   
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 }
 
 void Renderer::start_blockify() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
-    copyQueue.clear();
+    blockCopyQueue.clear();
 
-    paletteCounter = static_block_palette_size; //TODO: change to static block count. Currently its size of 1 cause of air
+    paletteCounter = static_block_palette_size;
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof(BlockID_t);
     memcpy(current_world.data(), origin_world.data(), size_to_copy);
 }
@@ -877,33 +933,53 @@ void Renderer::blockify_mesh(Mesh* mesh) {
         //     any(   lessThan     (ivec3(xx,yy,zz), ivec3(0)))) {
         //         continue;
         //     }
-        //static blocks TODO
+        //zero clear TODO
         int current_block = current_world(xx,yy,zz); 
         // if (current_block == 0) { //if not allocated
         //     current_world(xx,yy,zz) = palette_counter;
         //     palette_counter++;
         // } else {
-            if(current_block < static_block_palette_size) { // static and non-empty
+            if(current_block < static_block_palette_size) { // static
                 //add to copy queue
                 ivec2 src_block = {}; 
                 tie(src_block.x, src_block.y) = get_block_xy(current_block);
                 ivec2 dst_block = {}; 
                 tie(dst_block.x, dst_block.y) = get_block_xy(paletteCounter);
-                VkImageCopy 
-                    static_block_copy = {};
-                    static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                    static_block_copy.srcSubresource.baseArrayLayer = 0;
-                    static_block_copy.srcSubresource.layerCount = 1;
-                    static_block_copy.srcSubresource.mipLevel = 0;
-                    static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                    static_block_copy.dstSubresource.baseArrayLayer = 0;
-                    static_block_copy.dstSubresource.layerCount = 1;
-                    static_block_copy.dstSubresource.mipLevel = 0;
-                    static_block_copy.extent = {16,16,16};
-                    static_block_copy.srcOffset = {src_block.x*16, src_block.y*16, 0};
-                    static_block_copy.dstOffset = {dst_block.x*16, dst_block.y*16, 0};
                     // static_block_copy.
-                    copyQueue.push_back(static_block_copy);
+                    
+                    // if(current_block == 0){
+                        // VkImageSubresourceRange
+                        //     static_block_clear = {};
+                        //     static_block_clear.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                        //     static_block_clear.srcSubresource.baseArrayLayer = 0;
+                        //     static_block_clear.srcSubresource.layerCount = 1;
+                        //     static_block_clear.srcSubresource.mipLevel = 0;
+                        //     static_block_clear.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                        //     static_block_clear.dstSubresource.baseArrayLayer = 0;
+                        //     static_block_clear.dstSubresource.layerCount = 1;
+                        //     static_block_clear.dstSubresource.mipLevel = 0;
+                        //     static_block_clear.extent = {16,16,16};
+                        //     static_block_clear.srcOffset = {src_block.x*16, src_block.y*16, 0};
+                        //     static_block_clear.dstOffset = {dst_block.x*16, dst_block.y*16, 0};
+                        // blockCopyQueue.push_back(static_block_copy);
+                    // } else {
+                        VkImageCopy 
+                            static_block_copy = {};
+                            static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                            static_block_copy.srcSubresource.baseArrayLayer = 0;
+                            static_block_copy.srcSubresource.layerCount = 1;
+                            static_block_copy.srcSubresource.mipLevel = 0;
+                            static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                            static_block_copy.dstSubresource.baseArrayLayer = 0;
+                            static_block_copy.dstSubresource.layerCount = 1;
+                            static_block_copy.dstSubresource.mipLevel = 0;
+                            static_block_copy.extent = {16,16,16};
+                            static_block_copy.srcOffset = {src_block.x*16, src_block.y*16, 0};
+                            static_block_copy.dstOffset = {dst_block.x*16, dst_block.y*16, 0};
+                        blockCopyQueue.push_back(static_block_copy);
+                    // }
+
+
 
                     // printf("pc %d ", palette_counter);
                     current_world(xx,yy,zz) = paletteCounter;
@@ -939,82 +1015,94 @@ void Renderer::blockify_custom(void* ptr) {
     vmaFlushAllocation(VMAllocator, stagingWorld[currentFrame].alloc, 0, size_to_copy);
 }
 
-void Renderer::updade_radiance() {
+void Renderer::update_radiance() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
     vkCmdResetQueryPool(commandBuffer, queryPoolTimestamps, 0, 2);
 
-        
+    radianceUpdates.clear();
+
+    for(int xx = 0; xx < world_size.x; xx++) {
+    for(int yy = 0; yy < world_size.y; yy++) {
+    for(int zz = 0; zz < world_size.z; zz++) {
+        // int block_id = current_world(xx,yy,zz);
+        //yeah kinda slow... but who cares on less then a million blocks?
+        int sum_of_neighbours = 0;
+        for(int dx=-1; dx<=+1; dx++) {
+        for(int dy=-1; dy<=+1; dy++) {
+        for(int dz=-1; dz<=+1; dz++) {
+            sum_of_neighbours += current_world(xx+dx,yy+dy,zz+dz); 
+        }}}
+        // TODO: finish dynamic update system, integrate with RaVE
+        if(sum_of_neighbours != 0) {
+            radianceUpdates.push_back(ivec4(xx,yy,zz,0));
+        }
+    }}}
+    // printl(radianceUpdates.size())
+
+    VkDeviceSize bufferSize = sizeof(ivec4)*radianceUpdates.size();
+    memcpy(stagingRadianceUpdatesMapped[currentFrame], radianceUpdates.data(), bufferSize);
+    
+    // cmdPipelineBarrier(commandBuffer, 
+    //     VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+    //     VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+    //     stagingRadianceUpdates[currentFrame]);
+    // cmdPipelineBarrier(commandBuffer, 
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    //     VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+    //     gpuRadianceUpdates);
+
+    VkBufferCopy 
+        copyRegion = {};
+        copyRegion.size = bufferSize;
+    vkCmdCopyBuffer(commandBuffer, stagingRadianceUpdates[currentFrame].buffer, gpuRadianceUpdates.buffer, 1, &copyRegion);
+
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+        gpuRadianceUpdates);
+
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.line);
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.lineLayout, 0, 1, &radiancePipe.sets[currentFrame], 0, 0);
 
         int magic_number = iFrame % 2;
-        if(timeTakenByRadiance < 0.8){
+        //if fast than increase work
+        if(timeTakenByRadiance < 1.8){
             magicSize --;
-        } else if(timeTakenByRadiance > 1.2) {
+        //if slow than decrease work
+        } else if(timeTakenByRadiance > 2.2) {
             magicSize ++;
         }
-        magicSize = glm::max(magicSize,1);
-        magic_number = iFrame % magicSize;
+        magicSize = glm::max(magicSize,1); //never remove
+        magicSize = glm::min(magicSize,10);
 
         cameraPos_OLD = cameraPos;
         cameraDir_OLD = cameraDir;
         struct rtpc {int time, iters, size, shift;} pushconstant = {iFrame, 0, magicSize, iFrame % magicSize};
         vkCmdPushConstants(commandBuffer, radiancePipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
 
-        int wg_count = radianceUpdates.size();
-
-        // for(auto a: radianceUpdates){
-        //     printl(a.x)
-        //     printl(a.y)
-        //     printl(a.z)
-        //     printl(a.w)
-        // }
+        int wg_count = radianceUpdates.size() / magicSize;
         
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 0);
-        vkCmdDispatch(commandBuffer, wg_count, 1, 1);
-        // vkCmdDispatch(commandBuffer, RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
-        // ivec3 fullsize = ivec3(RCACHE_RAYS_PER_PROBE*world_size.x, world_size.y, 7);
-        // ivec3 partial_dispatch_size;
-        //       partial_dispatch_size.x = (fullsize.x)/2;
-        //       partial_dispatch_size.y = fullsize.y;
-        //       partial_dispatch_size.z = fullsize.z;
+    vkCmdDispatch(commandBuffer, wg_count, 1, 1);
 
-        // ivec3 dispatch_shift = ivec3(partial_dispatch_size.x, 0, 0) * magic_number;
-        VkImageMemoryBarrier _barrier = {};
-                _barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                _barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-                _barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-                _barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                _barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                _barrier.image = radianceCache.image;
-                _barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                _barrier.subresourceRange.baseMipLevel = 0;
-                _barrier.subresourceRange.levelCount = 1;
-                _barrier.subresourceRange.baseArrayLayer = 0;
-                _barrier.subresourceRange.layerCount = 1;
-                _barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-                _barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT; 
-        // for(int i=0; i<4; i++) {
-        
-                    // vkCmdDispatchBase(
-                    //     commandBuffer,
-                    //     // (world_size.x /2) * magic_number, 0, 0,
-                    //     0, 0, 0,
-                    //     (world_size.x /2), world_size.y/2, 7);
-            vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 1);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 1);
 
-            cmdPipelineBarrier(commandBuffer, 
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                &_barrier);
-        // }
-            // dispatch_shift.x, dispatch_shift.y, dispatch_shift.z,
-            // fullsize.x, fullsize.y, fullsize.z);
-            // partial_dispatch_size.x, partial_dispatch_size.y, partial_dispatch_size.z);
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+        radianceCache);
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+        radianceCache);
+}
+
+void Renderer::recalculate_df(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
     VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1022,36 +1110,130 @@ void Renderer::updade_radiance() {
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = highresFrames[currentFrame].image;
+        barrier.image = distancePalette.image;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = 1;
         barrier.subresourceRange.baseArrayLayer = 0;
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;   
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
 
-    // cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout targetLayout, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, Image *image)
-    barrier.image = radianceCache.image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);   
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    // vkCmdPipelineBarrier(
+    //     commandBuffer,
+    //     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    //     0,
+    //     0, NULL,
+    //     0, NULL,
+    //     1, &barrier
+    // );
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfxPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfxPipe.lineLayout, 0, 1, &dfxPipe.sets[currentFrame], 0, 0);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*paletteCounter);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfyPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfyPipe.lineLayout, 0, 1, &dfyPipe.sets[currentFrame], 0, 0);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*paletteCounter);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        ); 
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfzPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfzPipe.lineLayout, 0, 1, &dfzPipe.sets[currentFrame], 0, 0);
+        vkCmdDispatch(commandBuffer, 1, 1, 16*paletteCounter);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
 }
+void Renderer::recalculate_bit(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+
+    VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = bitPalette.image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;   
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, bitmaskPipe.line);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, bitmaskPipe.lineLayout, 0, 1, &bitmaskPipe.sets[currentFrame], 0, 0);
+        vkCmdDispatch(commandBuffer, 1, 1, 8*paletteCounter);
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0, NULL,
+            0, NULL,
+            1, &barrier
+        );
+}
+
 void Renderer::exec_copies() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    if(copyQueue.size() != 0) {
+    if(blockCopyQueue.size() != 0) {
         //we can copy from previous image, cause static blocks are same in both palettes. Additionaly, it gives src and dst optimal layouts
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, &originBlockPalette[previousFrame]);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, &originBlockPalette[ currentFrame]);
+        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, 
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
+            &originBlockPalette[previousFrame]);
+        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, 
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
+            &originBlockPalette[ currentFrame]);
 
-        vkCmdCopyImage(commandBuffer, originBlockPalette[previousFrame].image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, copyQueue.size(), copyQueue.data());
+        vkCmdCopyImage(commandBuffer, originBlockPalette[previousFrame].image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, blockCopyQueue.size(), blockCopyQueue.data());
 
-        cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, &originBlockPalette[previousFrame]);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, &originBlockPalette[ currentFrame]);
+        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, 
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
+            &originBlockPalette[previousFrame]);
+        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, 
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+            VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
+            &originBlockPalette[ currentFrame]);    
     }
     VkBufferImageCopy copyRegion = {};
     // copyRegion.size = size;
@@ -1060,49 +1242,32 @@ void Renderer::exec_copies() {
         copyRegion.imageExtent.depth  = world_size.z;
         copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         copyRegion.imageSubresource.layerCount = 1;
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, &world);
+        
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+        VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, 
+        &world);
+    
     vkCmdCopyBufferToImage(commandBuffer, stagingWorld[currentFrame].buffer, world.image, VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion);
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    // VkImageMemoryBarrier staging_world_barrier{};
-    //     staging_world_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    //     staging_world_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     staging_world_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     staging_world_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     staging_world_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     staging_world_barrier.image = world.image;
-    //     staging_world_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    //     staging_world_barrier.subresourceRange.baseMipLevel = 0;
-    //     staging_world_barrier.subresourceRange.levelCount = 1;
-    //     staging_world_barrier.subresourceRange.baseArrayLayer = 0;
-    //     staging_world_barrier.subresourceRange.layerCount = 1;
-    //     staging_world_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
-    //     staging_world_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &staging_world_barrier);
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, &world);
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 
+        &world);
 }
 
 void Renderer::start_map() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 0, 1, &mapPipe.sets[currentFrame], 0, 0);
 }
 
 void Renderer::map_mesh(Mesh* mesh) {
-    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
-    
-    //setting dynamic descriptors
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];    
         VkDescriptorImageInfo
             modelVoxelsInfo = {};
             modelVoxelsInfo.imageView = (*mesh).voxels[currentFrame].view; //CHANGE ME
             modelVoxelsInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-        VkDescriptorImageInfo 
-            blocksInfo = {};
-            blocksInfo.imageView = world.view;
-            blocksInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-        VkDescriptorImageInfo 
-            blockPaletteInfo = {};
-            blockPaletteInfo.imageView = originBlockPalette[currentFrame].view;
-            blockPaletteInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         VkWriteDescriptorSet 
             modelVoxelsWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -1112,25 +1277,9 @@ void Renderer::map_mesh(Mesh* mesh) {
             modelVoxelsWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             modelVoxelsWrite.descriptorCount = 1;
             modelVoxelsWrite.pImageInfo = &modelVoxelsInfo;
-        VkWriteDescriptorSet 
-            blocksWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            blocksWrite.dstSet = NULL;
-            blocksWrite.dstBinding = 1;
-            blocksWrite.dstArrayElement = 0;
-            blocksWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            blocksWrite.descriptorCount = 1;
-            blocksWrite.pImageInfo = &blocksInfo;
-        VkWriteDescriptorSet 
-            blockPaletteWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            blockPaletteWrite.dstSet = NULL;
-            blockPaletteWrite.dstBinding = 2;
-            blockPaletteWrite.dstArrayElement = 0;      
-            blockPaletteWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            blockPaletteWrite.descriptorCount = 1;
-            blockPaletteWrite.pImageInfo = &blockPaletteInfo;
-        vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite, blocksWrite, blockPaletteWrite};
+        vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite};
 
-    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
+    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
 
     dmat4 rotate = toMat4((*mesh).rot);
     dmat4 shift = translate(identity<mat4>(), (*mesh).shift);
@@ -1159,21 +1308,25 @@ void Renderer::end_map() {
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = originBlockPalette[currentFrame].image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, &barrier); 
+    // VkImageMemoryBarrier barrier{};
+    //     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    //     barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    //     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    //     barrier.image = originBlockPalette[currentFrame].image;
+    //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    //     barrier.subresourceRange.baseMipLevel = 0;
+    //     barrier.subresourceRange.levelCount = 1;
+    //     barrier.subresourceRange.baseArrayLayer = 0;
+    //     barrier.subresourceRange.layerCount = 1;
+    //     barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, &barrier); 
+    cmdPipelineBarrier(commandBuffer, 
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                originBlockPalette[currentFrame]);
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
 
     VkImageMemoryBarrier imageMemoryBarrier = {};
@@ -1217,14 +1370,19 @@ void Renderer::end_compute() {
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    cmdPipelineBarrier(commandBuffer, 
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                originBlockPalette[currentFrame]);
         barrier.image = world.image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    cmdPipelineBarrier(commandBuffer, 
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                world);
         barrier.image = originBlockPalette[previousFrame].image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
+
     
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     
@@ -1242,14 +1400,14 @@ void Renderer::end_compute() {
         barrier.subresourceRange.layerCount = 1;
         barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
-        barrier.image = world.image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
-        barrier.image = originBlockPalette[1].image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
+    //     barrier.image = world.image;
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
+    //     barrier.image = originBlockPalette[1].image;
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
     
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     // VK_CHECK(vkEndCommandBuffer(commandBuffer));
@@ -1269,7 +1427,7 @@ void Renderer::end_compute() {
 void Renderer::start_raygen() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
     
-    struct unicopy {mat4 trans; mat4 old_trans;} unicopy = {cameraTransform, cameraTransform_OLD};
+    struct unicopy {mat4 trans;} unicopy = {cameraTransform};
     vkCmdUpdateBuffer(commandBuffer, uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
     
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
@@ -1282,7 +1440,11 @@ void Renderer::start_raygen() {
         staging_uniform_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
         staging_uniform_barrier.size = VK_WHOLE_SIZE;
 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &staging_uniform_barrier);
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &staging_uniform_barrier);
+    cmdPipelineBarrier(commandBuffer, 
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                uniform[currentFrame]);
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
 
@@ -1330,8 +1492,8 @@ void Renderer::raygen_mesh(Mesh *mesh) {
         VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
     
-    struct {quat r1,r2; vec4 s1,s2;} raygen_pushconstant = {(*mesh).rot, (*mesh).old_rot, vec4((*mesh).shift,0), vec4((*mesh).old_shift,0)};
     //TODO:
+    struct {quat r1; vec4 s1;} raygen_pushconstant = {(*mesh).rot, vec4((*mesh).shift,0)};
     vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
     (*mesh).old_rot   = (*mesh).rot;
@@ -1342,27 +1504,39 @@ void Renderer::raygen_mesh(Mesh *mesh) {
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     // printl((*mesh).triangles.Pzz.icount);
     if(is_face_visible(mesh->rot*vec3(+1,0,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Pzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Pzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+        vec4 _normal = vec4(mesh->rot*vec3(+1,0,0),0);
+        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
         vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.Pzz.icount, 1, 0, 0, 0);
     }
     if(is_face_visible(mesh->rot*vec3(-1,0,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Nzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Nzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+        vec4 _normal = vec4(mesh->rot*vec3(-1,0,0),0);
+        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
         vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.Nzz.icount, 1, 0, 0, 0);
     }
     if(is_face_visible(mesh->rot*vec3(0,+1,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zPz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zPz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+        vec4 _normal = vec4(mesh->rot*vec3(0,+1,0),0);
+        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
         vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zPz.icount, 1, 0, 0, 0);
     }
     if(is_face_visible(mesh->rot*vec3(0,-1,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zNz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zNz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+        vec4 _normal = vec4(mesh->rot*vec3(0,-1,0),0);
+        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
         vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zNz.icount, 1, 0, 0, 0);
     }
     if(is_face_visible(mesh->rot*vec3(0,0,+1), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzP.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzP.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+        vec4 _normal = vec4(mesh->rot*vec3(0,0,+1),0);
+        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
         vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zzP.icount, 1, 0, 0, 0);
     }
     if(is_face_visible(mesh->rot*vec3(0,0,-1), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzN.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzN.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+        vec4 _normal = vec4(mesh->rot*vec3(0,0,-1),0);
+        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
         vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zzN.icount, 1, 0, 0, 0);
     }
         // old_buff = (*mesh).indexes[currentFrame].buffer;
@@ -1452,37 +1626,14 @@ void Renderer::updade_grass(vec2 windDirection){
     vkCmdPushConstants(commandBuffer, updateGrassPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateGrassPipe.lineLayout, 0, 1, &updateGrassPipe.sets[0], 0, 0);
 
-    //     VkDescriptorImageInfo 
-    //         state_info = {};
-    //         state_info.imageView = grassState.view;
-    //         state_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     VkWriteDescriptorSet 
-    //         stateWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    //         stateWrite.dstSet = NULL;
-    //         stateWrite.dstBinding = 0;
-    //         stateWrite.dstArrayElement = 0;
-    //         stateWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    //         stateWrite.descriptorCount = 1;
-    //         stateWrite.pImageInfo = &state_info;
-    //     vector<VkWriteDescriptorSet> descriptorWrites = {stateWrite};
-    // vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateGrassPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-
-    VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;  
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.image = grassState.image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier);
-
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+        grassState);
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+        grassState);
     vkCmdDispatch(commandBuffer, (world_size.x*2 +7)/8, (world_size.y*2 +7)/8, 1); //2x8 2x8 1x1
 }
 //blade is hardcoded but it does not really increase perfomance
@@ -1639,6 +1790,20 @@ void Renderer::glossy() {
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, glossyPipe.line);
 
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, glossyPipe.lineLayout, 0, 1, &glossyPipe.sets[currentFrame], 0, 0);
 
         cameraPos_OLD = cameraPos;
@@ -1753,21 +1918,27 @@ void Renderer::end_ui() {
         blit.dstOffsets[1].z = 1;
         
 
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.image = highresFrames[currentFrame].image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.image = swapchainImages[imageIndex].image;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+        // barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        // barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        // barrier.image = highresFrames[currentFrame].image;
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                &highresFrames[currentFrame]);
+        // barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        // barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        // barrier.image = swapchainImages[imageIndex].image;
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                &swapchainImages[imageIndex]);
+
     vkCmdBlitImage(commandBuffer, highresFrames[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, swapchainImages[imageIndex].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-        barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                &swapchainImages[imageIndex]); 
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
     cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
     cmdPipelineBarrier(copyCommandBuffers[currentFrame], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
@@ -1845,24 +2016,55 @@ void Renderer::end_frame() {
     // printl(timeTakenByRadiance)
 }
 
-void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier) {
+void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, 
+    VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, 
+    VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
+    Buffer buffer) {
+    VkBufferMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.srcAccessMask = srcAccessMask;
+        barrier.dstAccessMask = dstAccessMask;
+        barrier.size = VK_WHOLE_SIZE;
+        barrier.buffer = buffer.buffer; // buffer buffer buffer
+
     vkCmdPipelineBarrier(
         commandBuffer,
         srcStageMask, dstStageMask,
         0,
         0, NULL,
-        0, NULL,
-        1, barrier
+        1, &barrier,
+        0, NULL
     );
 }
-void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkBufferMemoryBarrier* barrier) {
+void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, 
+    VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, 
+    VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
+    Image image) {
+
+    VkImageMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = (image).layout;
+        barrier.newLayout = (image).layout;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = (image).image;
+        barrier.subresourceRange.aspectMask = (image).aspect;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = srcAccessMask;
+        barrier.dstAccessMask = dstAccessMask; 
+
     vkCmdPipelineBarrier(
         commandBuffer,
         srcStageMask, dstStageMask,
         0,
         0, NULL,
-        1, barrier,
-        0, NULL
+        0, NULL,
+        1, &barrier
     );
 }
 void Renderer::cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask) {
@@ -1921,7 +2123,34 @@ void Renderer::cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayou
     );
     (*image).layout = targetLayout;
 }
+void Renderer::cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout targetLayout,
+        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, 
+        Image* image) {
 
+    VkImageMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = srcLayout;
+        barrier.newLayout = targetLayout;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = (*image).image;
+        barrier.subresourceRange.aspectMask = (*image).aspect;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = srcAccessMask;
+        barrier.dstAccessMask = dstAccessMask;  
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        srcStageMask, dstStageMask,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
+    (*image).layout = targetLayout;
+}
 // void Renderer::create_grass_state(GrassState* state){
 //     create_Image_Storages(&state->marks,
 //         VK_IMAGE_TYPE_2D,
@@ -2201,7 +2430,7 @@ void Renderer::createDescriptorPool() {
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = poolSizes.size();
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT*11; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
+        poolInfo.maxSets = descriptor_sets_count; //becuase frames_in_flight multiply of 5 differents sets, each for shader 
     VK_CHECK(vkCreateDescriptorPool(device, &poolInfo, NULL, &descriptorPool));
 }
 
@@ -2232,6 +2461,7 @@ void Renderer::deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<Vk
         create_DescriptorSetLayout(descriptorTypes, stages, dsetLayout, createFlags);
     }
     
+    descriptor_sets_count += MAX_FRAMES_IN_FLIGHT;
     DelayedDescriptorSetup delayed_setup = {dsetLayout, descriptorSets, descriptions, stages, createFlags};
     delayed_descriptor_setups.push_back(delayed_setup);
 }
@@ -2352,8 +2582,6 @@ void Renderer::createSamplers() {
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &overlaySampler));
 }
-
-vector<char> read_Shader(const char* filename);
 
 void Renderer::copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
     VkCommandBuffer commandBuffer= begin_Single_Time_Commands();

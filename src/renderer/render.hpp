@@ -73,14 +73,17 @@ typedef struct Material {
     f32 rough;
 } Material;
 typedef u8 Voxel;
+
+#define POS_NORM_BIT_MASK 0b10000000
 typedef struct VoxelVertex {
     vec<3, unsigned char, defaultp> pos;
     vec<3,   signed char, defaultp> norm;
+    // vec<3, unsigned char, defaultp> pos_AND_normBits; //
     MatID_t matID;
 } VoxelVertex;
 typedef struct PackedVoxelVertex {
     vec<3, unsigned char, defaultp> pos;
-    unsigned char norm;
+    // unsigned char norm;
     MatID_t matID;
 } PackedVoxelVertex;
 
@@ -176,8 +179,10 @@ enum BlendAttachment{
     NO_BLEND,
 };
 enum DepthTesting{
-    DO_TEST,
     NO_TEST,
+    DO_TEST,
+    READ_TEST,
+    WRITE_TEST,
 };
 
 typedef struct ShaderStage{
@@ -363,7 +368,8 @@ public:
 private:
     bool hasPalette = false;
     int maxParticleCount;
-    vector<VkImageCopy> copyQueue = {};
+    vector<VkImageCopy> blockCopyQueue = {};
+    vector<VkImageSubresourceRange> blockclearQueue = {};
 public:
     double deltaTime = 0;
 
@@ -389,9 +395,11 @@ public:
             void start_map();
                 void map_mesh(Mesh* mesh);
             void end_map();
-            void updade_radiance();
+            void update_radiance();
             void updade_grass(vec2 windDirection);
             void updade_water();
+            void recalculate_df();
+            void recalculate_bit();
         void end_compute();
         void start_raygen();
             void raygen_mesh(Mesh* mesh);
@@ -413,7 +421,6 @@ public:
         void present();
     void end_frame();
         // void inter();
-            // void recalculate_df();
             // void raytrace();
             // void denoise(int iterations, int denoising_radius, denoise_targets target);
             // void accumulate();
@@ -427,11 +434,20 @@ public:
     void update_Material_Palette(Material* materialPalette);
     void update_SingleChunk(BlockID_t* blocks);
 
-    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkImageMemoryBarrier* barrier);
-    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkBufferMemoryBarrier* barrier);
+    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, 
+        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, 
+        VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
+        Buffer buffer);
+    void cmdPipelineBarrier(VkCommandBuffer commandBuffer, 
+        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, 
+        VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
+        Image image);    
     void cmdPipelineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask);
     //used as just barrier and can also transfer image layout
     void cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout targetLayout,
+        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, 
+        Image* image);
+    void cmdTransLayoutBarrier(VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout targetLayout,
         VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, 
         Image* image);
 private:
@@ -542,6 +558,7 @@ public:
     u32 COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT = 0;
     u32 UNIFORM_BUFFER_DESCRIPTOR_COUNT = 0; 
     u32 INPUT_ATTACHMENT_DESCRIPTOR_COUNT = 0;
+    u32 descriptor_sets_count = 0;
     void count_Descriptor(const VkDescriptorType type);
     void create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags stageFlags, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
 public:
@@ -622,13 +639,17 @@ public:
            Image               world; //can i really use just one?
 
     vector<Image> originBlockPalette;
+           Image     distancePalette;
+           Image          bitPalette; //bitmask of originBlockPalette
     // vector<Image> TBP;
         //    Image        block_palette;
     vector<Image> materialPalette;
     
     vector<Buffer>         uniform;
-    Buffer gpuRadianceUpdates;
-    vector<ivec4> radianceUpdates;
+    vector<ivec4>         radianceUpdates;
+    Buffer             gpuRadianceUpdates;
+    vector<void*>  stagingRadianceUpdatesMapped;
+    vector<Buffer> stagingRadianceUpdates;
 
     vector<Particle>     particles;
     vector<Buffer>   gpuParticles; //multiple because cpu-related work
@@ -646,6 +667,7 @@ public:
     ComputePipe   raytracePipe;
     ComputePipe   radiancePipe;
     ComputePipe        mapPipe;
+    VkDescriptorSetLayout mapPushLayout;
     ComputePipe        updateGrassPipe;
     ComputePipe        updateWaterPipe;
     ComputePipe        genPerlinPipe; //generate noise for grass 
@@ -658,9 +680,10 @@ public:
     // ComputePipe     mipmapPipe;
     // ComputePipe blockifyPipe;
     // ComputePipe     copyPipe;
-    // ComputePipe       dfxPipe;
-    // ComputePipe       dfyPipe;
-    // ComputePipe       dfzPipe;
+    ComputePipe dfxPipe;
+    ComputePipe dfyPipe;
+    ComputePipe dfzPipe;
+    ComputePipe bitmaskPipe;
 
     VmaAllocator VMAllocator; 
     u32 imageIndex = 0;

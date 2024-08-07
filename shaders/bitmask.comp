@@ -1,0 +1,66 @@
+#version 450 core
+
+/*
+reprojects block palette into bit palette of "has voxel" / "empty voxel"
+*/
+
+layout(set = 0, binding = 0, r8ui) uniform uimage3D blocksPalette;
+layout(set = 0, binding = 1, r8ui) uniform uimage3D    bitPalette;
+
+const int BLOCK_PALETTE_SIZE_X = 64;
+ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+16*block_x, 0+16*block_y,0);
+}
+
+//relative_voxel_pos is in range of 0 to 16/bits_per_inv
+ivec3 voxel_in_bit_palette(ivec3 relative_voxel_pos, int block_id) {
+    int block_x = block_id % BLOCK_PALETTE_SIZE_X;
+    int block_y = block_id / BLOCK_PALETTE_SIZE_X;
+
+    return relative_voxel_pos + ivec3(0+2*block_x, 0+16*block_y,0);
+}
+
+uint get_voxel(ivec3 voxel_pos, int block_id){
+    uint voxel = imageLoad(blocksPalette, voxel_in_palette(voxel_pos, block_id)).x;
+    return voxel;
+}
+
+// uint get_voxel_by_id(ivec3 voxel_pos, int block_id, int id){
+
+// }
+const int bits_per_inv = 8;
+layout(local_size_x = 16/bits_per_inv, local_size_y = 16, local_size_z = 2) in;
+void main(void){
+     vec3 fpos = gl_GlobalInvocationID.xyz;
+    ivec3 ipos = ivec3(fpos);
+    
+    int block_id = ipos.z / 16;
+    ivec3 base_shift = ivec3(
+        (ipos.x * bits_per_inv),
+        (ipos.y),
+        (ipos.z % 16)
+    );
+    // int block_pos = ipos.z / 16;
+
+    uint packed_voxels = 0;
+
+    for(int i=0; i<bits_per_inv; i++){
+        ivec3 current_vox = base_shift + ivec3(i,0,0);
+
+        uint vox_id = get_voxel(current_vox, block_id);
+        uint mask = 1 << i;
+        if(vox_id != 0){
+            packed_voxels = packed_voxels | mask;
+        }
+    }
+    
+    ivec3 voxel_pos = ipos % 16;
+
+    // packed_voxels = 0xffffffff;
+    imageStore(bitPalette, voxel_in_bit_palette(ivec3(ipos.x, ipos.y, ipos.z%16), block_id), uvec4(packed_voxels));
+
+    return;
+}

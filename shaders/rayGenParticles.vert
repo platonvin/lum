@@ -18,7 +18,7 @@ layout(location = 0) out VS_OUT {
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
-    mat4 trans_w2s_old;
+    // mat4 trans_w2s_old;
 } ubo;
 layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
 layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
@@ -43,7 +43,7 @@ void main() {
 
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
          clip_coords.z = -clip_coords.z;
-    vec3 clip_coords_old = (ubo.trans_w2s_old*world_pos_old).xyz;
+    // vec3 clip_coords_old = (ubo.trans_w2s_old*world_pos_old).xyz;
 
     gl_Position  = vec4(clip_coords, 1);    
     

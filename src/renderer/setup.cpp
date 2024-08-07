@@ -626,8 +626,29 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
     //if not depthTest then just not used. Done this way because same dept state used everywhere on not used at all
     VkPipelineDepthStencilStateCreateInfo
         depthStencil = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};    
-        depthStencil.depthTestEnable = VK_TRUE;
-        depthStencil.depthWriteEnable = VK_TRUE;
+        switch (depthTest) {
+            case NO_TEST: {
+                depthStencil.depthTestEnable = VK_FALSE;
+                depthStencil.depthWriteEnable = VK_FALSE;
+                break;
+            }
+            case DO_TEST: {
+                depthStencil.depthTestEnable = VK_TRUE;
+                depthStencil.depthWriteEnable = VK_TRUE;
+                break;
+            }
+            case READ_TEST: {
+                depthStencil.depthTestEnable = VK_TRUE;
+                depthStencil.depthWriteEnable = VK_FALSE;
+                break;
+            }
+            case WRITE_TEST: {
+                depthStencil.depthTestEnable = VK_FALSE;
+                depthStencil.depthWriteEnable = VK_TRUE;
+                break;
+            }
+            default: crash(whats depthTest);
+        }
         depthStencil.depthCompareOp = VK_COMPARE_OP_GREATER;
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f;
@@ -644,10 +665,10 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         pipelineInfo.pViewportState = &viewportState;
         pipelineInfo.pRasterizationState = &rasterizer;
         pipelineInfo.pMultisampleState = &multisampling;
-        if(depthTest == DO_TEST){
-            pipelineInfo.pDepthStencilState = &depthStencil;
-        } else {
+        if(depthTest == NO_TEST){
             pipelineInfo.pDepthStencilState = NULL;
+        } else {
+            pipelineInfo.pDepthStencilState = &depthStencil;
         }
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;

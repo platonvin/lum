@@ -307,22 +307,33 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
     ogt::my_int_mesh_optimize(&ctx, ogt_mesh);
 
 // println
-    vector<VoxelVertex> verts(ogt_mesh->vertex_count);
+    vector<VoxelVertex      >        verts(ogt_mesh->vertex_count);
+    vector<PackedVoxelVertex> packed_verts(ogt_mesh->vertex_count);
     for(u32 i=0; i<ogt_mesh->vertex_count; i++){
-        verts[i].pos  = uvec3(ogt_mesh->vertices[i].pos);
+        // vec<3, unsigned char, defaultp> packed_posNorm = {};
+        // packed_posNorm = uvec3(ogt_mesh->vertices[i].pos);
+
+        // packed_posNorm.x |= (ogt_mesh->vertices[i].normal.x != 0)? (POS_NORM_BIT_MASK) : 0;
+        // packed_posNorm.y |= (ogt_mesh->vertices[i].normal.y != 0)? (POS_NORM_BIT_MASK) : 0;
+        // packed_posNorm.z |= (ogt_mesh->vertices[i].normal.z != 0)? (POS_NORM_BIT_MASK) : 0;
         verts[i].norm = ivec3(ogt_mesh->vertices[i].normal);
+        verts[i].pos  = uvec3(ogt_mesh->vertices[i].pos);
         verts[i].matID = (MatID_t)ogt_mesh->vertices[i].palette_index;
 
         assert(verts[i].norm != (vec<3, signed char, defaultp>)(0));
         assert(length(vec3(verts[i].norm)) == 1.0f);
+        assert(!any(greaterThanEqual(ogt_mesh->vertices[i].pos, uvec3(255))));
+
+        packed_verts[i].pos  = uvec3(ogt_mesh->vertices[i].pos);
+        packed_verts[i].matID = (MatID_t)ogt_mesh->vertices[i].palette_index;
     }
 
-    vector<u32> verts_Pzz = {};
-    vector<u32> verts_Nzz = {};
-    vector<u32> verts_zPz = {};
-    vector<u32> verts_zNz = {};
-    vector<u32> verts_zzP = {};
-    vector<u32> verts_zzN = {};
+    vector<u16> verts_Pzz = {};
+    vector<u16> verts_Nzz = {};
+    vector<u16> verts_zPz = {};
+    vector<u16> verts_zNz = {};
+    vector<u16> verts_zzP = {};
+    vector<u16> verts_zzN = {};
 
     for(u32 i=0; i<ogt_mesh->index_count; i++){
         u32 index = ogt_mesh->indices[i];
@@ -344,17 +355,17 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
         }
     }
 // println
-    mesh->triangles.vertexes = create_elemBuffers<VoxelVertex>(verts.data(), ogt_mesh->vertex_count, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    mesh->triangles.vertexes = create_elemBuffers<PackedVoxelVertex>(packed_verts.data(), ogt_mesh->vertex_count, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 // println
     // printl(verts_Pzz.data());
     // printl(verts_Pzz.size());
 
-    mesh->triangles.Pzz.indexes = create_elemBuffers<u32>(verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.Nzz.indexes = create_elemBuffers<u32>(verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zPz.indexes = create_elemBuffers<u32>(verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zNz.indexes = create_elemBuffers<u32>(verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzP.indexes = create_elemBuffers<u32>(verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzN.indexes = create_elemBuffers<u32>(verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.Pzz.indexes = create_elemBuffers<u16>(verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.Nzz.indexes = create_elemBuffers<u16>(verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zPz.indexes = create_elemBuffers<u16>(verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zNz.indexes = create_elemBuffers<u16>(verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zzP.indexes = create_elemBuffers<u16>(verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zzN.indexes = create_elemBuffers<u16>(verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 // println
     assert(verts_Pzz.size()!=0);
     assert(verts_Nzz.size()!=0);

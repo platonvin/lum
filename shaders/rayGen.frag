@@ -7,8 +7,8 @@ precision varp float;
 
 // layout(location = 0) in float depth;
 // layout(location = 0)      in varp vec2 uv_shift;
-layout(location = 0) flat in varp vec3 norm;
-layout(location = 1) flat in varp uint mat;
+layout(location = 0) flat in lowp vec3 norm;
+layout(location = 1) flat in lowp uint mat;
 // layout(location = 3)      in float depth; //uint8 thing. But in float
 
 layout(location = 0) out varp vec4 outMatNorm;

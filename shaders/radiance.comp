@@ -29,7 +29,7 @@ layout(push_constant) uniform constants{
     varp int sihft;
 } PushConstants;
 
-#define SUBGROUPS_PER_WORKGROUP 1
+#define SUBGROUPS_PER_WORKGROUP 4
 #define RAYS_PER_PROBE (32*SUBGROUPS_PER_WORKGROUP) //TODO: change to spec const
 //funniest thing is that it should even work on amd, tho _light might take twice more
 
@@ -347,19 +347,21 @@ void main(){
     float seed = float(PushConstants.timeSeed);
     random_storage = vec2(sin(local_pos.x*seed*5.12315), sin(local_pos.y*seed*7.7343));
     
-    int probe_id = local_pos.y % RAYS_PER_PROBE;
     // int probe_id = local_pos.x % RAYS_PER_PROBE;
+    int probe_id = local_pos.y % RAYS_PER_PROBE;
 
-    ivec4 _t = reqBuffer.updateReqests[local_pos.x];
+    int req_num = local_pos.x*PushConstants.size + PushConstants.sihft;
+    ivec4 _t = reqBuffer.updateReqests[req_num];
     ivec3 probe_pos = _t.xyz;
     // if(probe_pos == ivec3(0)) {
     // if(any(notEqual(probe_pos,ivec3(0)))) {
-        // store_probe(probe_id, ivec3(local_pos.x, local_pos.y, 1), vec3(1));
+    //     store_probe(probe_id, ivec3(local_pos.x, local_pos.y, 1), vec3(1));
     //     store_probe(probe_id, ivec3(probe_pos.x,probe_pos.y, local_pos.y), vec3(1));
     //     return;
     // }
+
     // ivec3 probe_pos = ivec3(local_pos);
-    //       probe_pos.y /= RAYS_PER_PROBE;
+    //       probe_pos.x /= RAYS_PER_PROBE;
 
     vec3 block_center = vec3(probe_pos) * 16.0 + 8.0;
     vec3 ray_pos = block_center;

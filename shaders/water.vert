@@ -17,7 +17,7 @@ layout(push_constant) uniform constants{
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
-    mat4 trans_w2s_old; //just leave it
+    // mat4 trans_w2s_old; //just leave it
 } ubo;
 layout(set = 0, binding = 1) uniform sampler2D state;
 // layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
