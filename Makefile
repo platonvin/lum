@@ -111,7 +111,8 @@ obj/deb/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer
 	g++ src/renderer/render_ui_interface.cpp $(Flags) obj/deb/render_ui_interface.o
 obj/deb/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 	g++ src/renderer/ui.cpp $(Flags) obj/deb/ui.o
-obj/deb/main.o: src/main.cpp src/engine.hpp src/renderer/render.hpp
+.PHONY: obj/deb/main.o
+obj/deb/main.o:
 	g++ src/main.cpp $(Flags) obj/deb/main.o
 
 obj/rel/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp

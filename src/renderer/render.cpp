@@ -300,8 +300,8 @@ println
 println
 
     //not worth abstracting
-    createRenderPass1();
-    createRenderPass2();
+    // createRenderPass1();
+    // createRenderPass2();
 
     raygenBlocksPipe.renderPass = raygen2glossyRpass;
     raygenParticlesPipe.renderPass = raygen2glossyRpass;
@@ -492,11 +492,18 @@ println
     end_Single_Time_Commands(commandBuffer);
 
 println
+    assert(timestampCount!=0);
+    timestampNames.resize(timestampCount);
+    timestamps.resize(timestampCount);
+
     VkQueryPoolCreateInfo query_pool_info{};
         query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
         query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        query_pool_info.queryCount = 2;
+        query_pool_info.queryCount = timestampCount;
+    
+    // #ifdef MEASURE_PERFOMANCE
     VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &queryPoolTimestamps));    
+    // #endif
 }
 void Renderer::deleteImages(vector<Image>* images) {
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
@@ -513,22 +520,31 @@ void Renderer::deleteImages(Image* image) {
 void Renderer::cleanup() {
     delete ui_render_interface;
 	
-    deleteImages(&world);
     deleteImages(&radianceCache);
+    deleteImages(&world);
     deleteImages(&originBlockPalette);
+    deleteImages(&distancePalette);
+    deleteImages(&bitPalette);
     deleteImages(&materialPalette);
+    deleteImages(&perlinNoise);
+    deleteImages(&grassState);
+    deleteImages(&waterState);
 
     vkDestroySampler(device, nearestSampler, NULL);
     vkDestroySampler(device,  linearSampler, NULL);
-    vkDestroySampler(device,      overlaySampler, NULL);
+    vkDestroySampler(device, overlaySampler, NULL);
+    vkDestroySampler(device, linearSampler_tiled, NULL);
 
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
             vmaUnmapMemory(VMAllocator,                           stagingWorld[i].alloc);
             vmaUnmapMemory(VMAllocator,                           gpuParticles[i].alloc);
+            vmaUnmapMemory(VMAllocator,                           stagingRadianceUpdates[i].alloc);
         vmaDestroyBuffer(VMAllocator,  stagingWorld[i].buffer, stagingWorld[i].alloc);
         vmaDestroyBuffer(VMAllocator,  gpuParticles[i].buffer, gpuParticles[i].alloc);
         vmaDestroyBuffer(VMAllocator,  uniform[i].buffer, uniform[i].alloc);
+        vmaDestroyBuffer(VMAllocator,  stagingRadianceUpdates[i].buffer, stagingRadianceUpdates[i].alloc);
     }
+    vmaDestroyBuffer(VMAllocator,  gpuRadianceUpdates.buffer, gpuRadianceUpdates.alloc);
 
     vkDestroyDescriptorPool(device, descriptorPool, NULL);
 
@@ -538,14 +554,21 @@ void Renderer::cleanup() {
         vkDestroyFence(device,    frameInFlightFences[i], NULL);
     }
     vkDestroyCommandPool(device, commandPool, NULL);
+// println
     vkDestroyRenderPass(device, raygen2glossyRpass, NULL);
     vkDestroyRenderPass(device, blur2presentRpass, NULL);
-
+// println
     destroy_Compute_Pipeline(       &mapPipe);
+    vkDestroyDescriptorSetLayout(device, mapPushLayout, NULL);
     destroy_Compute_Pipeline(  &raytracePipe);
     destroy_Compute_Pipeline(  &radiancePipe);
     destroy_Compute_Pipeline(   &updateGrassPipe);
     destroy_Compute_Pipeline(   &updateWaterPipe);
+    destroy_Compute_Pipeline(   &genPerlinPipe);
+    destroy_Compute_Pipeline(   &dfxPipe);
+    destroy_Compute_Pipeline(   &dfyPipe);
+    destroy_Compute_Pipeline(   &dfzPipe);
+    destroy_Compute_Pipeline(   &bitmaskPipe);
 
     destroy_Raster_Pipeline(&raygenBlocksPipe);
     destroy_Raster_Pipeline(&raygenParticlesPipe);
@@ -569,6 +592,9 @@ void Renderer::cleanup() {
     }
     //do before destroyDevice
     vmaDestroyAllocator(VMAllocator);
+
+    vkDestroyQueryPool(device, queryPoolTimestamps, NULL);
+    
     vkDestroyDevice(device, NULL);
     //"unpicking" physical device is unnessesary :)
     vkDestroySurfaceKHR(instance, surface, NULL);
@@ -862,6 +888,10 @@ void Renderer::start_compute() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
   
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    // #ifdef MEASURE_PERFOMANCE
+    vkCmdResetQueryPool(commandBuffer, queryPoolTimestamps, 0, timestampCount);
+    // #endif
+    currentTimestamp = 0;
 }
 
 void Renderer::start_blockify() {
@@ -1020,8 +1050,6 @@ void Renderer::update_radiance() {
     
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    vkCmdResetQueryPool(commandBuffer, queryPoolTimestamps, 0, 2);
-
     radianceUpdates.clear();
 
     for(int xx = 0; xx < world_size.x; xx++) {
@@ -1086,10 +1114,9 @@ void Renderer::update_radiance() {
 
         int wg_count = radianceUpdates.size() / magicSize;
         
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, 0);
+        PLACE_TIMESTAMP_ALWAYS();
     vkCmdDispatch(commandBuffer, wg_count, 1, 1);
-
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, 1);
+        PLACE_TIMESTAMP_ALWAYS();
 
     cmdPipelineBarrier(commandBuffer, 
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1224,7 +1251,9 @@ void Renderer::exec_copies() {
             VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT , VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, 
             &originBlockPalette[ currentFrame]);
 
+        PLACE_TIMESTAMP();
         vkCmdCopyImage(commandBuffer, originBlockPalette[previousFrame].image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, blockCopyQueue.size(), blockCopyQueue.data());
+        PLACE_TIMESTAMP();
 
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, 
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
@@ -1260,6 +1289,7 @@ void Renderer::start_map() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.line);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 0, 1, &mapPipe.sets[currentFrame], 0, 0);
+        PLACE_TIMESTAMP();
 }
 
 void Renderer::map_mesh(Mesh* mesh) {
@@ -1309,6 +1339,7 @@ void Renderer::end_map() {
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 
         &originBlockPalette[currentFrame]);
+        PLACE_TIMESTAMP();
 }
 
 void Renderer::end_compute() {
@@ -1317,6 +1348,7 @@ void Renderer::end_compute() {
 
 void Renderer::start_raygen() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+        PLACE_TIMESTAMP();
     
     struct unicopy {mat4 trans;} unicopy = {cameraTransform};
     vkCmdUpdateBuffer(commandBuffer, uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
@@ -1448,6 +1480,7 @@ void Renderer::raygen_map_particles() {
     //go to next no matter what
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     
+        PLACE_TIMESTAMP();
     if(particles.size() > 0) { //just for safity
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.line);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.lineLayout, 0, 1, &raygenParticlesPipe.sets[currentFrame], 0, 0);
@@ -1471,10 +1504,12 @@ void Renderer::raygen_map_particles() {
         // assert(particles.size() != 0);
         vkCmdDraw(commandBuffer, particles.size(), 1, 0, 0);
     }
+        PLACE_TIMESTAMP();
 }
 void Renderer::raygen_start_grass(){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
+        PLACE_TIMESTAMP();
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.line);
@@ -1511,7 +1546,10 @@ void Renderer::updade_grass(vec2 windDirection){
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         grassState);
+
+        PLACE_TIMESTAMP();
     vkCmdDispatch(commandBuffer, (world_size.x*2 +7)/8, (world_size.y*2 +7)/8, 1); //2x8 2x8 1x1
+        PLACE_TIMESTAMP();
 }
 //blade is hardcoded but it does not really increase perfomance
 //done this way for simplicity, can easilly be replaced
@@ -1539,6 +1577,8 @@ void Renderer::raygen_map_grass(vec4 shift, int size){
 void Renderer::raygen_start_water(){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
+        PLACE_TIMESTAMP();
+        PLACE_TIMESTAMP();
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.line);
@@ -1580,6 +1620,7 @@ void Renderer::end_raygen() {
 void Renderer::diffuse() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
+        PLACE_TIMESTAMP();
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, diffusePipe.line);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, diffusePipe.lineLayout, 0, 1, &diffusePipe.sets[currentFrame], 0, 0);
@@ -1589,7 +1630,9 @@ void Renderer::diffuse() {
         struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,intBitsToFloat(iFrame)), vec4(cameraDir,0)};
         vkCmdPushConstants(commandBuffer, diffusePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
         
+        PLACE_TIMESTAMP();
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        PLACE_TIMESTAMP();
 }
 
 void Renderer::glossy() {
@@ -1619,7 +1662,9 @@ void Renderer::glossy() {
         struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,0), vec4(cameraDir,0)};
         vkCmdPushConstants(commandBuffer, glossyPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
+        PLACE_TIMESTAMP();
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        PLACE_TIMESTAMP();
         // vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
 
     vkCmdEndRenderPass(commandBuffer);
@@ -1653,14 +1698,18 @@ void Renderer::blur() {
         struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,0), vec4(cameraDir,0)};
         // vkCmdPushConstants(commandBuffer, blurPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
+        PLACE_TIMESTAMP();
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        PLACE_TIMESTAMP();
         // vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
 
 }
 
 void Renderer::start_ui() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers[currentFrame];
+        PLACE_TIMESTAMP();
     
+        PLACE_TIMESTAMP();
     VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         // recreate_SwapchainDependent();
@@ -1730,6 +1779,7 @@ void Renderer::end_ui() {
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
     // cmdPipelineBarrier(copyCommandBuffers[currentFrame], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
+        PLACE_TIMESTAMP();
 }
 
 void Renderer::present() {
@@ -1789,18 +1839,20 @@ void Renderer::end_frame() {
     iFrame++;
     process_ui_deletion_queue();
 
+    // #ifdef MEASURE_PERFOMANCE
     vkGetQueryPoolResults(
         device,
         queryPoolTimestamps,
         0,
-        2,
-        2 * sizeof(uint64_t),
-        timestamps,
+        timestampCount,
+        timestampCount * sizeof(uint64_t),
+        timestamps.data(),
         sizeof(uint64_t),
 	    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
 
     float timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
     timeTakenByRadiance = float(timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
+    // #endif
     // printl(timeTakenByRadiance)
 }
 

@@ -57,6 +57,18 @@
 #define calloc(x,y) ({void* res_ptr =(calloc)(x,y); assert(res_ptr!=NULL && __LINE_STRING__); res_ptr;})
 #endif
 
+#define PLACE_TIMESTAMP() do {\
+    if(measureAll){\
+        timestampNames[currentTimestamp] = __func__;\
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, currentTimestamp++);\
+    }\
+} while(0)
+
+#define PLACE_TIMESTAMP_ALWAYS() do {\
+    timestampNames[currentTimestamp] = __func__;\
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, currentTimestamp++);\
+} while(0)
+
 // #define SET_ALLOC_NAMES
 #ifdef SET_ALLOC_NAMES
 #define vmaCreateImage(allocator, pImageCreateInfo, pAllocationCreateInfo, pImage, pAllocation, pAllocationInfo) {\

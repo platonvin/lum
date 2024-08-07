@@ -699,7 +699,16 @@ private:
         VkDebugUtilsMessengerEXT debugMessenger;
     #endif
     VkQueryPool queryPoolTimestamps;
-    uint64_t timestamps[2];
+public:
+    int currentTimestamp = 0;
+    // #ifdef MEASURE_PERFOMANCE
+    // #else
+    // #endif
+    int timestampCount = 0;
+    bool measureAll = true;
+    // int timestampCount = 2;
+    vector<uint64_t> timestamps = {};
+    vector<const char*> timestampNames = {};
     VkPhysicalDeviceProperties physicalDeviceProperties;
     float timeTakenByRadiance = 0.0;
     int magicSize = 2;
