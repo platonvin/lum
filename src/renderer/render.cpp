@@ -1086,10 +1086,10 @@ void Renderer::update_radiance() {
 
         int wg_count = radianceUpdates.size() / magicSize;
         
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 0);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, 0);
     vkCmdDispatch(commandBuffer, wg_count, 1, 1);
 
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPoolTimestamps, 1);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPoolTimestamps, 1);
 
     cmdPipelineBarrier(commandBuffer, 
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1304,149 +1304,26 @@ void Renderer::map_mesh(Mesh* mesh) {
 void Renderer::end_map() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
 
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-
-    // VkImageMemoryBarrier barrier{};
-    //     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    //     barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    //     barrier.image = originBlockPalette[currentFrame].image;
-    //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    //     barrier.subresourceRange.baseMipLevel = 0;
-    //     barrier.subresourceRange.levelCount = 1;
-    //     barrier.subresourceRange.baseArrayLayer = 0;
-    //     barrier.subresourceRange.layerCount = 1;
-    //     barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-    //     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, 
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
-                originBlockPalette[currentFrame]);
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
-
-    VkImageMemoryBarrier imageMemoryBarrier = {};
-        imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;    // Access mask for the vertex shader write
-        imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;     // Access mask for the fragment shader read
-        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;           // The layout used during write
-        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;           // The layout used during read
-        imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        imageMemoryBarrier.image = originBlockPalette[currentFrame].image;  // The image being synchronized
-        imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
-        imageMemoryBarrier.subresourceRange.levelCount = 1;
-        imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
-        imageMemoryBarrier.subresourceRange.layerCount = 1;
-
-    vkCmdPipelineBarrier(
-        commandBuffer,
-        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, // srcStageMask
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, // dstStageMask
-        0,                                     // dependencyFlags
-        0, NULL,                               // memoryBarrierCount & pMemoryBarriers
-        0, NULL,                               // bufferMemoryBarrierCount & pBufferMemoryBarriers
-        1, &imageMemoryBarrier                 // imageMemoryBarrierCount & pImageMemoryBarriers
-    );
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 
+        &originBlockPalette[currentFrame]);
 }
+
 void Renderer::end_compute() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
-    VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = originBlockPalette[currentFrame].image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, 
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
-                originBlockPalette[currentFrame]);
-        barrier.image = world.image;
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    cmdPipelineBarrier(commandBuffer, 
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
-                world);
-        barrier.image = originBlockPalette[previousFrame].image;
-
-    
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    
-
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = originBlockPalette[0].image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;    
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
-    //     barrier.image = world.image;
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
-    //     barrier.image = originBlockPalette[1].image;
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier); 
-    
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    // VK_CHECK(vkEndCommandBuffer(commandBuffer));
-        // vector<VkSemaphore> computeWaitSemaphores = {rayGenFinishedSemaphores[currentFrame]};
-        // VkPipelineStageFlags computeWaitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    //     VkSubmitInfo submitInfo = {};
-    //         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    //         submitInfo.pWaitDstStageMask = computeWaitStages;
-    //         submitInfo.waitSemaphoreCount = computeWaitSemaphores.size();
-    //         submitInfo.pWaitSemaphores    = computeWaitSemaphores.data();
-    //         submitInfo.commandBufferCount = 1;
-    //         submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
-    //         submitInfo.signalSemaphoreCount = 1;
-    //         submitInfo.pSignalSemaphores = &raytraceFinishedSemaphores[currentFrame];
-    // VK_CHECK(vkQueueSubmit(computeQueue, 1, &submitInfo, raytraceInFlightFences[currentFrame]));
 }
+
 void Renderer::start_raygen() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
     
     struct unicopy {mat4 trans;} unicopy = {cameraTransform};
     vkCmdUpdateBuffer(commandBuffer, uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
-    
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    VkBufferMemoryBarrier staging_uniform_barrier{};
-        staging_uniform_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        staging_uniform_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        staging_uniform_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        staging_uniform_barrier.buffer = uniform[currentFrame].buffer;
-        staging_uniform_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT| VK_ACCESS_MEMORY_READ_BIT;
-        staging_uniform_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-        staging_uniform_barrier.size = VK_WHOLE_SIZE;
-
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &staging_uniform_barrier);
     cmdPipelineBarrier(commandBuffer, 
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT,
                 uniform[currentFrame]);
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT|VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
 
     vector<VkClearValue> clearColors = {
         {}, 
@@ -1644,42 +1521,6 @@ void Renderer::raygen_map_grass(vec4 shift, int size){
     struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
     vkCmdPushConstants(commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
-    // VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
-    // VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST   , {/*empty*/}, {world},                NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-    // VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT , {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-
-    //     VkDescriptorBufferInfo 
-    //         uniform_info = {};
-    //         uniform_info.buffer = uniform[currentFrame].buffer;
-    //         uniform_info.offset = 0;
-    //         uniform_info.range = VK_WHOLE_SIZE;
-    //     VkDescriptorImageInfo 
-    //         state_info = {};
-    //         state_info.imageView = grassState.view;
-    //         state_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //         state_info.sampler = linearSampler;
-
-    //     VkWriteDescriptorSet 
-    //         uniformWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    //         uniformWrite.dstSet = NULL;
-    //         uniformWrite.dstBinding = 0;
-    //         uniformWrite.dstArrayElement = 0;
-    //         uniformWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    //         uniformWrite.descriptorCount = 1;
-    //         uniformWrite.pBufferInfo = &uniform_info;
-    //     VkWriteDescriptorSet 
-    //         stateWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    //         stateWrite.dstSet = NULL;
-    //         stateWrite.dstBinding = 1;
-    //         stateWrite.dstArrayElement = 0;
-    //         stateWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    //         stateWrite.descriptorCount = 1;
-    //         stateWrite.pImageInfo = &state_info;
-    //     vector<VkWriteDescriptorSet> descriptorWrites = {uniformWrite, stateWrite};
-
-    // vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-
-
     // const int verts_per_blade = 4*6 + 3; //for triangle list
     // const int verts_per_blade = 11+3; //for triangle strip
     // const int blade_per_instance = 2; //for triangle strip
@@ -1723,39 +1564,6 @@ void Renderer::raygen_map_water(vec4 shift, int size){
 
     struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
     vkCmdPushConstants(commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
-
-    //     VkDescriptorBufferInfo 
-    //         uniform_info = {};
-    //         uniform_info.buffer = uniform[currentFrame].buffer;
-    //         uniform_info.offset = 0;
-    //         uniform_info.range = VK_WHOLE_SIZE;
-    //     VkDescriptorImageInfo 
-    //         state_info = {};
-    //         state_info.imageView = waterState.view;
-    //         state_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //         state_info.sampler = linearSampler;
-
-    //     VkWriteDescriptorSet 
-    //         uniformWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    //         uniformWrite.dstSet = NULL;
-    //         uniformWrite.dstBinding = 0;
-    //         uniformWrite.dstArrayElement = 0;
-    //         uniformWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    //         uniformWrite.descriptorCount = 1;
-    //         uniformWrite.pBufferInfo = &uniform_info;
-    //     VkWriteDescriptorSet 
-    //         stateWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    //         stateWrite.dstSet = NULL;
-    //         stateWrite.dstBinding = 1;
-    //         stateWrite.dstArrayElement = 0;
-    //         stateWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    //         stateWrite.descriptorCount = 1;
-    //         stateWrite.pImageInfo = &state_info;
-    //     vector<VkWriteDescriptorSet> descriptorWrites = {uniformWrite, stateWrite};
-
-    // vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
-
-
 
     const int verts_per_water_tape = 32;
     const int tapes_per_block = 16;
@@ -1884,20 +1692,6 @@ void Renderer::end_ui() {
 
     vkCmdEndRenderPass(commandBuffer); //end of blur2present rpass
 
-    VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT |VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT |VK_ACCESS_TRANSFER_WRITE_BIT;  
-        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-
     VkImageBlit blit = {};
         blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1916,32 +1710,26 @@ void Renderer::end_ui() {
         blit.dstOffsets[1].x = swapChainExtent.width;
         blit.dstOffsets[1].y = swapChainExtent.height;
         blit.dstOffsets[1].z = 1;
-        
 
-        // barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        // barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        // barrier.image = highresFrames[currentFrame].image;
-    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, &barrier); 
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                 &highresFrames[currentFrame]);
-        // barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        // barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        // barrier.image = swapchainImages[imageIndex].image;
+
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_ACCESS_NONE, VK_ACCESS_MEMORY_WRITE_BIT,
                 &swapchainImages[imageIndex]);
 
     vkCmdBlitImage(commandBuffer, highresFrames[currentFrame].image, VK_IMAGE_LAYOUT_GENERAL, swapchainImages[imageIndex].image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
+
     cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_NONE,
                 &swapchainImages[imageIndex]); 
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
-    cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
-    cmdPipelineBarrier(copyCommandBuffers[currentFrame], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
+    // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
+    // cmdPipelineBarrier(copyCommandBuffers[currentFrame], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
 }
 
 void Renderer::present() {
@@ -1953,9 +1741,9 @@ void Renderer::present() {
     
     vector<VkSemaphore> waitSemaphores = {imageAvailableSemaphores[currentFrame]};
     VkPipelineStageFlags waitStages[] = {
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
     };
 
     vector<VkCommandBuffer> commandBuffers = {copyCommandBuffers[currentFrame], computeCommandBuffers[currentFrame], graphicsCommandBuffers[currentFrame]};
