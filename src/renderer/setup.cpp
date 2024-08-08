@@ -537,7 +537,7 @@ void Renderer::createRenderPass2(){
         dependencies[2].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
         dependencies[2].srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
         dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_INDEX_READ_BIT;
-        dependencies[2].dependencyFlags = 0;
+        dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
     vector<VkSubpassDescription> subpasses = {blur_subpass, overlay_subpass};
 

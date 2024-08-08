@@ -556,6 +556,8 @@ void Renderer::cleanup() {
         vkDestroySemaphore(device,  imageAvailableSemaphores[i], NULL);
         vkDestroySemaphore(device,  renderFinishedSemaphores[i], NULL);
         vkDestroyFence(device,    frameInFlightFences[i], NULL);
+        
+        vkDestroyQueryPool(device, queryPoolTimestamps[i], NULL);
     }
     vkDestroyCommandPool(device, commandPool, NULL);
 // println
@@ -593,7 +595,6 @@ void Renderer::cleanup() {
         // cout << dump << std::fflush(stdout);
         // fflush(stdout);
         // vmaFreeStatsString(VMAllocator, dump);
-        vkDestroyQueryPool(device, queryPoolTimestamps[i], NULL);
     }
     //do before destroyDevice
     vmaDestroyAllocator(VMAllocator);
@@ -1838,6 +1839,7 @@ void Renderer::present() {
 
 void Renderer::end_frame() {
     if(iFrame != 0){
+        //this was causing basically device wait idle
         vkGetQueryPoolResults(
             device,
             queryPoolTimestamps[previousFrame],

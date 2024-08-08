@@ -73,7 +73,7 @@ float get_blade_width(float height){
 //ONLY WORKS WITH BLADE NON TRANSFORMED VERTS
 void rotate_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
     // {//obvious version. Is left to explaing 
-        float angle = rnd01 * PI * 2.0; //increasing randomness
+        float angle = rnd01 * PI * 2.0 * 420.0; //increasing randomness
         float cos_rot = cos(angle);
         float sin_rot = sin(angle);
     // }

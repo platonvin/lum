@@ -448,7 +448,7 @@ void Engine::draw()
                 render.raygen_start_grass();
                     for(int xx=0; xx<16;xx++){
                     for(int yy=0; yy<16;yy++){
-                        if(render.current_world(4+xx,4+yy,1) == 0){
+                        if(render.origin_world(4+xx,4+yy,1) == 0){
                             render.raygen_map_grass(vec4(64+xx*16,64+yy*16,16,0), 16);
                         }
                     }}
