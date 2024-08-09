@@ -51,11 +51,6 @@ const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 #define  FINAL_IMAGE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
 #define OLD_UV_FORMAT VK_FORMAT_R32G32_SFLOAT
 #define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
-#ifdef STENCIL
-#define DEPTH_FORMAT VK_FORMAT_D24_UNORM_S8_UINT 
-#else
-#define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT
-#endif
 // #define ACCUMULATE_HIGHRES
 //should be (at least) 2 for temporal accumulation, but can be changed if rebind images
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -626,13 +621,13 @@ public:
 
     vector<Image> swapchainImages;
            Image highresFrames;
-           Image highresDepths;
+           Image highresDepthStencils;
            Image highresStencils;
            Image highresMatNorms; 
            //downscaled version for memory coherence. TODO:TEST perfomance on tiled 
            Image lowresMatNorm;
-           Image lowresDepth;
-           Image stencil;
+           Image lowresDepthStencil;
+               VkImageView stencilViewForDS;
            Image maskFrame; //where lowres renders to. Blends with highres afterwards
     
 

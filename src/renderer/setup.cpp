@@ -132,7 +132,7 @@ void Renderer::createRenderPass1(){
         ca_frame.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         ca_depth = {};
-        ca_depth.format = DEPTH_FORMAT;
+        ca_depth.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
         ca_depth.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         ca_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
@@ -494,10 +494,10 @@ void Renderer::createRenderPass3(){
     //     a_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         a_stencil = {}; //stencil generated in same rpass and unused after
-        a_stencil.format = VK_FORMAT_S8_UINT;
+        a_stencil.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
         a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
         a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_NONE; 
         a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         a_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;

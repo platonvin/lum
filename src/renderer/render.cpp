@@ -189,10 +189,10 @@ println
 
     if(scaled){
         transition_Image_Layout_Singletime(&maskFrame, VK_IMAGE_LAYOUT_GENERAL);
-        transition_Image_Layout_Singletime(&lowresDepth, VK_IMAGE_LAYOUT_GENERAL);
+        transition_Image_Layout_Singletime(&lowresDepthStencil, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&lowresMatNorm, VK_IMAGE_LAYOUT_GENERAL);
     }
-    transition_Image_Layout_Singletime(&stencil, VK_IMAGE_LAYOUT_GENERAL);
+    // transition_Image_Layout_Singletime(&stencil, VK_IMAGE_LAYOUT_GENERAL);
     
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         transition_Image_Layout_Singletime(&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
@@ -219,7 +219,7 @@ println
 println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepths},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencils},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {originBlockPalette}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {materialPalette},    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
@@ -238,7 +238,7 @@ println
 println
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepth},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
@@ -676,7 +676,7 @@ void Renderer::createSwapchain() {
 }
 
 void Renderer::cleanupSwapchainDependent() {
-    deleteImages(&highresDepths);
+    deleteImages(&highresDepthStencils);
     deleteImages(&highresFrames);    
     deleteImages(&highresMatNorms);
 
@@ -702,13 +702,13 @@ void Renderer::createSwapchainDependent() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(&highresDepths,
+    create_Image_Storages(&highresDepthStencils,
         VK_IMAGE_TYPE_2D,
-        DEPTH_FORMAT,
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,
         {swapChainExtent.width, swapChainExtent.height, 1});
     create_Image_Storages(&highresFrames,
         VK_IMAGE_TYPE_2D,
@@ -729,19 +729,33 @@ void Renderer::createSwapchainDependent() {
             VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             {raytraceExtent.width, raytraceExtent.height, 1});
-        create_Image_Storages(&lowresDepth,
+        create_Image_Storages(&lowresDepthStencil,
             VK_IMAGE_TYPE_2D,
-            DEPTH_FORMAT,
+            VK_FORMAT_D32_SFLOAT_S8_UINT,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-            VK_IMAGE_ASPECT_DEPTH_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,
             {raytraceExtent.width, raytraceExtent.height, 1});
     } else {
         //set them same
         lowresMatNorm = highresMatNorms;
-        lowresDepth = highresDepths;
+        lowresDepthStencil = highresDepthStencils;
     }
+
+        VkImageViewCreateInfo viewInfo = {};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = lowresDepthStencil.image;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
+        viewInfo.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT; //create stencil view yourself
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 1;
+        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &stencilViewForDS));
+
     //required anyways
     create_Image_Storages(&maskFrame,
         VK_IMAGE_TYPE_2D,
@@ -752,19 +766,11 @@ void Renderer::createSwapchainDependent() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         {raytraceExtent.width, raytraceExtent.height, 1});
-    create_Image_Storages(&stencil,
-        VK_IMAGE_TYPE_2D,
-        VK_FORMAT_S8_UINT,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_STENCIL_BIT,
-        {raytraceExtent.width, raytraceExtent.height, 1});
     vector<vector<VkImageView>> rayGenVeiws(3);
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         rayGenVeiws[0].push_back(highresMatNorms.view);
         rayGenVeiws[1].push_back(highresFrames.view);
-        rayGenVeiws[2].push_back(highresDepths.view);
+        rayGenVeiws[2].push_back(highresDepthStencils.view);
     }
 
     vector<vector<VkImageView>> interVeiws(3);
@@ -773,7 +779,7 @@ void Renderer::createSwapchainDependent() {
             interVeiws[0].push_back(lowresMatNorm.view);
             interVeiws[1].push_back(maskFrame.view);
             // interVeiws[2].push_back(lowresDepth.view);
-            interVeiws[2].push_back(stencil.view);
+            interVeiws[2].push_back(stencilViewForDS);
         // } else {
             // interVeiws[0].push_back(highresMatNorms.view);
             // interVeiws[1].push_back(highresFrames.view);
@@ -1749,15 +1755,15 @@ void Renderer::start_2nd_spass(){
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
             &highresMatNorms);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &highresDepths);
+            &highresDepthStencils);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
             &maskFrame);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
             &lowresMatNorm);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &lowresDepth);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &stencil);
+            &lowresDepthStencil);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &stencil);
         VkImageBlit 
             blit = {};
             blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1781,7 +1787,7 @@ void Renderer::start_2nd_spass(){
             vkCmdBlitImage(commandBuffer, highresMatNorms.image, VK_IMAGE_LAYOUT_GENERAL, lowresMatNorm.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
                 blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                 blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            vkCmdBlitImage(commandBuffer, highresDepths.image, VK_IMAGE_LAYOUT_GENERAL, lowresDepth.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
+            vkCmdBlitImage(commandBuffer, highresDepthStencils.image, VK_IMAGE_LAYOUT_GENERAL, lowresDepthStencil.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
         }
 
         cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
@@ -1789,9 +1795,9 @@ void Renderer::start_2nd_spass(){
         cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
             lowresMatNorm);
         cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            lowresDepth);
-        cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            stencil);
+            lowresDepthStencil);
+        // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     stencil);
     // }
     
     vector<VkClearValue> clearColors = {
@@ -2373,7 +2379,11 @@ void Renderer::create_Image_Storages(Image* image,
             viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
         }
         viewInfo.format = format;
-        viewInfo.subresourceRange.aspectMask = aspect;
+        if((aspect&VK_IMAGE_ASPECT_DEPTH_BIT) and (aspect&VK_IMAGE_ASPECT_STENCIL_BIT)) {
+            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT; //create stencil view yourself
+        } else {
+            viewInfo.subresourceRange.aspectMask = aspect;
+        }
         viewInfo.subresourceRange.baseMipLevel = 0;
         viewInfo.subresourceRange.baseArrayLayer = 0;
         viewInfo.subresourceRange.levelCount = mipmaps;
