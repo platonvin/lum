@@ -161,7 +161,7 @@ void Renderer::createRenderPass1(){
     const int SP_GRASS = SP_PARTS+1;
     const int SP_WATER = SP_GRASS+1;
     const int SP_DIFFUSE = SP_WATER+1;
-    const int SP_GLOSSY = SP_DIFFUSE+1;
+    // const int SP_GLOSSY = SP_DIFFUSE+1;
     VkSubpassDescription 
         raygen_subpass = {};
         raygen_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -198,15 +198,15 @@ void Renderer::createRenderPass1(){
         //depth is in input cause we use it as "color", not for hw depth testing
         diffuse_fs.inputAttachmentCount = diffuse_input_attachment_refs.size();
         diffuse_fs.pInputAttachments = diffuse_input_attachment_refs.data();
-    VkSubpassDescription 
-        glossy_fs = {};
-        glossy_fs.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        //only writes to final frame
-        glossy_fs.colorAttachmentCount = 1;
-        glossy_fs.pColorAttachments = &aref_frame;
-        //depth is in input cause we use it as "color", not for hw depth testing
-        glossy_fs.inputAttachmentCount = diffuse_input_attachment_refs.size();
-        glossy_fs.pInputAttachments = diffuse_input_attachment_refs.data();
+    // VkSubpassDescription 
+    //     glossy_fs = {};
+    //     glossy_fs.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    //     //only writes to final frame
+    //     glossy_fs.colorAttachmentCount = 1;
+    //     glossy_fs.pColorAttachments = &aref_frame;
+    //     //depth is in input cause we use it as "color", not for hw depth testing
+    //     glossy_fs.inputAttachmentCount = diffuse_input_attachment_refs.size();
+    //     glossy_fs.pInputAttachments = diffuse_input_attachment_refs.data();
 
     VkSubpassDependency full_wait_color = {};
 		full_wait_color.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -296,20 +296,20 @@ void Renderer::createRenderPass1(){
 		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_BLOCKS;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
-        wait.srcSubpass = SP_BLOCKS;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_BLOCKS;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_BLOCKS;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
 
         wait.srcSubpass = SP_PARTS;
         wait.dstSubpass = SP_GRASS;
@@ -342,27 +342,27 @@ void Renderer::createRenderPass1(){
 		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_PARTS;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
-        wait.srcSubpass = SP_PARTS; //mapping particles
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		wait.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    dependencies.push_back(wait);
-        wait.srcSubpass = SP_PARTS;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_PARTS;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_PARTS; //mapping particles
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    // dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_PARTS;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
 
         wait.srcSubpass = SP_GRASS;
         wait.dstSubpass = SP_WATER;
@@ -387,20 +387,20 @@ void Renderer::createRenderPass1(){
 		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_GRASS;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
-        wait.srcSubpass = SP_GRASS;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_GRASS;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_GRASS;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
 
 
         wait.srcSubpass = SP_WATER;
@@ -417,28 +417,28 @@ void Renderer::createRenderPass1(){
 		wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 
-        wait.srcSubpass = SP_WATER;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
-        wait.srcSubpass = SP_WATER;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-		wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    //     wait.srcSubpass = SP_WATER;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_WATER;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
 
 
-        wait.srcSubpass = SP_DIFFUSE;
-        wait.dstSubpass = SP_GLOSSY;
-        wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-		wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_DIFFUSE;
+    //     wait.dstSubpass = SP_GLOSSY;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+    // dependencies.push_back(wait);
     //     wait.srcSubpass = SP_DIFFUSE;
     //     wait.dstSubpass = SP_GLOSSY;
     //     wait.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
@@ -447,7 +447,8 @@ void Renderer::createRenderPass1(){
 	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     // dependencies.push_back(wait);
 
-    vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, raygen_grass_subpass, raygen_water_subpass, diffuse_fs, glossy_fs};
+    // vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, raygen_grass_subpass, raygen_water_subpass, diffuse_fs, glossy_fs};
+    vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, raygen_grass_subpass, raygen_water_subpass, diffuse_fs};
 
     VkRenderPassCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -458,8 +459,154 @@ void Renderer::createRenderPass1(){
         createInfo.dependencyCount = dependencies.size();
         createInfo.pDependencies = dependencies.data();
     
-    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &raygen2glossyRpass));
+    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &raygen2diffuseRpass));
 }
+void Renderer::createRenderPass3(){
+    VkAttachmentDescription 
+        a_mat_norm = {};
+        a_mat_norm.format = VK_FORMAT_R8G8B8A8_SNORM;
+        a_mat_norm.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_mat_norm.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        a_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_mat_norm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_mat_norm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_mat_norm.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_mat_norm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_result = {}; //frame image that will apply on top of highres one
+        a_result.format = VK_FORMAT_R16G16B16A16_UNORM;
+        a_result.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_result.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_result.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        a_result.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_result.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_result.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_result.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    // VkAttachmentDescription 
+    //     a_depth = {}; //stencil generated in same rpass and unused after
+    //     a_depth.format = DEPTH_FORMAT;
+    //     a_depth.samples = VK_SAMPLE_COUNT_1_BIT;
+    //     a_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+    //     a_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+    //     a_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    //     a_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    //     a_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     a_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_stencil = {}; //stencil generated in same rpass and unused after
+        a_stencil.format = VK_FORMAT_S8_UINT;
+        a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_stencil.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    VkAttachmentReference 
+        aref_mat_norm = {};
+        aref_mat_norm.attachment = 0;
+        aref_mat_norm.layout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentReference 
+        aref_res = {};
+        aref_res.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_res.attachment = 1;
+    // VkAttachmentReference 
+    //     aref_depth = {};
+    //     aref_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+    //     aref_depth.attachment = 2;
+    VkAttachmentReference 
+        aref_stencil = {};
+        aref_stencil.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_stencil.attachment = 2;
+    vector<VkAttachmentDescription> attachments = {a_mat_norm, a_result, a_stencil};
+
+    //fills with 01 but discards
+    VkSubpassDescription 
+        fill_stencil_for_reflection_subpass = {};
+        fill_stencil_for_reflection_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        fill_stencil_for_reflection_subpass.colorAttachmentCount = 0;
+        fill_stencil_for_reflection_subpass.pColorAttachments = NULL;
+        fill_stencil_for_reflection_subpass.inputAttachmentCount = 1;
+        fill_stencil_for_reflection_subpass.pInputAttachments = &aref_mat_norm;
+        fill_stencil_for_reflection_subpass.pDepthStencilAttachment = &aref_stencil;
+    //fills with 10 on rasterization
+    VkSubpassDescription 
+        fill_stencil_for_smoke_subpass = {};
+        fill_stencil_for_smoke_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        fill_stencil_for_smoke_subpass.colorAttachmentCount = 0;
+        fill_stencil_for_smoke_subpass.pColorAttachments = NULL;
+        fill_stencil_for_smoke_subpass.inputAttachmentCount = 0;
+        fill_stencil_for_smoke_subpass.pInputAttachments = NULL;
+        fill_stencil_for_smoke_subpass.pDepthStencilAttachment = &aref_stencil;
+    //reads from mat_norm and writes to final frame. Tested against 01 bitmask in stencil
+    // vector<VkAttachmentReference> reflection_refs = {aref_mat_norm, aref_depth};
+    vector<VkAttachmentReference> reflection_refs = {};
+    VkSubpassDescription 
+        reflections_subpass = {};
+        reflections_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        reflections_subpass.colorAttachmentCount = 1;
+        reflections_subpass.pColorAttachments = &aref_res;
+        reflections_subpass.inputAttachmentCount = 0;
+        reflections_subpass.pInputAttachments = NULL;
+        reflections_subpass.pDepthStencilAttachment = &aref_stencil;
+    //reads from depth, and writes to final frame. Tested against 10 bitmask in stencil
+    //rendered on top of reflections
+    // vector<VkAttachmentReference> smoke_refs = {aref_ds};
+    VkSubpassDescription
+        smoke_subpass = {};
+        smoke_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        smoke_subpass.colorAttachmentCount = 1;
+        smoke_subpass.pColorAttachments = &aref_res;
+        smoke_subpass.inputAttachmentCount = 0;
+        smoke_subpass.pInputAttachments = NULL;
+        smoke_subpass.pDepthStencilAttachment = &aref_stencil;
+
+    VkSubpassDependency full_wait_color = {};
+		full_wait_color.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		full_wait_color.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		full_wait_color.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		full_wait_color.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		full_wait_color.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    VkSubpassDependency full_wait_depth = {};
+        full_wait_depth.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        full_wait_depth.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        full_wait_depth.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        full_wait_depth.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        full_wait_depth.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		// This makes sure that writes to the depth image are done before we try to write to it again
+    vector<VkSubpassDependency> dependencies(1);
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        dependencies[0].dependencyFlags = 0;
+
+    //temporary dev barriers TODO
+    for(int i=0; i<4; i++){
+    for(int j=i+1; j<4; j++){
+        full_wait_depth.srcSubpass = full_wait_color.srcSubpass = i;
+        full_wait_depth.dstSubpass = full_wait_color.dstSubpass = j;
+        dependencies.push_back(full_wait_color);
+        dependencies.push_back(full_wait_depth);
+    }}
+
+    vector<VkSubpassDescription> subpasses = {fill_stencil_for_reflection_subpass, fill_stencil_for_smoke_subpass, reflections_subpass, smoke_subpass};
+
+    VkRenderPassCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        createInfo.attachmentCount = attachments.size();
+        createInfo.pAttachments    = attachments.data();
+        createInfo.subpassCount = subpasses.size();
+        createInfo.pSubpasses = subpasses.data();
+        createInfo.dependencyCount = dependencies.size();
+        createInfo.pDependencies = dependencies.data();
+    
+    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &smoke2glossyRpass));
+}
+
 void Renderer::createRenderPass2(){
     VkAttachmentDescription 
         ca_mat_norm = {};
@@ -559,9 +706,19 @@ void Renderer::destroy_Raster_Pipeline(RasterPipe* pipe){
     vkDestroyDescriptorSetLayout(device, pipe->setLayout, NULL);
 }
 
+static bool stencil_is_empty(VkStencilOpState stencil){
+    return 
+    (stencil.failOp == 0) &&
+    (stencil.passOp == 0) &&
+    (stencil.depthFailOp == 0) &&
+    (stencil.compareOp == 0) &&
+    (stencil.compareMask == 0) &&
+    (stencil.writeMask == 0) &&
+    (stencil.reference == 0);
+}
 void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
-        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling){
+        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling, Discard discard, const VkStencilOpState stencil){
     
     // vector<vector<char>> shader_codes(shader_stages.size());
     vector<VkShaderModule > shader_modules(shader_stages.size());
@@ -635,7 +792,7 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
     VkPipelineRasterizationStateCreateInfo 
         rasterizer = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
         rasterizer.depthClampEnable = VK_FALSE;
-        rasterizer.rasterizerDiscardEnable = VK_FALSE;
+        rasterizer.rasterizerDiscardEnable = (discard==NO_DISCARD)? VK_FALSE : VK_TRUE;
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer.lineWidth = 1.0f;
         rasterizer.depthBiasEnable = VK_FALSE;
@@ -706,22 +863,22 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
     VkPipelineDepthStencilStateCreateInfo
         depthStencil = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};    
         switch (depthTest) {
-            case NO_TEST: {
+            case NO_DEPTH_TEST: {
                 depthStencil.depthTestEnable = VK_FALSE;
                 depthStencil.depthWriteEnable = VK_FALSE;
                 break;
             }
-            case DO_TEST: {
+            case FULL_DEPTH_TEST: {
                 depthStencil.depthTestEnable = VK_TRUE;
                 depthStencil.depthWriteEnable = VK_TRUE;
                 break;
             }
-            case READ_TEST: {
+            case READ_DEPTH_TEST: {
                 depthStencil.depthTestEnable = VK_TRUE;
                 depthStencil.depthWriteEnable = VK_FALSE;
                 break;
             }
-            case WRITE_TEST: {
+            case WRITE_DEPTH_TEST: {
                 depthStencil.depthTestEnable = VK_FALSE;
                 depthStencil.depthWriteEnable = VK_TRUE;
                 break;
@@ -732,9 +889,13 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f;
         depthStencil.maxDepthBounds = 1.0f;
-        depthStencil.stencilTestEnable = VK_FALSE;
-        depthStencil.front = {};
-        depthStencil.back = {};
+        if(stencil_is_empty(stencil)){
+            depthStencil.stencilTestEnable = VK_FALSE;
+        } else {
+            depthStencil.stencilTestEnable = VK_TRUE;
+            depthStencil.front = stencil;
+            depthStencil.back  = stencil;
+        }
     VkGraphicsPipelineCreateInfo 
         pipelineInfo = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
         pipelineInfo.stageCount = shaderStages.size();
@@ -744,7 +905,7 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         pipelineInfo.pViewportState = &viewportState;
         pipelineInfo.pRasterizationState = &rasterizer;
         pipelineInfo.pMultisampleState = &multisampling;
-        if(depthTest == NO_TEST){
+        if((depthTest == NO_DEPTH_TEST) and (stencil_is_empty(stencil))){
             pipelineInfo.pDepthStencilState = NULL;
         } else {
             pipelineInfo.pDepthStencilState = &depthStencil;
@@ -772,7 +933,7 @@ void Renderer::destroy_Compute_Pipeline(ComputePipe* pipe){
     vkDestroyPipelineLayout(device, pipe->lineLayout, NULL);
     vkDestroyDescriptorSetLayout(device, pipe->setLayout, NULL);
 }
-void Renderer::create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 push_size, VkPipelineCreateFlags create_flags){
+void Renderer::create_Compute_Pipeline(ComputePipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, const char* src, u32 push_size, VkPipelineCreateFlags create_flags){
     auto compShaderCode = read_Shader(src);
 
     VkShaderModule module = create_Shader_Module(&compShaderCode);
@@ -790,10 +951,14 @@ void Renderer::create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 p
         pushRange.offset = 0;
         pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+    vector<VkDescriptorSetLayout> used_dset_layouts = {pipe->setLayout};
+    if(extra_dynamic_layout != 0){
+        used_dset_layouts.push_back(extra_dynamic_layout);
+    }
     VkPipelineLayoutCreateInfo 
         pipelineLayoutInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &pipe->setLayout;
+        pipelineLayoutInfo.setLayoutCount = used_dset_layouts.size();
+        pipelineLayoutInfo.pSetLayouts = used_dset_layouts.data();
         if(push_size != 0) {
             pipelineLayoutInfo.pushConstantRangeCount = 1;
             pipelineLayoutInfo.pPushConstantRanges = &pushRange;

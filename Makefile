@@ -72,6 +72,12 @@ _shaders:= \
 	shaders/compiled/rayGenParticlesGeom.spv\
 	shaders/compiled/diffuseVert.spv\
 	shaders/compiled/diffuseFrag.spv\
+	shaders/compiled/fillStencilGlossyVert.spv\
+	shaders/compiled/fillStencilGlossyFrag.spv\
+	shaders/compiled/fillStencilSmokeVert.spv\
+	shaders/compiled/fillStencilSmokeFrag.spv\
+	shaders/compiled/smokeVert.spv\
+	shaders/compiled/smokeFrag.spv\
 	shaders/compiled/glossyVert.spv\
 	shaders/compiled/glossyFrag.spv\
 	shaders/compiled/overlayVert.spv\
@@ -127,8 +133,8 @@ obj/rel/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer
 	g++ src/renderer/render_ui_interface.cpp $(Flags) obj/rel/render_ui_interface.o
 obj/rel/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 	g++ src/renderer/ui.cpp $(Flags) obj/rel/ui.o
-.PHONY: obj/rel/main.o
-obj/rel/main.o:
+# .PHONY: obj/rel/main.o
+obj/rel/main.o: src/main.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
 	g++ src/main.cpp $(Flags) obj/rel/main.o
 
 
@@ -186,6 +192,19 @@ shaders/compiled/dfz.spv: shaders/dfz.comp
 	glslc shaders/dfz.comp -o shaders/compiled/dfz.spv $(SHADER_FLAGS)
 shaders/compiled/bitmask.spv: shaders/bitmask.comp
 	glslc shaders/bitmask.comp -o shaders/compiled/bitmask.spv $(SHADER_FLAGS)
+shaders/compiled/fillStencilGlossyVert.spv: shaders/fillStencilGlossy.vert
+	glslc shaders/fillStencilGlossy.vert -o shaders/compiled/fillStencilGlossyVert.spv $(SHADER_FLAGS)
+shaders/compiled/fillStencilGlossyFrag.spv: shaders/fillStencilGlossy.frag
+	glslc shaders/fillStencilGlossy.frag -o shaders/compiled/fillStencilGlossyFrag.spv $(SHADER_FLAGS)
+shaders/compiled/fillStencilSmokeVert.spv: shaders/fillStencilSmoke.vert
+	glslc shaders/fillStencilSmoke.vert -o shaders/compiled/fillStencilSmokeVert.spv $(SHADER_FLAGS)
+shaders/compiled/fillStencilSmokeFrag.spv: shaders/fillStencilSmoke.frag
+	glslc shaders/fillStencilSmoke.frag -o shaders/compiled/fillStencilSmokeFrag.spv $(SHADER_FLAGS)
+shaders/compiled/smokeVert.spv: shaders/smoke.vert
+	glslc shaders/smoke.vert -o shaders/compiled/smokeVert.spv $(SHADER_FLAGS)
+shaders/compiled/smokeFrag.spv: shaders/smoke.frag
+	glslc shaders/smoke.frag -o shaders/compiled/smokeFrag.spv $(SHADER_FLAGS)
+
 
 debug: Flags=$(debug_flags) 
 # debug: objs=$(deb_objs)

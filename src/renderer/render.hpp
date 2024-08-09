@@ -179,11 +179,17 @@ enum BlendAttachment{
     NO_BLEND,
 };
 enum DepthTesting{
-    NO_TEST,
-    DO_TEST,
-    READ_TEST,
-    WRITE_TEST,
+    NO_DEPTH_TEST,
+    FULL_DEPTH_TEST,
+    READ_DEPTH_TEST,
+    WRITE_DEPTH_TEST,
 };
+//it was not discard in fragment
+enum Discard{
+    NO_DISCARD,
+    DO_DISCARD,
+};
+const VkStencilOpState NO_STENCIL = {};
 
 typedef struct ShaderStage{
     const char* src;
@@ -385,6 +391,7 @@ public:
     dmat4 cameraTransform     = identity<dmat4>();
     dmat4 cameraTransform_OLD = identity<dmat4>();
 
+    void gen_perlin();
     void start_frame();
         void start_compute();
             void start_blockify();
@@ -413,9 +420,13 @@ public:
                 void raygen_end_water();
             // void end_raygen_first();
             void diffuse();
-            void glossy();
+            void start_2nd_spass();
+                void smoke_raygen();// special mesh?
+                void smoke();
+                void glossy();
+            void end_2nd_spass();
         void end_raygen();
-            void blur();
+            void collect_glossy();
             void start_ui();
             void end_ui();
         void present();
@@ -451,15 +462,11 @@ public:
         VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, 
         Image* image);
 private:
-    //including fullscreen and scaled images
     void  cleanupSwapchainDependent();
-    //including fullscreen and scaled images
     void   createSwapchainDependent();
-    //including fullscreen and scaled images
-    void  recreateSwapchainDependent();
+    void recreateSwapchainDependent();
 
     void  cleanupImages();
-
 
     void createAllocator();
     void createWindow();
@@ -479,17 +486,17 @@ private:
     VkPresentModeKHR chooseSwapPresentMode(vector<VkPresentModeKHR> availablePresentModes);
     VkExtent2D chooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities);
     void createSwapchainImageViews();
-    void createRenderPassGraphical();
     void createRenderPass1();
-    void createRenderPass2();
+    void createRenderPass2(); //2=3. 
+    void createRenderPass3(); //3=2. Cool, right? borrowed from dreambeard
 
     
     void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
-        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling);
+        VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling, Discard discard, VkStencilOpState stencil);
     void destroy_Raster_Pipeline(RasterPipe* pipe);
 
-    void create_Compute_Pipeline(ComputePipe* pipe, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
+    void create_Compute_Pipeline(ComputePipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
     void destroy_Compute_Pipeline(ComputePipe* pipe);
 
     void createDescriptorPool();
@@ -582,55 +589,56 @@ public:
     VkExtent2D swapChainExtent;
     VkExtent2D  raytraceExtent;
 
+    // RasterPipe lightmapPipe;
+
     RasterPipe raygenBlocksPipe;
     RasterPipe raygenParticlesPipe;
     RasterPipe raygenGrassPipe;
     RasterPipe raygenWaterPipe;
-
     RasterPipe diffusePipe;
+
+    RasterPipe fillStencilGlossyPipe;
+    RasterPipe fillStencilSmokePipe;
     RasterPipe glossyPipe;
+    RasterPipe smokePipe;
+
     RasterPipe blurPipe; // i can use it for both mirror and glow
 
     RasterPipe overlayPipe;
 
-    VkRenderPass raygen2glossyRpass;//name me pleeeeese
-    VkRenderPass  blur2presentRpass;//name me pleeeeese
+    VkRenderPass       lightmapRpass;
+    VkRenderPass raygen2diffuseRpass;
+    VkRenderPass   smoke2glossyRpass;
+    VkRenderPass   blur2presentRpass;
 
-    vector<VkFramebuffer>      rayGenFramebuffers; //for 1st rpass
-    vector<VkFramebuffer>     overlayFramebuffers; //for 2st rpass.
+    vector<VkFramebuffer>  rayGenFramebuffers; //for 1st rpass
+    vector<VkFramebuffer>  glossyFramebuffers; //for 3rd rpass. Size of 1
+    vector<VkFramebuffer> overlayFramebuffers; //for 2st rpass.
 
-    vector<VkCommandBuffer>       computeCommandBuffers; 
-    vector<VkCommandBuffer>      graphicsCommandBuffers;
-    // vector<VkCommandBuffer>       overlayCommandBuffers; //separate so in theory you could run it on separate thread
-    vector<VkCommandBuffer>          copyCommandBuffers; //runtime copies for ui and runtime grass/water creation. Also does first frame resources
+    vector<VkCommandBuffer>  computeCommandBuffers; 
+    vector<VkCommandBuffer> graphicsCommandBuffers;
+    vector<VkCommandBuffer>     copyCommandBuffers; //runtime copies for ui and runtime grass/water creation. Also does first frame resources
 
-    vector<VkSemaphore>   imageAvailableSemaphores;
-    vector<VkSemaphore>   renderFinishedSemaphores; //to sync renering with presenting
-    // vector<VkSemaphore> raytraceFinishedSemaphores;
-    // vector<VkSemaphore>   rayGenFinishedSemaphores;
-    // vector<VkFence> graphicalInFlightFences;
-    // vector<VkFence>  raytraceInFlightFences;
-    vector<VkFence>    frameInFlightFences;    
+    vector<VkSemaphore> imageAvailableSemaphores;
+    vector<VkSemaphore> renderFinishedSemaphores; //to sync renering with presenting
 
-        // Image stepCount;
-        Image radianceCache;
-    // vector<Image> lowresFrames;
-        //    Image  frameMipmapped; //used for reflections
-    vector<Image> highresFrames;
-    vector<Image> depthHighres; //used for depth testing
-    // vector<Image> depthLowres; //used for depth testing
-        //    Image  depthMipmapped; //used for reflections
-    vector<Image> matNormHighres;
-    // vector<Image> matNormLowres; //render always to one, other stored downscaled
-        //    Image  oldUvHighres;
-        //    Image  oldUvLowres;
-            //    Image oldUv_downscaled; //dont need it
-    // vector<Image> mixRatio;
+    vector<VkFence>     frameInFlightFences;    
+
     vector<Image> swapchainImages;
+           Image highresFrames;
+           Image highresDepths;
+           Image highresStencils;
+           Image highresMatNorms; 
+           //downscaled version for memory coherence. TODO:TEST perfomance on tiled 
+           Image lowresMatNorm;
+           Image lowresDepth;
+           Image stencil;
+           Image maskFrame; //where lowres renders to. Blends with highres afterwards
+    
+
     VkSampler  nearestSampler;
     VkSampler   linearSampler;
     VkSampler   linearSampler_tiled;
-    // VkSampler   frameSampler;
     VkSampler  overlaySampler;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
@@ -638,11 +646,11 @@ public:
     vector<void*>       stagingWorldMapped;
            Image               world; //can i really use just one?
 
+           Image radianceCache;
+
     vector<Image> originBlockPalette;
            Image     distancePalette;
            Image          bitPalette; //bitmask of originBlockPalette
-    // vector<Image> TBP;
-        //    Image        block_palette;
     vector<Image> materialPalette;
     
     vector<Buffer>         uniform;

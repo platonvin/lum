@@ -233,7 +233,7 @@ bool initTvals(out varp vec3 tMax, out varp vec3 tDelta, out varp ivec3 blockPos
     return true;
 }
 
-bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection, 
+bool CastRay_fast(in varp vec3 origin, in varp vec3 direction, 
         out varp float fraction, out varp vec3 normal, out Material material){
     bool block_hit = false;
 
@@ -244,18 +244,36 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
     float max_dist = 16.0*32.0;
     bool current_voxel = GetVoxel(voxel_pos)!=0;
 
-    vec3 one_div_dir = 1.0 / rayDirection;    
+    vec3 one_div_dir = 1.0 / direction;    
+
+    //instead of checkng two
+    vec3 precomputed_corner;
+        precomputed_corner.x = (direction.x >0)? 16.0 : 0.0; 
+        precomputed_corner.y = (direction.y >0)? 16.0 : 0.0; 
+        precomputed_corner.z = (direction.z >0)? 16.0 : 0.0; 
+        // vec3 box_min = vec3(block_pos)*16.0;
+        // vec3 box_max = box_min+16.0;
+
+        // vec3 temp = - pos*one_div_dir;
+        
+        // varp vec3 block_corner1 = box_min*one_div_dir + temp; //now corners are relative vectors
+        // varp vec3 block_corner2 = box_max*one_div_dir + temp;
+        
+        // vec3 _t;
+        // _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+        // _t.y = max(block_corner1.y, block_corner2.y);
+        // _t.z = max(block_corner1.z, block_corner2.z);
 
     varp int iterations = 0;
     fraction = 0;
     while (true) {
         fraction += 0.5;
 
-        vec3 pos = rayOrigin + rayDirection*fraction;
+        vec3 pos = origin + direction*fraction;
         voxel_pos = ivec3(pos);
 
         // current_voxel = GetVoxel(voxel_pos)!=0;
-        // orig += dot(tDelta, vec3(currentStepDiretion)) * rayDirection;
+        // orig += dot(tDelta, vec3(currentStepDiretion)) * direction;
         // current_voxel = GetVoxel(voxel_pos);
             varp ivec3 block_pos = voxel_pos / 16;
             varp ivec3 relative_voxel_pos = voxel_pos % 16;
@@ -282,19 +300,21 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
 
             // if block_id is zero - teleport to border
             if(block_id == 0){
-                vec3 box_min = vec3(block_pos)*16.0;
-                vec3 box_max = box_min+16.0;
+                    // vec3 box_min = vec3(block_pos)*16.0;
+                    // vec3 box_max = box_min+16.0;
+                    vec3 box_precomp = vec3(block_pos)*16.0 + precomputed_corner;
 
-                    vec3 temp = - pos*one_div_dir;
+                    vec3 temp = -pos*one_div_dir;
                     
-                    varp vec3 block_corner1 = box_min*one_div_dir + temp; //now corners are relative vectors
-                    varp vec3 block_corner2 = box_max*one_div_dir + temp;
+                    // varp vec3 block_corner1 = box_min*one_div_dir + temp; //now corners are relative vectors
+                    // varp vec3 block_corner2 = box_max*one_div_dir + temp;
+                    varp vec3 block_corner = box_precomp*one_div_dir + temp;
                     
                     vec3 _t;
-                    _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
-                    _t.y = max(block_corner1.y, block_corner2.y);
-                    _t.z = max(block_corner1.z, block_corner2.z);
-                    // _t = block_corner1;                    
+                    // _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+                    // _t.y = max(block_corner1.y, block_corner2.y);
+                    // _t.z = max(block_corner1.z, block_corner2.z);
+                    _t = block_corner;                    
 
                     float _f = min(_t.x, min(_t.y, _t.z));
                     float f = max(_f,0.001); //safity
@@ -319,24 +339,24 @@ bool CastRay_fast(in varp vec3 rayOrigin, in varp vec3 rayDirection,
         }
     }
 
-    vec3 before_hit = rayOrigin + rayDirection*(fraction-1.0);
+    vec3 before_hit = origin + direction*(fraction-1.0);
 
 //todo:
     if(current_voxel){
 
-        ivec3 steps = ivec3(greaterThan(rayDirection, vec3(0)));
+        ivec3 steps = ivec3(greaterThan(direction, vec3(0)));
         steps = 2 * steps + (-1);
 
         vec3 tMax, tDelta;
         ivec3 voxel_pos;
         
-        vec3 block_corner1 = (floor(before_hit) - before_hit)/rayDirection; //now corners are relative vectors
-        vec3 block_corner2 = (floor(before_hit) - before_hit)/rayDirection  + 1.0/rayDirection;
+        vec3 block_corner1 = (floor(before_hit) - before_hit)/direction; //now corners are relative vectors
+        vec3 block_corner2 = (floor(before_hit) - before_hit)/direction  + 1.0/direction;
         tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
         tMax.y = max(block_corner1.y, block_corner2.y);
         tMax.z = max(block_corner1.z, block_corner2.z);
 
-        tDelta = 1.0 / abs(rayDirection); //how many dir vectors needeed to move 1.0 across each axys
+        tDelta = 1.0 / abs(direction); //how many dir vectors needeed to move 1.0 across each axys
         voxel_pos = ivec3(before_hit); //round origin to block pos
 
         vec3 fcurrentStepDiretion = vec3(0);
@@ -492,7 +512,6 @@ vec3 trace_ray(vec3 ray_pos, vec3 ray_dir){
     Material material;
     
     hit = CastRay_fast(origin, direction, fraction, normal, material);
-    
 
     if(hit){
         vec3 propagated_light = sample_radiance(origin+fraction*direction, normal);

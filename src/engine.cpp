@@ -87,7 +87,7 @@ static double delt_time = 0;
 static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 15, 8128, float(1), false, false);
+    render.init(48, 48, 16, 15, 8128, float(1.5), false, false);
 // println
     vkDeviceWaitIdle(render.device);
 
@@ -461,16 +461,23 @@ void Engine::draw()
 // println
                 render.diffuse();
 // println
+                render.end_raygen();
+
+                render.start_2nd_spass();
+// println
                 render.glossy();
 // println
-                render.end_raygen();
+                render.smoke();
 // println
-            render.blur(); 
+                render.end_2nd_spass();
+// println
+// println
+            render.collect_glossy(); 
 // println
             render.start_ui(); 
 // println
                 ui.update();
-    // println
+// println
                 ui.draw();
 // println
         render.end_ui(); 
