@@ -90,7 +90,7 @@ println
         world_size); //TODO: dynamic
     create_Image_Storages(&radianceCache,
         VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R16G16B16A16_UNORM,
+        RADIANCE_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -696,7 +696,7 @@ void Renderer::createSwapchainDependent() {
     // int mipmaps;
     create_Image_Storages(&highresMatNorms,
         VK_IMAGE_TYPE_2D,
-        VK_FORMAT_R8G8B8A8_SNORM,
+        MATNORM_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -704,7 +704,7 @@ void Renderer::createSwapchainDependent() {
         {swapChainExtent.width, swapChainExtent.height, 1});
     create_Image_Storages(&highresDepthStencils,
         VK_IMAGE_TYPE_2D,
-        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        DEPTH_FORMAT,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -712,8 +712,7 @@ void Renderer::createSwapchainDependent() {
         {swapChainExtent.width, swapChainExtent.height, 1});
     create_Image_Storages(&highresFrames,
         VK_IMAGE_TYPE_2D,
-        RAYTRACED_IMAGE_FORMAT,
-        // VK_FORMAT_R8G8B8A8_UNORM,
+        FRAME_FORMAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -723,7 +722,7 @@ void Renderer::createSwapchainDependent() {
     if(scaled){
         create_Image_Storages(&lowresMatNorm,
             VK_IMAGE_TYPE_2D,
-            VK_FORMAT_R8G8B8A8_SNORM,
+            MATNORM_FORMAT,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -731,7 +730,7 @@ void Renderer::createSwapchainDependent() {
             {raytraceExtent.width, raytraceExtent.height, 1});
         create_Image_Storages(&lowresDepthStencil,
             VK_IMAGE_TYPE_2D,
-            VK_FORMAT_D32_SFLOAT_S8_UINT,
+            DEPTH_FORMAT,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
             VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -747,8 +746,7 @@ void Renderer::createSwapchainDependent() {
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         viewInfo.image = lowresDepthStencil.image;
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
-        viewInfo.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        viewInfo.format = DEPTH_FORMAT;
         viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT; //create stencil view yourself
         viewInfo.subresourceRange.baseMipLevel = 0;
         viewInfo.subresourceRange.baseArrayLayer = 0;
@@ -759,7 +757,7 @@ void Renderer::createSwapchainDependent() {
     //required anyways
     create_Image_Storages(&maskFrame,
         VK_IMAGE_TYPE_2D,
-        RAYTRACED_IMAGE_FORMAT,
+        FRAME_FORMAT,
         // VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,

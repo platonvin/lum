@@ -23,7 +23,7 @@ layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput de
 layout(set = 0, binding = 2, r16i       ) uniform iimage3D  blocks;
 layout(set = 0, binding = 3, r8ui       ) uniform uimage3D  blockPalette;
 layout(set = 0, binding = 4, r32f       ) uniform image2D   voxelPalette;
-layout(set = 0, binding = 5, rgba16     ) uniform image3D   radianceCache;
+layout(set = 0, binding = 5, rgb10_a2     ) uniform image3D   radianceCache;
 
 layout(location = 0) in vec2 non_clip_pos;
 layout(location = 0) out vec4 frame_color;

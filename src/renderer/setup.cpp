@@ -112,7 +112,7 @@ VkShaderModule Renderer::create_Shader_Module(vector<char>* code) {
 void Renderer::createRenderPass1(){
     VkAttachmentDescription 
         ca_mat_norm = {};
-        ca_mat_norm.format = VK_FORMAT_R8G8B8A8_SNORM;
+        ca_mat_norm.format = MATNORM_FORMAT;
         ca_mat_norm.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_mat_norm.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         ca_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
@@ -122,7 +122,7 @@ void Renderer::createRenderPass1(){
         ca_mat_norm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         ca_frame = {};
-        ca_frame.format = VK_FORMAT_R16G16B16A16_UNORM;
+        ca_frame.format = FRAME_FORMAT;
         ca_frame.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_frame.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         ca_frame.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
@@ -132,7 +132,7 @@ void Renderer::createRenderPass1(){
         ca_frame.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         ca_depth = {};
-        ca_depth.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        ca_depth.format = DEPTH_FORMAT;
         ca_depth.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         ca_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
@@ -464,7 +464,7 @@ void Renderer::createRenderPass1(){
 void Renderer::createRenderPass3(){
     VkAttachmentDescription 
         a_mat_norm = {};
-        a_mat_norm.format = VK_FORMAT_R8G8B8A8_SNORM;
+        a_mat_norm.format = MATNORM_FORMAT;
         a_mat_norm.samples = VK_SAMPLE_COUNT_1_BIT;
         a_mat_norm.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
         a_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
@@ -474,7 +474,7 @@ void Renderer::createRenderPass3(){
         a_mat_norm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         a_result = {}; //frame image that will apply on top of highres one
-        a_result.format = VK_FORMAT_R16G16B16A16_UNORM;
+        a_result.format = FRAME_FORMAT;
         a_result.samples = VK_SAMPLE_COUNT_1_BIT;
         a_result.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         a_result.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
@@ -494,7 +494,7 @@ void Renderer::createRenderPass3(){
     //     a_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         a_stencil = {}; //stencil generated in same rpass and unused after
-        a_stencil.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+        a_stencil.format = DEPTH_FORMAT;
         a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
         a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_NONE; 
@@ -610,7 +610,7 @@ void Renderer::createRenderPass3(){
 void Renderer::createRenderPass2(){
     VkAttachmentDescription 
         ca_mat_norm = {};
-        ca_mat_norm.format = VK_FORMAT_R8G8B8A8_SNORM;
+        ca_mat_norm.format = MATNORM_FORMAT;
         ca_mat_norm.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_mat_norm.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
         ca_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
@@ -620,7 +620,7 @@ void Renderer::createRenderPass2(){
         ca_mat_norm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
         ca_frame = {};
-        ca_frame.format = VK_FORMAT_R16G16B16A16_UNORM;
+        ca_frame.format = FRAME_FORMAT;
         ca_frame.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_frame.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
         ca_frame.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 

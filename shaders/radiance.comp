@@ -5,7 +5,6 @@ precision highp float;
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
 //well, its not really radiance. Its more of a minecraft lighting but raytraced
-//Most importantly it uses its
 
 //sadly there is no way to use specialization constants for this
 #define varp highp
@@ -13,15 +12,16 @@ precision highp float;
 layout(set = 0, binding = 0, r16i       ) uniform iimage3D blocks;
 layout(set = 0, binding = 1, r8ui       ) uniform uimage3D blockPalette;
 layout(set = 0, binding = 2, r32f       ) uniform image2D voxelPalette;
-layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
+// layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
+// A2B10G10R10_UNORM_PACK32
+layout(set = 0, binding = 3, rgb10_a2) uniform image3D radianceCache;
 layout(std430,set = 0, binding = 4) buffer ReqBuffer{
 	ivec4 updateReqests[];
 } reqBuffer;
 
 // layout(constant_id = 0) const int RAYS_PER_PROBE = 32;
 layout(constant_id = 1) const int BLOCK_PALETTE_SIZE_X = 64;
-layout(constant_id = 2) const int MAX_DEPTH = 5;
-layout(constant_id = 3) const float REACTIVNESS = 0.01;
+layout(constant_id = 2) const float REACTIVNESS = 0.01;
 
 layout(push_constant) uniform constants{
     varp int timeSeed;
@@ -35,8 +35,6 @@ layout(push_constant) uniform constants{
 //funniest thing is that it should even work on amd, tho _light might take twice more
 
 const varp float PI = 3.1415926535897932384626433832795;
-const varp float FAR_DISTANCE = 100000.0;
-
 const varp ivec3 world_size = ivec3(48,48,16);
 varp vec3 globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
 
@@ -48,25 +46,19 @@ struct Material{
 };
 
 vec2 random_storage;
-varp float Random1D(){
-    // float res = sin((dot(random_storage, vec2(12.9898, 78.233))) * 43758.5453);
-    // random_storage.x = random_storage.y;
-    // random_storage.y = res;
-    
-    float res = fract(sin(dot(random_storage, vec2(12.9898,78.233))) * 43758.5453123);
+float Random1D() {
+    float dot_product = dot(random_storage, vec2(12.9898, 78.233));
+    float sin_result = sin(dot_product * 43758.5453123);
+    float fractional_part = fract(sin_result);
+
+    // for the next call
     random_storage.x = random_storage.y;
-    random_storage.y = res;
+    random_storage.y = fractional_part;
 
-    // return sin(sin(res*780.233)*43758.5453);
-    return (res);
+    return fractional_part;
 }
-
-vec2 Random2D(){
-    return (vec2(Random1D(), Random1D()));
-}
-varp vec3 Random3D() {
-    return vec3(Random1D(), Random1D(), Random1D());
-}
+varp vec2 Random2D() {return vec2(Random1D(), Random1D());}
+varp vec3 Random3D() {return vec3(Random1D(), Random1D(), Random1D());}
 
 varp vec3 randomSpherePoint(varp vec3 rand) {
     varp float ang1 = (rand.x + 1.0) * PI; // [-1..1) -> [0..2*PI)
@@ -95,7 +87,7 @@ varp vec3 randomCosineWeightedHemispherePoint(varp vec3 rand, varp vec3 n) {
     tangent = cross(bitangent, n);
     
     return tangent * ph.x + bitangent * ph.y + n * ph.z;
-    }
+}
 
 varp int GetBlock(in varp  ivec3 block_pos){
     varp int block;

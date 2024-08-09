@@ -24,7 +24,7 @@ layout(set = 0, binding = 1) uniform sampler2D depthBuffer;
 layout(set = 0, binding = 2, r16i       ) uniform iimage3D  blocks;
 layout(set = 0, binding = 3, r8ui       ) uniform uimage3D  blockPalette;
 layout(set = 0, binding = 4, r32f       ) uniform image2D   voxelPalette;
-layout(set = 0, binding = 5, rgba16     ) uniform image3D   radianceCache;
+layout(set = 0, binding = 5, rgb10_a2     ) uniform image3D   radianceCache;
 layout(set = 0, binding = 6, r8ui       ) uniform uimage3D distancePalette;
 // layout(set = 0, binding = 6             ) uniform sampler3D distancePalette;
 layout(set = 0, binding = 7, r8ui       ) uniform uimage3D bitPalette;
@@ -730,14 +730,14 @@ bool ssr_intersects(in varp float test_depth, in varp vec2 pix, inout bool smoot
     //ATTENTION causes division line on low values due to rounding errors
     // if(diff >= 0.0)    {ssr = true;}
     // if(diff <  0.5) {smooth_intersection = true;}
-    if(diff <  0.5) {smooth_intersection = true;}
+    if(diff <  1.0) {smooth_intersection = true;}
     // smooth_intersection = true;
     return ssr;
     // return false;
 }
 bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 start_pix, out highp float fraction, out varp vec3 normal, out Material material){
     bool smooth_intersection = false;
-    highp float fraction_add = .1;
+    highp float fraction_add = .15;
     highp float fraction_mul = 1.0;
     
     fraction = 0.0;
@@ -760,13 +760,13 @@ bool ssr_traceRay(in varp vec3 origin, in varp vec3 direction, in highp vec2 sta
                 return true;
             } else {
                 fraction -= fraction_add;
-                fraction /= fraction_mul;
+                // fraction /= fraction_mul;
                 return false;
             }
         }
         fraction += fraction_add;
-        fraction *= fraction_mul;
-        if (fraction > 2.5) return false;
+        // fraction *= fraction_mul;
+        if (fraction > 1.5) return false;
     }
 }
 
@@ -818,7 +818,7 @@ void main(void){
     vec3 accumulated_light = vec3(0);
     vec3 accumulated_reflection = vec3(1);
 
-    origin += normal*1.5;
+    // origin += normal*0.01;
     ProcessHit(origin, direction, 
             0, normal, mat, 
             accumulated_light, accumulated_reflection);
@@ -828,6 +828,13 @@ void main(void){
     vec3 ssr_normal;
     bool ssr_hit = ssr_traceRay(origin, direction, vec2(0), ssr_fraction, ssr_normal, ssr_mat);
     
+    origin += ssr_fraction * direction;
+    if(ssr_hit){
+        ProcessHit(origin, direction, 
+            0, normal, mat, 
+            accumulated_light, accumulated_reflection);
+    }
+    ssr_hit = ssr_traceRay(origin, direction, vec2(0), ssr_fraction, ssr_normal, ssr_mat);
     origin += ssr_fraction * direction;
     if(ssr_hit){
         ProcessHit(origin, direction, 

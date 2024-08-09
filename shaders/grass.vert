@@ -207,7 +207,6 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
 
     return vertex;
 }
-
 void main() {
     // int global_vertex_id = gl_VertexIndex;
     // int blade_id = global_vertex_id / VTX_IN_BLADE;    
