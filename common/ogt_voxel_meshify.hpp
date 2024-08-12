@@ -639,7 +639,7 @@ void ogt_stream_from_paletted_voxels_simple(
                 if (current_voxel[0] == 0)
                     continue;
 
-                ogt_mesh_rgba color = palette[ current_voxel[0]];
+                ogt_mesh_rgba color = {1,1,1,1};
                 
                 // determine the min/max coords of the voxel for each dimension.
                 const float min_x = (float)i;

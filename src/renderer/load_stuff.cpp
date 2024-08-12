@@ -299,7 +299,14 @@ void Renderer::free_mesh(Mesh* mesh){
 // }
 void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
     ogt::ogt_voxel_meshify_context ctx = {};
-    // ogt::ogt_mesh* ogt_mesh = ogt::ogt_mesh_from_paletted_voxels_polygon(&ctx, (const u8*)Voxels, x_size, y_size, z_size, NULL);
+    
+    // const u8 a[] = {1};
+    // ogt::ogt_mesh* m = ogt::ogt_mesh_from_paletted_voxels_simple(&ctx, (const u8*)a, 1, 1, 1, NULL);
+    // for(int i=0; i<m->index_count; i++){
+    //     printf("vec3(%f,%f,%f)\n", m->vertices[m->indices[i]].pos.x, m->vertices[m->indices[i]].pos.y, m->vertices[m->indices[i]].pos.z);
+    // }
+    // abort();
+
     // ogt::ogt_mesh_remove_duplicate_vertices(&ctx, ogt_mesh);
     ogt::ogt_int_mesh* ogt_mesh =  ogt::my_int_mesh_from_paletted_voxels(&ctx, (const u8*)Voxels, x_size, y_size, z_size);
     ogt::my_int_mesh_optimize(&ctx, ogt_mesh);

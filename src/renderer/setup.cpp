@@ -482,26 +482,36 @@ void Renderer::createRenderPass3(){
         a_result.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a_result.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
         a_result.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-    // VkAttachmentDescription 
-    //     a_depth = {}; //stencil generated in same rpass and unused after
-    //     a_depth.format = DEPTH_FORMAT;
-    //     a_depth.samples = VK_SAMPLE_COUNT_1_BIT;
-    //     a_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
-    //     a_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
-    //     a_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    //     a_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    //     a_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-    //     a_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
     VkAttachmentDescription 
-        a_stencil = {}; //stencil generated in same rpass and unused after
-        a_stencil.format = DEPTH_FORMAT;
-        a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
-        a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_NONE; 
-        a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        a_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        a_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
-        a_stencil.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_depth_stencil = {}; //stencil generated in same rpass and unused after
+        a_depth_stencil.format = DEPTH_FORMAT;
+        a_depth_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_depth_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        a_depth_stencil.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_depth_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_depth_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_depth_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_depth_stencil.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_far_depth = {}; //for smoke march distance. Is not D32 but just r16 cause not hw depth
+        a_far_depth.format = SECONDARY_DEPTH_FORMAT;
+        a_far_depth.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_far_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_far_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_far_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_far_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_far_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_far_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_near_depth = {}; //for smoke march distance. Is not D32 but just r16 cause not hw depth
+        a_near_depth.format = SECONDARY_DEPTH_FORMAT;
+        a_near_depth.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_near_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_near_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_near_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_near_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_near_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_near_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     VkAttachmentReference 
         aref_mat_norm = {};
@@ -511,15 +521,20 @@ void Renderer::createRenderPass3(){
         aref_res = {};
         aref_res.layout = VK_IMAGE_LAYOUT_GENERAL;
         aref_res.attachment = 1;
-    // VkAttachmentReference 
-    //     aref_depth = {};
-    //     aref_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
-    //     aref_depth.attachment = 2;
     VkAttachmentReference 
-        aref_stencil = {};
-        aref_stencil.layout = VK_IMAGE_LAYOUT_GENERAL;
-        aref_stencil.attachment = 2;
-    vector<VkAttachmentDescription> attachments = {a_mat_norm, a_result, a_stencil};
+        aref_depth_stencil = {};
+        aref_depth_stencil.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_depth_stencil.attachment = 2;
+    //blends with max/min
+    VkAttachmentReference 
+        aref_far_depth = {};
+        aref_far_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_far_depth.attachment = 3;
+    VkAttachmentReference 
+        aref_near_depth = {};
+        aref_near_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_near_depth.attachment = 4;
+    vector<VkAttachmentDescription> attachments = {a_mat_norm, a_result, a_depth_stencil, a_far_depth, a_near_depth};
 
     //fills with 01 but discards
     VkSubpassDescription 
@@ -529,16 +544,17 @@ void Renderer::createRenderPass3(){
         fill_stencil_for_reflection_subpass.pColorAttachments = NULL;
         fill_stencil_for_reflection_subpass.inputAttachmentCount = 1;
         fill_stencil_for_reflection_subpass.pInputAttachments = &aref_mat_norm;
-        fill_stencil_for_reflection_subpass.pDepthStencilAttachment = &aref_stencil;
+        fill_stencil_for_reflection_subpass.pDepthStencilAttachment = &aref_depth_stencil;
     //fills with 10 on rasterization
+    vector<VkAttachmentReference> fill_smoke_out = {aref_far_depth, aref_near_depth};
     VkSubpassDescription 
         fill_stencil_for_smoke_subpass = {};
         fill_stencil_for_smoke_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        fill_stencil_for_smoke_subpass.colorAttachmentCount = 0;
-        fill_stencil_for_smoke_subpass.pColorAttachments = NULL;
+        fill_stencil_for_smoke_subpass.colorAttachmentCount = fill_smoke_out.size();
+        fill_stencil_for_smoke_subpass.pColorAttachments = fill_smoke_out.data();//writes to it
         fill_stencil_for_smoke_subpass.inputAttachmentCount = 0;
         fill_stencil_for_smoke_subpass.pInputAttachments = NULL;
-        fill_stencil_for_smoke_subpass.pDepthStencilAttachment = &aref_stencil;
+        fill_stencil_for_smoke_subpass.pDepthStencilAttachment = &aref_depth_stencil;
     //reads from mat_norm and writes to final frame. Tested against 01 bitmask in stencil
     // vector<VkAttachmentReference> reflection_refs = {aref_mat_norm, aref_depth};
     vector<VkAttachmentReference> reflection_refs = {};
@@ -549,18 +565,18 @@ void Renderer::createRenderPass3(){
         reflections_subpass.pColorAttachments = &aref_res;
         reflections_subpass.inputAttachmentCount = 0;
         reflections_subpass.pInputAttachments = NULL;
-        reflections_subpass.pDepthStencilAttachment = &aref_stencil;
+        reflections_subpass.pDepthStencilAttachment = &aref_depth_stencil;
     //reads from depth, and writes to final frame. Tested against 10 bitmask in stencil
     //rendered on top of reflections
-    // vector<VkAttachmentReference> smoke_refs = {aref_ds};
+    vector<VkAttachmentReference> smoke_inputss = {aref_near_depth, aref_far_depth};
     VkSubpassDescription
         smoke_subpass = {};
         smoke_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         smoke_subpass.colorAttachmentCount = 1;
         smoke_subpass.pColorAttachments = &aref_res;
-        smoke_subpass.inputAttachmentCount = 0;
-        smoke_subpass.pInputAttachments = NULL;
-        smoke_subpass.pDepthStencilAttachment = &aref_stencil;
+        smoke_subpass.inputAttachmentCount = smoke_inputss.size();
+        smoke_subpass.pInputAttachments = smoke_inputss.data();
+        smoke_subpass.pDepthStencilAttachment = &aref_depth_stencil;
 
     VkSubpassDependency full_wait_color = {};
 		full_wait_color.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
@@ -815,18 +831,38 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
     vector<VkPipelineColorBlendAttachmentState> blendAttachments (blends.size()); 
     for (int i=0; i<blends.size(); i++){
         //for now only two possible states
-        if(blends[i] == DO_BLEND){
-            blendAttachments[i].blendEnable = VK_TRUE;
-        } else {
+        if(blends[i] == NO_BLEND){
             blendAttachments[i].blendEnable = VK_FALSE;
+        } else {
+            blendAttachments[i].blendEnable = VK_TRUE;
         }
         blendAttachments[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         blendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         blendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         blendAttachments[i].colorBlendOp = VK_BLEND_OP_ADD;
-        blendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        blendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        blendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         blendAttachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
+
+        if(blends[i] == BLEND_REPLACE_IF_GREATER){
+            blendAttachments[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            blendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            blendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            blendAttachments[i].colorBlendOp = VK_BLEND_OP_MAX;
+            //no alpha
+            blendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+            blendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            blendAttachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
+        } else if(blends[i] == BLEND_REPLACE_IF_LESS){
+            blendAttachments[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            blendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            blendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            blendAttachments[i].colorBlendOp = VK_BLEND_OP_MIN;
+            //no alpha
+            blendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+            blendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            blendAttachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
+        }
     }
    
     VkPipelineColorBlendStateCreateInfo colorBlending{};
@@ -1132,6 +1168,7 @@ void Renderer::createLogicalDevice(){
         deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
         deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
         deviceFeatures.geometryShader = VK_TRUE;
+        deviceFeatures.independentBlend = VK_TRUE;
 
     VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

@@ -5,6 +5,7 @@ precision highp float;
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
 //well, its not really radiance. Its more of a minecraft lighting but raytraced
+//its not that realistic but imho looks good
 
 //sadly there is no way to use specialization constants for this
 #define varp highp
@@ -12,9 +13,9 @@ precision highp float;
 layout(set = 0, binding = 0, r16i       ) uniform iimage3D blocks;
 layout(set = 0, binding = 1, r8ui       ) uniform uimage3D blockPalette;
 layout(set = 0, binding = 2, r32f       ) uniform image2D voxelPalette;
-// layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
+layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // A2B10G10R10_UNORM_PACK32
-layout(set = 0, binding = 3, rgb10_a2) uniform image3D radianceCache;
+// layout(set = 0, binding = 3, rgb10_a2) uniform image3D radianceCache;
 layout(std430,set = 0, binding = 4) buffer ReqBuffer{
 	ivec4 updateReqests[];
 } reqBuffer;
@@ -28,7 +29,7 @@ layout(push_constant) uniform constants{
     varp int iters;
     varp int size;
     varp int sihft;
-} PushConstants;
+} pco;
 
 #define SUBGROUPS_PER_WORKGROUP 2
 #define RAYS_PER_PROBE (32*SUBGROUPS_PER_WORKGROUP) //TODO: change to spec const
@@ -45,20 +46,37 @@ struct Material{
     varp float transparancy;
 };
 
-vec2 random_storage;
-float Random1D() {
-    float dot_product = dot(random_storage, vec2(12.9898, 78.233));
-    float sin_result = sin(dot_product * 43758.5453123);
-    float fractional_part = fract(sin_result);
+// int random_storage;
+// float Random1D() {
+//     float dot_product = dot(random_storage, vec2(12.9898, 78.233));
+//     float sin_result = sin(dot_product * 43758.5453123);
+//     float fractional_part = fract(sin_result);
 
-    // for the next call
-    random_storage.x = random_storage.y;
-    random_storage.y = fractional_part;
+//     // for the next call
+//     random_storage.x = random_storage.y;
+//     random_storage.y += fractional_part*1241.1241;
 
-    return fractional_part;
+//     return fractional_part;
+// }
+// varp vec2 Random2D() {return vec2(Random1D(), Random1D());}
+// varp vec3 Random3D() {return vec3(Random1D(), Random1D(), Random1D());}
+
+const uint k = 1103515245U;  // GLIB C
+vec3 hash33( uvec3 x )
+{
+    x = ((x>>8U)^x.yzx)*k;
+    x = ((x>>8U)^x.yzx)*k;
+    x = ((x>>8U)^x.yzx)*k;
+    
+    return vec3(x)*(1.0/float(0xffffffffU));
 }
-varp vec2 Random2D() {return vec2(Random1D(), Random1D());}
-varp vec3 Random3D() {return vec3(Random1D(), Random1D(), Random1D());}
+
+uvec3 random_storage;
+varp vec3 Random3D() {
+    vec3 res = hash33(random_storage);
+    random_storage.x++;
+    return res;
+}
 
 varp vec3 randomSpherePoint(varp vec3 rand) {
     varp float ang1 = (rand.x + 1.0) * PI; // [-1..1) -> [0..2*PI)
@@ -451,12 +469,13 @@ void ProcessHit(inout varp vec3 origin, inout varp vec3 direction,
 
             varp vec3 new_origin = origin + (fraction * direction);
 
-            varp vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random3D(), normal);
+            // varp vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random3D(), normal);
 
-            varp vec3 new_direction = hemisphereDistributedDirection;
+            // varp vec3 new_direction = hemisphereDistributedDirection;
 
-                varp vec3 idealReflection = reflect(direction, normal);
-                new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
+                // new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
+
+                varp vec3 new_direction = reflect(direction, normal);
                 new_origin += normal * 0.001;
                 accumulated_reflection *= material.color;
                 accumulated_light += accumulated_reflection * material.emmitance;
@@ -546,16 +565,17 @@ layout(local_size_x = 1, local_size_y = RAYS_PER_PROBE, local_size_z = 1) in;
 void main(){
     ivec3 local_pos = ivec3(gl_GlobalInvocationID.xyz);
 
-    float seed = float(PushConstants.timeSeed);
-    random_storage = vec2(sin(local_pos.x*seed*5.12315), sin(local_pos.y*seed*7.7343));
+    // float seed = float(pco.timeSeed);
+    // random_storage = vec2((local_pos.x*seed*5123.12315), (local_pos.y*seed*7152.7343));
     
     // int probe_id = local_pos.x % RAYS_PER_PROBE;
     int probe_id = local_pos.y % RAYS_PER_PROBE;
 
-    int req_num = local_pos.x*PushConstants.size + PushConstants.sihft;
+    int req_num = local_pos.x*pco.size + pco.sihft;
     ivec4 _t = reqBuffer.updateReqests[req_num];
     ivec3 probe_pos = _t.xyz;
     // if(probe_pos == ivec3(0)) {
+    random_storage = uvec3(probe_pos.xy+probe_pos.zz, pco.timeSeed);
     // if(any(notEqual(probe_pos,ivec3(0)))) {
     //     store_probe(probe_id, ivec3(local_pos.x, local_pos.y, 1), vec3(1));
     //     store_probe(probe_id, ivec3(probe_pos.x,probe_pos.y, local_pos.y), vec3(1));
@@ -565,14 +585,22 @@ void main(){
     // ivec3 probe_pos = ivec3(local_pos);
     //       probe_pos.x /= RAYS_PER_PROBE;
 
-    vec3 block_center = vec3(probe_pos) * 16.0 + 8.0;
+    vec3 block_corner = vec3(probe_pos) * 16.0;
+    vec3 block_center = block_corner + 8.0;
     vec3 ray_pos = block_center;
         //  ray_pos += 15.99*(Random3D() - 0.5);
     vec3 ray_dir = probeId_to_rayDir(probe_id);
         //  ray_dir = normalize(mix(ray_dir, NormalOrientedHemispherePoint(Random3D(), ray_dir), 0.8));
         //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));
-         ray_dir = normalize(ray_dir + .05 * ((Random3D() - 0.5)*2.0));
+        
+         ray_dir = normalize(ray_dir + .2 * ((Random3D() - 0.5)*2.0));
          ray_pos += ray_dir*8.0;
+         ray_dir = ((probe_id%2)==0)? ray_dir : -ray_dir; //to sample light blocks themselves
+        //  ray_dir = normalize(((Random3D() - 0.5)));
+
+        //  ray_dir = normalize(((Random3D() - 0.5)));
+        //  ray_pos = block_corner + Random3D()*16.0;
+         
         // ray_dir = randomCosineWeightedHemispherePoint(Random3D(), ray_dir);
         // ray_dir = 2.0 * (Random3D() - 0.5);
         // ray_dir = normalize(ray_pos - block_center);

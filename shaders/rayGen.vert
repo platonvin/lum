@@ -9,8 +9,7 @@ layout(location = 0) in varp uvec3 posIn;
 // layout(location = 1) in varp ivec3 normIn;
 layout(location = 1) in varp uint MatIDIn;
 
-layout(location = 0) flat out lowp vec3 norm;
-layout(location = 1) flat out lowp uint mat;
+layout(location = 0) lowp flat out vec4 mat_norm;
 
 //no reason to move up in pipeline cause sm load is like ~ 6% in vs
 layout(binding = 0, set = 0) uniform UniformBufferObject {
@@ -43,6 +42,8 @@ void main() {
 
     gl_Position  = vec4(clip_coords, 1);    
     
-    norm = (qtransform(pco.rot,fnorm)); //move up
-    mat = uint(MatIDIn);
+    vec3 norm = (qtransform(pco.rot,fnorm)); //move up
+    uint mat = uint(MatIDIn);
+    float fmat = (float(mat)-127.0)/127.0;
+    mat_norm = vec4(fmat, norm);
 }

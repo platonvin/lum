@@ -92,24 +92,7 @@ ivec3 voxel_in_bit_palette(ivec3 relative_voxel_pos, int block_id) {
     return relative_voxel_pos + ivec3(0+2*block_x, 0+16*block_y,0);
 }
 
-varp int GetVoxel(in varp ivec3 pos){
-
-    // if(((pos.x + pos.y)%2)==0) return 2;
-    // if(((pos.x + pos.y)%5)==0) return 5;
-    // if(((pos.x + pos.y)%7)==1) return 7;
-    // if(((pos.x + pos.y)%9)==0) return 9;
-
-
-    // if(((block_pos.x + block_pos.y)%2)==0) return 1;
-    // if(((block_pos.x + block_pos.y)%5)==0) return 2;
-    // if(((block_pos.x + block_pos.y)%7)==1) return 3;
-    // if(((block_pos.x + block_pos.y)%9)==0) return 4;
-    // if(((block_pos.x + block_pos.y)%13)==0) return 5;
-
-
-    // voxel_pos /= (1 << lod);
-    // voxel_pos.z += get_lod_shift(lod);
-    
+varp int GetVoxel(in varp ivec3 pos){    
     varp int voxel;
     varp ivec3 block_pos = pos / 16;
     varp ivec3 relative_voxel_pos = pos % 16;

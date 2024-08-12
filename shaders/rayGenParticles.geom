@@ -11,8 +11,9 @@ layout(location = 0) in VS_OUT {
 } gs_in[];
 
 // layout(location = 0)      out vec2 old_uv;
-layout(location = 0) flat out vec3 norm;
-layout(location = 1) flat out uint mat;
+// layout(location = 0) flat out vec3 norm;
+// layout(location = 1) flat out float fmat;
+layout(location = 0) lowp flat out vec4 mat_norm;
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
@@ -69,7 +70,7 @@ void main() {
         shift_on_screen.z = -shift_on_screen.z;
         // shift_on_screen = -vec3(.1);
 
-        norm = norms[i];
+        vec3 norm = norms[i];
 
         gl_Position = gl_in[0].gl_Position + vec4(shift_on_screen,0);
         // gl_Position.z = -.999;
@@ -77,7 +78,10 @@ void main() {
         
         // old_uv = gs_in[0].old_uv;
         // old_uv = vec2(0);
-        mat = gs_in[0].mat;
+        uint mat = gs_in[0].mat;
+        float fmat = (float(mat)-127.0)/127.0;
+
+        mat_norm = vec4(fmat, norm);
 
         EmitVertex();
     }

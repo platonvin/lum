@@ -26,8 +26,8 @@ layout(binding = 0, set = 0) uniform UniformBufferObject {
 } ubo;
 layout(set = 0, binding = 1) uniform sampler2D state;
 
-layout(location = 0) flat out vec3 norm;
-layout(location = 1) flat out uint mat;
+layout(location = 0) lowp flat out float fmat;
+layout(location = 1) lowp      out vec3 norm;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
@@ -242,5 +242,6 @@ void main() {
 
     norm = normal;
     // norm = normalize(vec3(1));
-    mat = uint(9);
+    uint mat = uint(9);
+    fmat = (float(mat)-127.0)/127.0;
 }

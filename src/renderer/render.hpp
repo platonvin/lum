@@ -44,15 +44,16 @@ const int BLOCK_PALETTE_SIZE_X = 64;
 const int BLOCK_PALETTE_SIZE_Y = 64;
 const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 
-#define FRAME_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
-#define DEPTH_FORMAT VK_FORMAT_D24_UNORM_S8_UINT
-#define MATNORM_FORMAT VK_FORMAT_R8G8B8A8_SNORM
-#define RADIANCE_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
-
-// #define FRAME_FORMAT VK_FORMAT_R16G16B16A16_UNORM
-// #define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT_S8_UINT
+// #define FRAME_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
+// #define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT_S8_UINT //somehow faster than VK_FORMAT_D24_UNORM_S8_UINT even on low-end 
 // #define MATNORM_FORMAT VK_FORMAT_R8G8B8A8_SNORM
-// #define RADIANCE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+// #define RADIANCE_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
+
+#define FRAME_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+#define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT_S8_UINT //somehow faster than VK_FORMAT_D24_UNORM_S8_UINT even on low-end 
+#define MATNORM_FORMAT VK_FORMAT_R8G8B8A8_SNORM
+#define RADIANCE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
+#define SECONDARY_DEPTH_FORMAT VK_FORMAT_R16_SFLOAT 
 
 #define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
 
@@ -175,8 +176,10 @@ typedef struct AttrFormOffs{
 }AttrFormOffs;
 
 enum BlendAttachment{
-    DO_BLEND,
     NO_BLEND,
+    DO_BLEND,
+    BLEND_REPLACE_IF_GREATER, //basically max
+    BLEND_REPLACE_IF_LESS, //basically max
 };
 enum DepthTesting{
     NO_DEPTH_TEST,
@@ -343,6 +346,9 @@ class MyRenderInterface;
 class Renderer {
 public: 
     void init(int xSize=8, int ySize=8, int zSize=8, int staticBlockPaletteSize=128, int maxParticleCount=1024, float ratio = 1.5f, bool vsync=true, bool fullscreen = false);
+    void setupDescriptors();
+    void createImages();
+    void createPipilines();
     void cleanup();
 
     // sets voxels and size. By default uses first .vox palette as main palette
@@ -391,7 +397,8 @@ public:
     dmat4 cameraTransform     = identity<dmat4>();
     dmat4 cameraTransform_OLD = identity<dmat4>();
 
-    void gen_perlin();
+    void gen_perlin_2d();
+    void gen_perlin_3d();
     void start_frame();
         void start_compute();
             void start_blockify();
@@ -633,6 +640,8 @@ public:
            Image lowresMatNorm;
            Image lowresDepthStencil;
                VkImageView stencilViewForDS;
+           Image farDepth; //represents how much should smoke traversal for
+           Image nearDepth; //represents how much should smoke traversal for
            Image maskFrame; //where lowres renders to. Blends with highres afterwards
     
 
@@ -663,9 +672,11 @@ public:
     vector<Buffer>   gpuParticles; //multiple because cpu-related work
     vector<void* >   gpuParticlesMapped; //multiple because cpu-related work
 
-    Image perlinNoise; //full-world grass shift (~direction) texture sampled in grass
+    Image perlinNoise2d; //full-world grass shift (~direction) texture sampled in grass
     Image grassState; //full-world grass shift (~direction) texture sampled in grass
     Image waterState; //~same but water
+
+    Image perlinNoise3d; //4 channels of different tileable noise for volumetrics
 
     vector<ImageDeletion>  imageDeletionQueue;  //cpu side  image abstractions deletion queue. Exists for delayed copies
     vector<BufferDeletion> bufferDeletionQueue; //cpu side buffer abstractions deletion queue. Exists for delayed copies
@@ -678,7 +689,8 @@ public:
     VkDescriptorSetLayout mapPushLayout;
     ComputePipe        updateGrassPipe;
     ComputePipe        updateWaterPipe;
-    ComputePipe        genPerlinPipe; //generate noise for grass 
+    ComputePipe        genPerlin2dPipe; //generate noise for grass 
+    ComputePipe        genPerlin3dPipe; //generate noise for grass 
     // ComputePipe    diffusePipe;
     // ComputePipe     glossyPipe;
     // ComputePipe    denoisePipe;

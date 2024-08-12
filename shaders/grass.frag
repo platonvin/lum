@@ -6,12 +6,12 @@ layout(early_fragment_tests) in;
 precision highp int;
 precision highp float;
 
-layout(location = 0)      in vec3 norm;
-layout(location = 1) flat in uint mat;
+layout(location = 0) lowp flat in float fmat;
+layout(location = 1) lowp      in vec3 norm;
 
 layout(location = 0) out vec4 outMatNorm;
 
 void main() {
-    outMatNorm.x = (float(mat)-127.0)/127.0;
+    outMatNorm.x = fmat;
     outMatNorm.gba = normalize(norm.xyz);
 }

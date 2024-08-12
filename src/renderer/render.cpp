@@ -45,8 +45,8 @@ void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize,
     createSwapchain(); //should be before anything related to its size and format
     createSwapchainImageViews();
 
-    // createRenderPassGraphical();
 println
+    //not worth abstracting
     createRenderPass1();
 println
     createRenderPass3();
@@ -59,24 +59,39 @@ println
     printl(swapChainImageFormat)
     
     create_Command_Pool();
-    // create_Command_Buffers(&overlayCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers( &computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&graphicsCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(    &copyCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 
-    // VkCommandBufferAllocateInfo allocInfo{};
-    //     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    //     allocInfo.commandPool = commandPool;
-    //     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    //     allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-    // copyCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    // VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyCommandBuffers.data())); 
-    // renderOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    // VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderOverlayCommandBuffers.data())); 
-    
     createSwapchainDependent();
-println
 
+    createImages();
+        
+    setupDescriptors();
+
+    createPipilines();
+    
+    create_Sync_Objects();
+
+    gen_perlin_2d();
+    gen_perlin_3d();
+println
+    assert(timestampCount!=0);
+    timestampNames.resize(timestampCount);
+    timestamps.resize(timestampCount);
+
+    VkQueryPoolCreateInfo query_pool_info{};
+        query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+        query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        query_pool_info.queryCount = timestampCount;
+    
+    queryPoolTimestamps.resize(MAX_FRAMES_IN_FLIGHT);
+    for (auto &q : queryPoolTimestamps){
+        VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &q));    
+    }
+}
+
+void Renderer::createImages(){
     create_Buffer_Storages(&stagingWorld,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         world_size.x*world_size.y*world_size.z*sizeof(BlockID_t), true);
@@ -149,7 +164,7 @@ println
         {world_size.x*2, world_size.y*2, 1}); //for quality
     transition_Image_Layout_Singletime(&waterState, VK_IMAGE_LAYOUT_GENERAL);
 
-    create_Image_Storages(&perlinNoise,
+    create_Image_Storages(&perlinNoise2d,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R16G16_SNORM,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -157,7 +172,16 @@ println
         0,
         VK_IMAGE_ASPECT_COLOR_BIT,
         {world_size.x, world_size.y, 1}); //does not matter than much
-    transition_Image_Layout_Singletime(&perlinNoise, VK_IMAGE_LAYOUT_GENERAL);
+    transition_Image_Layout_Singletime(&perlinNoise2d, VK_IMAGE_LAYOUT_GENERAL);
+    create_Image_Storages(&perlinNoise3d,
+        VK_IMAGE_TYPE_3D,
+        VK_FORMAT_R16G16B16A16_UNORM,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        0,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {32, 32, 32}); //does not matter than much
+    transition_Image_Layout_Singletime(&perlinNoise3d, VK_IMAGE_LAYOUT_GENERAL);
 
     create_Buffer_Storages(&gpuParticles,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -187,8 +211,10 @@ println
     transition_Image_Layout_Singletime(&world, VK_IMAGE_LAYOUT_GENERAL);
     transition_Image_Layout_Singletime(&radianceCache, VK_IMAGE_LAYOUT_GENERAL);
 
+    transition_Image_Layout_Singletime(&maskFrame, VK_IMAGE_LAYOUT_GENERAL);
+    transition_Image_Layout_Singletime(&farDepth, VK_IMAGE_LAYOUT_GENERAL);
+    transition_Image_Layout_Singletime(&nearDepth, VK_IMAGE_LAYOUT_GENERAL);
     if(scaled){
-        transition_Image_Layout_Singletime(&maskFrame, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&lowresDepthStencil, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&lowresMatNorm, VK_IMAGE_LAYOUT_GENERAL);
     }
@@ -200,8 +226,9 @@ println
         transition_Image_Layout_Singletime(&distancePalette, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&materialPalette[i], VK_IMAGE_LAYOUT_GENERAL);
     }
-    //this have to sets allocated
-        
+}
+
+void Renderer::setupDescriptors(){
     create_DescriptorSetLayout({
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, //in texture (ui)
         }, 
@@ -233,8 +260,8 @@ println
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     deferDescriptorsetup(&fillStencilSmokePipe.setLayout, &fillStencilSmokePipe.sets, {
-
-    }, VK_SHADER_STAGE_FRAGMENT_BIT);
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+    }, VK_SHADER_STAGE_VERTEX_BIT);
 println
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
@@ -243,13 +270,16 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     deferDescriptorsetup(&smokePipe.setLayout, &smokePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {farDepth}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {nearDepth}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {perlinNoise3d}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     deferDescriptorsetup(&blurPipe.setLayout, &blurPipe.sets, { 
@@ -272,7 +302,7 @@ println
 
     deferDescriptorsetup(&updateGrassPipe.setLayout, &updateGrassPipe.sets, {
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {grassState}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, {perlinNoise}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, {perlinNoise2d}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 
     deferDescriptorsetup(&updateWaterPipe.setLayout, &updateWaterPipe.sets, {
@@ -289,8 +319,11 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {waterState}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
 
-    deferDescriptorsetup(&genPerlinPipe.setLayout, &genPerlinPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {perlinNoise}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    deferDescriptorsetup(&genPerlin2dPipe.setLayout, &genPerlin2dPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {perlinNoise2d}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_COMPUTE_BIT);
+    deferDescriptorsetup(&genPerlin3dPipe.setLayout, &genPerlin3dPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {perlinNoise3d}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 
     create_DescriptorSetLayout({
@@ -324,11 +357,9 @@ println
 println
     flushDescriptorSetup();
 println
+}
 
-    //not worth abstracting
-    // createRenderPass1();
-    // createRenderPass2();
-
+void Renderer::createPipilines(){
     raygenBlocksPipe.renderPass = raygen2diffuseRpass;
     raygenParticlesPipe.renderPass = raygen2diffuseRpass;
     raygenGrassPipe.renderPass = raygen2diffuseRpass;
@@ -417,14 +448,14 @@ println
     fillStencilSmokePipe.subpassId = 1;
     create_Raster_Pipeline(&fillStencilSmokePipe, {
             {"shaders/compiled/fillStencilSmokeVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
-            // {"shaders/compiled/fillStencilSmokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT}, //because its just set stencil
+            {"shaders/compiled/fillStencilSmokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*passed as push constants lol*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, sizeof(vec3), NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, {
+        swapChainExtent, {BLEND_REPLACE_IF_GREATER, BLEND_REPLACE_IF_LESS}, sizeof(vec3)+sizeof(int)+sizeof(vec4), READ_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, {
             //sets 10 bit on rasterization 
-            .failOp = VK_STENCIL_OP_REPLACE,
+            .failOp = VK_STENCIL_OP_KEEP,
             .passOp = VK_STENCIL_OP_REPLACE,
-            .depthFailOp = VK_STENCIL_OP_REPLACE,
+            .depthFailOp = VK_STENCIL_OP_KEEP,
             .compareOp = VK_COMPARE_OP_ALWAYS,
             .compareMask = 0b00,
             .writeMask = 0b10, //10 for smoke
@@ -491,31 +522,184 @@ println
     create_Compute_Pipeline(&radiancePipe,0, "shaders/compiled/radiance.spv", sizeof(int)*4,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
     create_Compute_Pipeline(&updateGrassPipe,0, "shaders/compiled/updateGrass.spv", sizeof(vec2)*2 + sizeof(float), 0);
     // create_Compute_Pipeline(&updateWaterPipe,0, "shaders/compiled/updateWater.spv", sizeof(float) + sizeof(vec2)*2, 0);
-    create_Compute_Pipeline(&genPerlinPipe,0, "shaders/compiled/perlin.spv", 0, 0);
+    create_Compute_Pipeline(&genPerlin2dPipe,0, "shaders/compiled/perlin2.spv", 0, 0);
+    create_Compute_Pipeline(&genPerlin3dPipe,0, "shaders/compiled/perlin3.spv", 0, 0);
     create_Compute_Pipeline(&dfxPipe,0, "shaders/compiled/dfx.spv", 0, 0);
     create_Compute_Pipeline(&dfyPipe,0, "shaders/compiled/dfy.spv", 0, 0);
     create_Compute_Pipeline(&dfzPipe,0, "shaders/compiled/dfz.spv", 0, 0);
     create_Compute_Pipeline(&bitmaskPipe,0, "shaders/compiled/bitmask.spv", 0, 0);
     create_Compute_Pipeline(&mapPipe, mapPushLayout, "shaders/compiled/map.spv",      sizeof(mat4) + sizeof(ivec4),   0);
 
-    create_Sync_Objects();
-
-    gen_perlin();
-println
-    assert(timestampCount!=0);
-    timestampNames.resize(timestampCount);
-    timestamps.resize(timestampCount);
-
-    VkQueryPoolCreateInfo query_pool_info{};
-        query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-        query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        query_pool_info.queryCount = timestampCount;
-    
-    queryPoolTimestamps.resize(MAX_FRAMES_IN_FLIGHT);
-    for (auto &q : queryPoolTimestamps){
-        VK_CHECK(vkCreateQueryPool(device, &query_pool_info, NULL, &q));    
-    }
 }
+
+void Renderer::createSwapchainDependent() {
+    // int mipmaps;
+    create_Image_Storages(&highresMatNorms,
+        VK_IMAGE_TYPE_2D,
+        MATNORM_FORMAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {swapChainExtent.width, swapChainExtent.height, 1});
+    create_Image_Storages(&highresDepthStencils,
+        VK_IMAGE_TYPE_2D,
+        DEPTH_FORMAT,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,
+        {swapChainExtent.width, swapChainExtent.height, 1});
+    create_Image_Storages(&highresFrames,
+        VK_IMAGE_TYPE_2D,
+        FRAME_FORMAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {swapChainExtent.width, swapChainExtent.height, 1});
+
+    if(scaled){
+        create_Image_Storages(&lowresMatNorm,
+            VK_IMAGE_TYPE_2D,
+            MATNORM_FORMAT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            {raytraceExtent.width, raytraceExtent.height, 1});
+        create_Image_Storages(&lowresDepthStencil,
+            VK_IMAGE_TYPE_2D,
+            DEPTH_FORMAT,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,
+            {raytraceExtent.width, raytraceExtent.height, 1});
+    } else {
+        //set them to the same ptrs
+        lowresMatNorm = highresMatNorms;
+        lowresDepthStencil = highresDepthStencils;
+    }
+
+        VkImageViewCreateInfo viewInfo = {};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = lowresDepthStencil.image;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = DEPTH_FORMAT;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT; //create stencil view yourself
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 1;
+        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &stencilViewForDS));
+
+    //required anyways
+    create_Image_Storages(&maskFrame, //stencil for glossy&smoke
+        VK_IMAGE_TYPE_2D,
+        FRAME_FORMAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {raytraceExtent.width, raytraceExtent.height, 1});
+    create_Image_Storages(&farDepth, //smoke depth
+        VK_IMAGE_TYPE_2D,
+        SECONDARY_DEPTH_FORMAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {raytraceExtent.width, raytraceExtent.height, 1});
+    create_Image_Storages(&nearDepth, //smoke depth
+        VK_IMAGE_TYPE_2D,
+        SECONDARY_DEPTH_FORMAT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        {raytraceExtent.width, raytraceExtent.height, 1});
+
+    vector<vector<VkImageView>> rayGenVeiws(3);
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
+        rayGenVeiws[0].push_back(highresMatNorms.view);
+        rayGenVeiws[1].push_back(highresFrames.view);
+        rayGenVeiws[2].push_back(highresDepthStencils.view);
+    }
+
+    vector<vector<VkImageView>> interVeiws(5);
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) { //single framebuffer
+        interVeiws[0].push_back(lowresMatNorm.view);
+        interVeiws[1].push_back(maskFrame.view);
+        interVeiws[2].push_back(stencilViewForDS);
+        interVeiws[3].push_back(farDepth.view);
+        interVeiws[4].push_back(nearDepth.view);
+    }
+
+    vector<vector<VkImageView>> blurVeiws(2);
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
+        blurVeiws[0].push_back(highresMatNorms.view);
+        blurVeiws[1].push_back(highresFrames.view);
+    }
+    
+    
+println
+    create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, raygen2diffuseRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+    
+    create_N_Framebuffers(&glossyFramebuffers, &interVeiws, smoke2glossyRpass, MAX_FRAMES_IN_FLIGHT, raytraceExtent.width, raytraceExtent.height);
+println
+    create_N_Framebuffers(&overlayFramebuffers, &blurVeiws, blur2presentRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+println
+}
+void Renderer::recreateSwapchainDependent() {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window.pointer, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(window.pointer, &width, &height);
+        glfwWaitEvents();
+    }
+    
+    vkDeviceWaitIdle(device);
+    cleanupSwapchainDependent();
+    vkDeviceWaitIdle(device);
+
+    createSwapchain();
+    createSwapchainImageViews();
+
+    vkDestroyCommandPool(device, commandPool, NULL);
+
+    create_Command_Pool();
+    // create_Command_Buffers(&overlayCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&   graphicsCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+    create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = commandPool;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+    copyCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyCommandBuffers.data())); 
+    // renderOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    // VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderOverlayCommandBuffers.data())); 
+
+    createSwapchainDependent();
+
+    // setup_Raytrace_Descriptors();
+    // setup_Denoise_Descriptors();
+    // setup_Radiance_Cache_Descriptors();
+    // setup_Diffuse_Descriptors();
+    if(scaled) {
+        // setup_Upscale_Descriptors();
+    }
+    // setup_Accumulate_Descriptors();
+    // setup_RayGen_Descriptors();
+    // setup_RayGen_Particles_Descriptors();
+
+    
+    vkDeviceWaitIdle(device);
+} 
+
 void Renderer::deleteImages(vector<Image>* images) {
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
          vkDestroyImageView(device,  (*images)[i].view, NULL);
@@ -537,7 +721,7 @@ void Renderer::cleanup() {
     deleteImages(&distancePalette);
     deleteImages(&bitPalette);
     deleteImages(&materialPalette);
-    deleteImages(&perlinNoise);
+    deleteImages(&perlinNoise2d);
     deleteImages(&grassState);
     deleteImages(&waterState);
 
@@ -577,7 +761,8 @@ println
     destroy_Compute_Pipeline(  &radiancePipe);
     destroy_Compute_Pipeline(   &updateGrassPipe);
     destroy_Compute_Pipeline(   &updateWaterPipe);
-    destroy_Compute_Pipeline(   &genPerlinPipe);
+    destroy_Compute_Pipeline(   &genPerlin2dPipe);
+    destroy_Compute_Pipeline(   &genPerlin3dPipe);
     destroy_Compute_Pipeline(   &dfxPipe);
     destroy_Compute_Pipeline(   &dfyPipe);
     destroy_Compute_Pipeline(   &dfzPipe);
@@ -692,163 +877,6 @@ void Renderer::cleanupSwapchainDependent() {
     }
     vkDestroySwapchainKHR(device, swapchain, NULL);
 }
-void Renderer::createSwapchainDependent() {
-    // int mipmaps;
-    create_Image_Storages(&highresMatNorms,
-        VK_IMAGE_TYPE_2D,
-        MATNORM_FORMAT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(&highresDepthStencils,
-        VK_IMAGE_TYPE_2D,
-        DEPTH_FORMAT,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,
-        {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(&highresFrames,
-        VK_IMAGE_TYPE_2D,
-        FRAME_FORMAT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        {swapChainExtent.width, swapChainExtent.height, 1});
-
-    if(scaled){
-        create_Image_Storages(&lowresMatNorm,
-            VK_IMAGE_TYPE_2D,
-            MATNORM_FORMAT,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            {raytraceExtent.width, raytraceExtent.height, 1});
-        create_Image_Storages(&lowresDepthStencil,
-            VK_IMAGE_TYPE_2D,
-            DEPTH_FORMAT,
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
-            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-            VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-            VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,
-            {raytraceExtent.width, raytraceExtent.height, 1});
-    } else {
-        //set them same
-        lowresMatNorm = highresMatNorms;
-        lowresDepthStencil = highresDepthStencils;
-    }
-
-        VkImageViewCreateInfo viewInfo = {};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = lowresDepthStencil.image;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = DEPTH_FORMAT;
-        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT; //create stencil view yourself
-        viewInfo.subresourceRange.baseMipLevel = 0;
-        viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.levelCount = 1;
-        viewInfo.subresourceRange.layerCount = 1;
-        VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &stencilViewForDS));
-
-    //required anyways
-    create_Image_Storages(&maskFrame,
-        VK_IMAGE_TYPE_2D,
-        FRAME_FORMAT,
-        // VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        {raytraceExtent.width, raytraceExtent.height, 1});
-    vector<vector<VkImageView>> rayGenVeiws(3);
-    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
-        rayGenVeiws[0].push_back(highresMatNorms.view);
-        rayGenVeiws[1].push_back(highresFrames.view);
-        rayGenVeiws[2].push_back(highresDepthStencils.view);
-    }
-
-    vector<vector<VkImageView>> interVeiws(3);
-    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) { //single framebuffer
-        // if(scaled){
-            interVeiws[0].push_back(lowresMatNorm.view);
-            interVeiws[1].push_back(maskFrame.view);
-            // interVeiws[2].push_back(lowresDepth.view);
-            interVeiws[2].push_back(stencilViewForDS);
-        // } else {
-            // interVeiws[0].push_back(highresMatNorms.view);
-            // interVeiws[1].push_back(highresFrames.view);
-            // // interVeiws[2].push_back(lowresDepth.view);
-            // interVeiws[2].push_back(highresDepths.view);
-        // }
-    }
-
-    vector<vector<VkImageView>> blurVeiws(2);
-    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
-        blurVeiws[0].push_back(highresMatNorms.view);
-        blurVeiws[1].push_back(highresFrames.view);
-    }
-    
-    
-println
-    create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, raygen2diffuseRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
-    
-    create_N_Framebuffers(&glossyFramebuffers, &interVeiws, smoke2glossyRpass, MAX_FRAMES_IN_FLIGHT, raytraceExtent.width, raytraceExtent.height);
-println
-    create_N_Framebuffers(&overlayFramebuffers, &blurVeiws, blur2presentRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
-println
-}
-void Renderer::recreateSwapchainDependent() {
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(window.pointer, &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(window.pointer, &width, &height);
-        glfwWaitEvents();
-    }
-    
-    vkDeviceWaitIdle(device);
-    cleanupSwapchainDependent();
-    vkDeviceWaitIdle(device);
-
-    createSwapchain();
-    createSwapchainImageViews();
-
-    vkDestroyCommandPool(device, commandPool, NULL);
-
-    create_Command_Pool();
-    // create_Command_Buffers(&overlayCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-    create_Command_Buffers(&   graphicsCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-    create_Command_Buffers(&  computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-
-    VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = commandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-    copyCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, copyCommandBuffers.data())); 
-    // renderOverlayCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    // VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, renderOverlayCommandBuffers.data())); 
-
-    createSwapchainDependent();
-
-    // setup_Raytrace_Descriptors();
-    // setup_Denoise_Descriptors();
-    // setup_Radiance_Cache_Descriptors();
-    // setup_Diffuse_Descriptors();
-    if(scaled) {
-        // setup_Upscale_Descriptors();
-    }
-    // setup_Accumulate_Descriptors();
-    // setup_RayGen_Descriptors();
-    // setup_RayGen_Particles_Descriptors();
-
-    
-    vkDeviceWaitIdle(device);
-} 
 
 void Renderer::createSwapchainImageViews() {
     for(i32 i=0; i<swapchainImages.size(); i++) {
@@ -929,7 +957,7 @@ void Renderer::process_ui_deletion_queue() {
     bufferDeletionQueue.resize(write_index);
 }
 
-void Renderer::gen_perlin(){
+void Renderer::gen_perlin_2d(){
     VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
 
     VkImageMemoryBarrier barrier{};
@@ -938,8 +966,8 @@ void Renderer::gen_perlin(){
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = perlinNoise.image;
-    barrier.subresourceRange.aspectMask = perlinNoise.aspect;
+    barrier.image = perlinNoise2d.image;
+    barrier.subresourceRange.aspectMask = perlinNoise2d.aspect;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = 0;
@@ -947,10 +975,43 @@ void Renderer::gen_perlin(){
     barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlinPipe.line);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlinPipe.lineLayout, 0, 1, &genPerlinPipe.sets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin2dPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin2dPipe.lineLayout, 0, 1, &genPerlin2dPipe.sets[currentFrame], 0, 0);
 
     vkCmdDispatch(commandBuffer, world_size.x/8, world_size.y/8, 1);
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0, NULL,
+        0, NULL,
+        1, &barrier
+    );
+    end_Single_Time_Commands(commandBuffer);
+}
+
+void Renderer::gen_perlin_3d(){
+    VkCommandBuffer commandBuffer = begin_Single_Time_Commands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = perlinNoise3d.image;
+    barrier.subresourceRange.aspectMask = perlinNoise3d.aspect;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin3dPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin3dPipe.lineLayout, 0, 1, &genPerlin3dPipe.sets[currentFrame], 0, 0);
+
+    vkCmdDispatch(commandBuffer, 64/4, 64/4, 64/4);
     vkCmdPipelineBarrier(
         commandBuffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -1797,12 +1858,24 @@ void Renderer::start_2nd_spass(){
         // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
         //     stencil);
     // }
-    
+    VkClearValue 
+        far = {};
+        far.color.float32[0] = -10000.f;
+        far.color.float32[1] = -10000.f;
+        far.color.float32[2] = -10000.f;
+        far.color.float32[3] = -10000.f;
+    VkClearValue 
+        near = {};
+        near.color.float32[0] = +10000.f;
+        near.color.float32[1] = +10000.f;
+        near.color.float32[2] = +10000.f;
+        near.color.float32[3] = +10000.f;
     vector<VkClearValue> clearColors = {
         {}, 
         {}, 
         {}, 
-        {}
+        far,
+        near, 
     };
     VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1849,11 +1922,11 @@ void Renderer::start_2nd_spass(){
     
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilSmokePipe.lineLayout, 0, 1, &fillStencilSmokePipe.sets[currentFrame], 0, 0);
 
-        struct rtpc {vec3 center;} pushconstant = {vec3(3,3,3)};
+        struct rtpc {vec4 centerSize;} pushconstant = {vec4(vec3(8,8,1.5)*16.f, 32)};
         vkCmdPushConstants(commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
         PLACE_TIMESTAMP();
-        // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdDraw(commandBuffer, 36, 1, 0, 0);
         PLACE_TIMESTAMP();
 }
 
@@ -1876,11 +1949,14 @@ void Renderer::smoke() {
         scissor.offset = {0, 0};
         scissor.extent = raytraceExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    
+
+        struct rtpc {vec3 pos; int t; vec4 dir;} pushconstant = {vec3(cameraPos), iFrame, vec4(cameraDir,0)};
+        vkCmdPushConstants(commandBuffer, smokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
+
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, smokePipe.lineLayout, 0, 1, &smokePipe.sets[currentFrame], 0, 0);
 
         PLACE_TIMESTAMP();
-        // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
         PLACE_TIMESTAMP();
 }
 
@@ -2683,8 +2759,12 @@ void Renderer::createSamplers() {
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &linearSampler));
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    // samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    // samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    // samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &linearSampler_tiled));

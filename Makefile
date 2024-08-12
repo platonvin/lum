@@ -15,7 +15,7 @@ release_specific_flags = -O2 -DNDEBUG
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
 
-SHADER_FLAGS = --target-env=vulkan1.1
+SHADER_FLAGS = --target-env=vulkan1.1 -g
 
 deb_objs := \
 	obj/deb/main.o\
@@ -86,7 +86,8 @@ _shaders:= \
 	shaders/compiled/grassFrag.spv\
 	shaders/compiled/waterVert.spv\
 	shaders/compiled/updateGrass.spv\
-	shaders/compiled/perlin.spv\
+	shaders/compiled/perlin2.spv\
+	shaders/compiled/perlin3.spv\
 	shaders/compiled/dfx.spv\
 	shaders/compiled/dfy.spv\
 	shaders/compiled/dfz.spv\
@@ -182,8 +183,10 @@ shaders/compiled/waterVert.spv: shaders/water.vert
 	glslc shaders/water.vert -o shaders/compiled/waterVert.spv $(SHADER_FLAGS)
 shaders/compiled/updateGrass.spv: shaders/updateGrass.comp
 	glslc shaders/updateGrass.comp -o shaders/compiled/updateGrass.spv $(SHADER_FLAGS)
-shaders/compiled/perlin.spv: shaders/perlin.comp
-	glslc shaders/perlin.comp -o shaders/compiled/perlin.spv $(SHADER_FLAGS)
+shaders/compiled/perlin2.spv: shaders/perlin2.comp
+	glslc shaders/perlin2.comp -o shaders/compiled/perlin2.spv $(SHADER_FLAGS)
+shaders/compiled/perlin3.spv: shaders/perlin3.comp
+	glslc shaders/perlin3.comp -o shaders/compiled/perlin3.spv $(SHADER_FLAGS)
 shaders/compiled/dfx.spv: shaders/dfx.comp
 	glslc shaders/dfx.comp -o shaders/compiled/dfx.spv $(SHADER_FLAGS)
 shaders/compiled/dfy.spv: shaders/dfy.comp
@@ -205,6 +208,7 @@ shaders/compiled/smokeVert.spv: shaders/smoke.vert
 shaders/compiled/smokeFrag.spv: shaders/smoke.frag
 	glslc shaders/smoke.frag -o shaders/compiled/smokeFrag.spv $(SHADER_FLAGS)
 
+shaders: $(_shaders)
 
 debug: Flags=$(debug_flags) 
 # debug: objs=$(deb_objs)
@@ -214,6 +218,7 @@ release: Flags=$(release_flags)
 # release: objs=$(rel_objs)
 release: build_rel
 	client.exe
+
 fun:
 	@echo fun was never an option
 # opt: client_opt
