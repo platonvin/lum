@@ -10,7 +10,7 @@ layout(location = 1) out float near_depth_out;
 
 void main() {
     if(!gl_FrontFacing){
-        gl_FragDepth = end_depth_in + 0.01;
+        gl_FragDepth = end_depth_in - 0.01;
     } else {
         gl_FragDepth = end_depth_in;
     }

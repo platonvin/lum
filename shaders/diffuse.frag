@@ -126,7 +126,7 @@ varp int load_mat(){
 highp float load_depth(){
     // highp vec2 uv = (vec2(pixel)+0.5)/vec2(size);
     highp float depth_encoded = (subpassLoad(depthBuffer).x);
-    return (1.0-depth_encoded)*1000.0;
+    return (depth_encoded)*1000.0;
 }
 Material GetMat(in varp int voxel){
     Material mat;
@@ -199,4 +199,6 @@ void main(void){
         final_color /= ma;
     // else final_color /= mi;
     frame_color = vec4((final_color),1);
+
+    // frame_color = vec4(vec3(load_depth())/1000.0,1);
 }

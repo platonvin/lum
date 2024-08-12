@@ -42,7 +42,7 @@ void main() {
     vec4 world_pos_old = vec4(posIn - velIn*deltaTime,0);
 
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
-         clip_coords.z = -clip_coords.z;
+         clip_coords.z = 1.0+clip_coords.z;
     // vec3 clip_coords_old = (ubo.trans_w2s_old*world_pos_old).xyz;
 
     gl_Position  = vec4(clip_coords, 1);    

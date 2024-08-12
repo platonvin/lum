@@ -458,7 +458,7 @@ void main(){
 	 vec2 fpix = gl_GlobalInvocationID.xy + 0.5;
 	ivec2 ipix = ivec2(fpix);
 	// float noise_val = cnoise(fpix / 48.0); 
-	float noise_val = perlinNoise(fpix/48.0, vec2(2), 0); 
+	float noise_val = perlinNoise(fpix/(2*48.0), vec2(3), 0); 
 // mult
 	
 	imageStore(noise_image, ipix, vec4(noise_val));

@@ -73,12 +73,14 @@ float get_blade_width(float height){
 //ONLY WORKS WITH BLADE NON TRANSFORMED VERTS
 void rotate_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
     // {//obvious version. Is left to explaing 
-        float angle = rnd01 * PI * 2.0 * 420.0; //increasing randomness
+        float angle = rnd01 * PI * 2.0 * 42.0; //increasing randomness
         float cos_rot = cos(angle);
         float sin_rot = sin(angle);
     // }
+
+    // vertex.xy -= 0.5;
     
-    // float cos_rot = rnd01; //
+    // float cos_rot = rnd01*0.0; //
     // float sin_rot = sqrt(1 - cos_rot*cos_rot);
 
     float vxNew =  vertex.x * cos_rot + vertex.y * sin_rot;
@@ -86,6 +88,7 @@ void rotate_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
 
     vertex.x = vxNew;
     vertex.y = vyNew;
+    // vertex.xy += 0.5;
     // normal.x = 
     float nxNew =  normal.x * cos_rot + normal.y * sin_rot;
     float nyNew = -normal.x * sin_rot + normal.y * cos_rot;
@@ -111,7 +114,7 @@ void scale_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
     return;
 }
 void curve_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
-    vertex.y = (vertex.z / MAX_HEIGHT) * 1.5;
+    vertex.y = (vertex.z / MAX_HEIGHT) * 1.5;// * sign(rnd01 - 0.5);
 
     return;
 }
@@ -193,6 +196,8 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
     vec3 n2 = vec3(+0.5,1,0);
     normal = normalize(mix(n1,n2,x_pos));
 
+    vertex.y *= 3.7; // increase width
+    vertex.x *= 3.7; // increase width
 
     curve_blade_vert(rnd01, vertex, normal);
 
@@ -202,7 +207,6 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
 
     displace_blade(rnd01, vertex, normal);
 
-    vertex.x *= 3.7; // increase width
     vertex.z *= 3.0; // increase height
 
     return vertex;
@@ -227,7 +231,7 @@ void main() {
     vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(pco.size));
 
     vec3 normal;
-    float rand01 = rand(relative_pos);
+    float rand01 = rand(relative_pos*7.132);
     vec3 rel2world = get_blade_vert(blade_vertex_id, normal, rand01, relative_pos);
 
     vec2 rel2tile_shift = relative_pos * 16.0; //for visibility
@@ -235,7 +239,7 @@ void main() {
 
     vec4 world_pos = vec4(rel2tile,1) + pco.shift;
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
-         clip_coords.z = -clip_coords.z;
+         clip_coords.z = 1.0+clip_coords.z;
 
     // // uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     gl_Position  = vec4(clip_coords, 1);    

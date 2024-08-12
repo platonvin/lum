@@ -1,4 +1,7 @@
 #version 450
+
+#extension GL_EXT_shader_8bit_storage : enable
+
 // layout(location = 0) in vec3 zero_origin;
 layout(location = 0) in vec2 UV;
 layout(location = 0) out vec4 smoke_color;
@@ -7,8 +10,8 @@ precision highp float;
 precision highp int;
 
 //dont swap
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput smoke_depth_near;
-layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_far;
+layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput smoke_depth_far;
+layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_near;
 // layout(set = 0, binding = 2, r16i  ) uniform iimage3D blocks;
 layout(set = 0, binding = 2, rgba16) uniform image3D radianceCache;
 layout(set = 0, binding = 3) uniform sampler3D noise;
@@ -138,7 +141,7 @@ vec3 sample_radiance(vec3 position){
 }
 
 float decode_depth(float d){
-    return (1.0-d)*1000.0;
+    return (d)*1000.0;
 }
 float load_depth_far(){
     return decode_depth(subpassLoad(smoke_depth_far).x);
@@ -175,6 +178,13 @@ vec2 rotate(vec2 v, float a) {
 	return m * v;
 }
 
+mat2 rotatem(float a) {
+	float s = sin(a);
+	float c = cos(a);
+	mat2 m = mat2(c, s, -s, c);
+	return m;
+}
+
 void main() {
     // smoke_color = vec4(0);
     // outColor = vec4(fragColor, 1.0);
@@ -184,16 +194,21 @@ void main() {
     // uv.x = (vxx.yy).y;
     // vec2 size = textureSize(ui_elem_texture, 0);
     cameraRayDirPlane = normalize(vec3(PushConstants.camera_direction.xy, 0));
-    horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
+    horizline = (cross(cameraRayDirPlane, vec3(0,0,1)));
     vertiline = normalize(cross(PushConstants.camera_direction.xyz, horizline));
     // outColor = final_color;
 
     float near = (load_depth_near());
     float  far = (load_depth_far());
+    // if(near > far){
+    //     float t = near;
+    //     near = far;
+    //     far = t;
+    // }
     //     if(near < far) smoke_color = vec4(1);
     //     else smoke_color = vec4(0);
     // return;
-    float diff = clamp(abs(far-near), 0, 100);
+    float diff = (far-near);
     
     // if(diff > 8.0){
     // smoke_color = vec4(vec3(1), 0.04*diff);
@@ -216,6 +231,10 @@ void main() {
     float I = 1.0;
 
     vec3 position;
+    const float treshhold = 0.7;
+    const float multiplier = 1.7;
+
+    float total_dencity = 0;
 
     for(float fraction = near; fraction < far; fraction+=step_size){
             position = get_origin_from_depth(fraction, UV);
@@ -223,22 +242,30 @@ void main() {
             vec3 noise_uv = voxel_pos / 32.0;
         vec4 noises;
                 vec3 wind_direction = vec3(1,0,0);
-            noises.x = texture(noise, noise_uv/1.0 + wind_direction*PushConstants.timeSeed/200.0).x;
-                wind_direction.xy = rotate(wind_direction.xy, 1.6);
-            noises.y = texture(noise, noise_uv/2.0 + wind_direction*PushConstants.timeSeed/200.0).y;
-                wind_direction.xy = rotate(wind_direction.xy, 1.6);
-            noises.z = texture(noise, noise_uv/3.0 + wind_direction*PushConstants.timeSeed/200.0).z;
-                wind_direction.xy = rotate(wind_direction.xy, 1.6);
-            noises.w = texture(noise, noise_uv/4.0 + wind_direction*PushConstants.timeSeed/200.0).w;
+                mat2 wind_rotate = rotatem(1.6);
+            noises.x = texture(noise, noise_uv/1.0 + wind_direction*PushConstants.timeSeed/3500.0).x;
+                wind_direction.xy *= wind_rotate;
+            noises.y = texture(noise, noise_uv/2.1 + wind_direction*PushConstants.timeSeed/3000.0).y;
+                wind_direction.xy *= wind_rotate;
+            noises.z = texture(noise, noise_uv/3.2 + wind_direction*PushConstants.timeSeed/2500.0).z;
+                wind_direction.xy *= wind_rotate;
+            noises.w = texture(noise, noise_uv/4.3 + wind_direction*PushConstants.timeSeed/2000.0).w;
 
-        float dencity = (noises.x + noises.y + noises.z + noises.w) / 4.0;
+        float close_to_border = clamp(diff,0.1,16.0)/16.0;
+
+        float dencity = (noises.x + noises.y + noises.z - noises.w / close_to_border) / 2.0 - treshhold;
+
+        dencity = clamp(dencity,0,treshhold) * multiplier;
+        // float dencity = (noises.x) / 1.0;
         // dencity *= exp(-clamp(diff, 0, 100)/100.0);
-        dencity += clamp(diff,0,10)/200.0;
+        // dencity += clamp(diff/10,0,1)/20.0;
 
         I = (1.0 - dencity * step_size) * I;
+        total_dencity += dencity * step_size;
     }
-
+    // int8_t a;
     //at point of leaving smoke
+    //does not look realistic but fits engine blocky style
     vec3 final_light = sample_radiance(position, direction);
 
     float smoke_opacity = 1.0 - I;
@@ -248,11 +275,13 @@ void main() {
     // }
     // smoke_opacity = 1.0 / (1.5-smoke_opacity);
     //1-I because its inverted
-    smoke_color = vec4(vec3(0.3), smoke_opacity);
+    // smoke_color = vec4(vec3(0.3), smoke_opacity);
+    // smoke_color = vec4(vec3(0.42-total_dencity/diff), smoke_opacity);
+    smoke_color = vec4(vec3(final_light), smoke_opacity);
     // smoke_color.w = 0;
     // }   
     // float mix_ratio = 
-    // smoke_color = vec4(vec3(mod(near-far,13.0)/13.0,1,1), 1);
+    // smoke_color = vec4(0);
     // vec4 old_color = subpassLoad(inFrame);
     // int mat = load_mat();
     // frame_color = sin(old_color * 42.2);

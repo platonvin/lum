@@ -67,7 +67,7 @@ void main() {
     for(int i=0; i<14; i++){
         vec3 shift_in_world  = cube_strip[i]*gs_in[0].size;
         vec3 shift_on_screen = (ubo.trans_w2s * vec4(shift_in_world,1)).xyz; //todo move out
-        shift_on_screen.z = -shift_on_screen.z;
+        shift_on_screen.z = +shift_on_screen.z;
         // shift_on_screen = -vec3(.1);
 
         vec3 norm = norms[i];

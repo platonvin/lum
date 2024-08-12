@@ -38,7 +38,7 @@ void main() {
     vec4 world_pos = vec4(qtransform(pco.rot, fpos) + pco.shift.xyz ,1);
 
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz; //move up
-         clip_coords.z = -clip_coords.z;
+         clip_coords.z = 1+clip_coords.z;
 
     gl_Position  = vec4(clip_coords, 1);    
     

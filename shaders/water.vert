@@ -144,7 +144,7 @@ void main() {
 
     vec4 world_pos = vec4(rel2world,1) + pco.shift;
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
-         clip_coords.z = -clip_coords.z;
+         clip_coords.z = 1.0+clip_coords.z;
 
     // // uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     gl_Position  = vec4(clip_coords, 1);    

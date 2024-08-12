@@ -25,6 +25,9 @@ const vector<const char*>   deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
     VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME,
+    VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
+    VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
+    VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
     // VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME
     // VK_NV_device_diagnostic_checkpoints
     // "VK_KHR_shader_non_semantic_info"
@@ -921,7 +924,7 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
             }
             default: crash(whats depthTest);
         }
-        depthStencil.depthCompareOp = VK_COMPARE_OP_GREATER;
+        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
         depthStencil.depthBoundsTestEnable = VK_FALSE;
         depthStencil.minDepthBounds = 0.0f;
         depthStencil.maxDepthBounds = 1.0f;

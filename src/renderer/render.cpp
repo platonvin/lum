@@ -412,6 +412,7 @@ println
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
         swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     raygenWaterPipe.subpassId = 3;
+println
     create_Raster_Pipeline(&raygenWaterPipe, {
             {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -1525,10 +1526,12 @@ void Renderer::start_raygen() {
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT,
                 uniform[currentFrame]);
 
+    VkClearValue clear_depth = {};
+    clear_depth.depthStencil.depth = 1;
     vector<VkClearValue> clearColors = {
         {}, 
         {}, 
-        {}
+        clear_depth
     };
     VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1922,7 +1925,7 @@ void Renderer::start_2nd_spass(){
     
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilSmokePipe.lineLayout, 0, 1, &fillStencilSmokePipe.sets[currentFrame], 0, 0);
 
-        struct rtpc {vec4 centerSize;} pushconstant = {vec4(vec3(8,8,1.5)*16.f, 32)};
+        struct rtpc {vec4 centerSize;} pushconstant = {vec4(vec3(11,11,1.5)*16.f, 32)};
         vkCmdPushConstants(commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
         PLACE_TIMESTAMP();

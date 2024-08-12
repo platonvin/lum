@@ -92,7 +92,7 @@ void main()
 
     vec4 world_pos = vec4(vertex + pco.originSize.xyz,1);
     vec3 clip_coords = (ubo.trans_w2s*world_pos).xyz;
-         clip_coords.z = -clip_coords.z;
+         clip_coords.z = 1.0+clip_coords.z;
     end_depth = clip_coords.z;
         //  clip_coords.z = 0;
 
