@@ -1,6 +1,6 @@
 #version 450 
 
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput matNorm;
+layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
 layout(set = 0, binding = 1, r32f       ) uniform image2D   voxelPalette;
 
 //stencils smooth surface pixels bit at 01 from 00 to 01
@@ -12,7 +12,7 @@ struct Material{
     float roughness;
 };
 int load_mat(){
-    int mat = int(round(subpassLoad(matNorm).x*127.0))+127;
+    int mat = int(round(subpassLoad(matNorm).x));
     return mat;
 }
 Material GetMat(in int voxel){
