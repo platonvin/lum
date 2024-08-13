@@ -5,8 +5,6 @@
 using namespace std;
 using namespace glm;
 
-
-
 tuple<int, int> get_block_xy(int N);
 
 vector<char> read_Shader(const char* filename);
@@ -45,6 +43,9 @@ void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize,
     createSwapchain(); //should be before anything related to its size and format
     createSwapchainImageViews();
 
+    DEPTH_FORMAT = findSupportedFormat({DEPTH_FORMAT_PREFERED, DEPTH_FORMAT_SPARE}, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+
 println
     //not worth abstracting
     createRenderPass1();
@@ -79,6 +80,8 @@ println
     assert(timestampCount!=0);
     timestampNames.resize(timestampCount);
     timestamps.resize(timestampCount);
+    ftimestamps.resize(timestampCount);
+    average_ftimestamps.resize(timestampCount);
 
     VkQueryPoolCreateInfo query_pool_info{};
         query_pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
@@ -285,7 +288,8 @@ println
     deferDescriptorsetup(&blurPipe.setLayout, &blurPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresFrames},  NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {maskFrame}, linearSampler,     VK_IMAGE_LAYOUT_GENERAL},
+        // if(true)
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {maskFrame}, scaled? linearSampler : nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     deferDescriptorsetup(&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
@@ -2191,9 +2195,17 @@ void Renderer::end_frame() {
             VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
     }
 
-    float timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
+    double timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
     timeTakenByRadiance = float(timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
     
+    for(int i=0; i<timestampCount; i++){
+        ftimestamps[i] = double(timestamps[i]) * timestampPeriod / 1000000.0;
+    }
+    if(iFrame > 5){
+        for(int i=0; i<timestampCount; i++){
+            average_ftimestamps[i] = mix(average_ftimestamps[i], ftimestamps[i], 0.1);
+        }
+    }
     
     previousFrame = currentFrame;
      currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -2369,6 +2381,7 @@ void Renderer::create_Image_Storages(vector<Image>* images,
     uvec3 size, int mipmaps, VkSampleCountFlagBits sample_count) {
     (*images).resize(MAX_FRAMES_IN_FLIGHT);
     
+    // VkFormat chosen_format = findSupportedFormat(format, type, VK_IMAGE_TILING_OPTIMAL, usage);
 
     for (i32 i=0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         (*images)[i].aspect = aspect;
@@ -2423,6 +2436,8 @@ void Renderer::create_Image_Storages(vector<Image>* images,
 void Renderer::create_Image_Storages(Image* image, 
     VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, 
     uvec3 size, int mipmaps, VkSampleCountFlagBits sample_count) {
+
+    // VkFormat chosen_format = findSupportedFormat(format, type, VK_IMAGE_TILING_OPTIMAL, usage);
 
     image->aspect = aspect;
     image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -3045,3 +3060,29 @@ tuple<int, int> get_block_xy(int N) {
 // void Renderer::load_vertices(Mesh* mesh, Vertex* vertices) {
 //     crash("not implemented yet");
 // }
+
+VkFormat Renderer::findSupportedFormat(vector<VkFormat> candidates, 
+                             VkImageType type,
+                             VkImageTiling tiling, 
+                             VkImageUsageFlags usage) 
+{
+    for (VkFormat format : candidates) {
+        // cout << string_VkFormat(format) << "\n";
+        VkImageFormatProperties imageFormatProperties;
+        VkResult result = vkGetPhysicalDeviceImageFormatProperties(
+            physicalDevice, 
+            format, 
+            type,
+            tiling, 
+            usage, 
+            // 0, 
+            0, // No flags
+            &imageFormatProperties);
+
+        // cout << string_VkResult(result) << "\n";
+        if (result == VK_SUCCESS) {
+            return format;
+        }
+    }
+    crash(Failed to find supported format!);
+}

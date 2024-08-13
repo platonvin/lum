@@ -49,12 +49,6 @@ const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 // #define MATNORM_FORMAT VK_FORMAT_R8G8B8A8_SNORM
 // #define RADIANCE_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
 
-#define FRAME_FORMAT VK_FORMAT_R16G16B16A16_UNORM
-#define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT_S8_UINT //somehow faster than VK_FORMAT_D24_UNORM_S8_UINT even on low-end 
-#define MATNORM_FORMAT VK_FORMAT_R8G8B8A8_SNORM
-#define RADIANCE_FORMAT VK_FORMAT_R16G16B16A16_UNORM
-#define SECONDARY_DEPTH_FORMAT VK_FORMAT_R16_SFLOAT 
-
 #define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
 
 // #define ACCUMULATE_HIGHRES
@@ -497,6 +491,7 @@ private:
     void createRenderPass2(); //2=3. 
     void createRenderPass3(); //3=2. Cool, right? borrowed from dreambeard
 
+    VkFormat findSupportedFormat(vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
     
     void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
@@ -728,10 +723,24 @@ public:
     bool measureAll = true;
     // int timestampCount = 2;
     vector<uint64_t> timestamps = {};
+    vector<double> ftimestamps = {};
+    vector<double> average_ftimestamps = {};
     vector<const char*> timestampNames = {};
     VkPhysicalDeviceProperties physicalDeviceProperties;
     float timeTakenByRadiance = 0.0;
     int magicSize = 2;
+
+private:
+    const VkFormat FRAME_FORMAT =  VK_FORMAT_R16G16B16A16_UNORM;
+    VkFormat DEPTH_FORMAT = VK_FORMAT_UNDEFINED;
+    const VkFormat DEPTH_FORMAT_PREFERED =  VK_FORMAT_D24_UNORM_S8_UINT;
+    const VkFormat DEPTH_FORMAT_SPARE =  VK_FORMAT_D32_SFLOAT_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end
+    // const VkFormat DEPTH_FORMAT_PREFERED =  VK_FORMAT_D32_SFLOAT_S8_UINT;
+    // const VkFormat DEPTH_FORMAT_SPARE =  VK_FORMAT_D24_UNORM_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end
+
+    const VkFormat MATNORM_FORMAT =  VK_FORMAT_R8G8B8A8_UINT;
+    const VkFormat RADIANCE_FORMAT =  VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    const VkFormat SECONDARY_DEPTH_FORMAT =  VK_FORMAT_R16_SFLOAT; 
 };
 
 class MyRenderInterface : public Rml::RenderInterface{   

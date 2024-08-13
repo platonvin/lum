@@ -7,15 +7,15 @@ precision highp float;
 //well, its not really radiance. Its more of a minecraft lighting but raytraced
 //its not that realistic but imho looks good
 
-//sadly there is no way to use specialization constants for this
+//sadly there is no easy way to use specialization constants for this
 #define varp highp
 
 layout(set = 0, binding = 0, r16i       ) uniform iimage3D blocks;
 layout(set = 0, binding = 1, r8ui       ) uniform uimage3D blockPalette;
-layout(set = 0, binding = 2, r32f       ) uniform image2D voxelPalette;
-layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
+layout(set = 0, binding = 2, r32f       ) uniform  image2D voxelPalette;
+// layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // A2B10G10R10_UNORM_PACK32
-// layout(set = 0, binding = 3, rgb10_a2) uniform image3D radianceCache;
+layout(set = 0, binding = 3, rgb10_a2) uniform image3D radianceCache;
 layout(std430,set = 0, binding = 4) buffer ReqBuffer{
 	ivec4 updateReqests[];
 } reqBuffer;

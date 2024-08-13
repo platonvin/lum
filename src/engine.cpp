@@ -32,7 +32,7 @@ vec3 rnVec3(float minValue, float maxValue) {
 bool sort_blocks(struct block_render_request const& lhs, struct block_render_request const& rhs){
     // return lhs.index < rhs.index;
     // return lhs.cam_dist > rhs.cam_dist; //what state is more important and does it even matter?
-    return lhs.cam_dist < rhs.cam_dist; //what state is more important and does it even matter?
+    return lhs.cam_dist >= rhs.cam_dist; //what state is more important and does it even matter?
 }
 
 quat find_quat(vec3 v1, vec3 v2){
@@ -87,7 +87,7 @@ static double delt_time = 0;
 static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
-    render.init(48, 48, 16, 15, 8128, float(1.), true, false);
+    render.init(48, 48, 16, 15, 8128, float(1.), false, false);
     // render.init(48, 48, 16, 15, 8128, float(1.5), false, false);
 // println
     vkDeviceWaitIdle(render.device);

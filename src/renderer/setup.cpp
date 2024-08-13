@@ -23,11 +23,11 @@ const vector<const char*> instanceLayers = {
 };
 const vector<const char*>   deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-    VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME,
-    VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
-    VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
-    VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
+    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, //simplifies renderer for negative cost lol
+    VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME, //for measuring frame times - dynamic quality to perfomance exchange
+    VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, //pco / ubo +perfomance
+    VK_KHR_16BIT_STORAGE_EXTENSION_NAME, //just explicit control
+    VK_KHR_8BIT_STORAGE_EXTENSION_NAME, //just explicit control
     // VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME
     // VK_NV_device_diagnostic_checkpoints
     // "VK_KHR_shader_non_semantic_info"

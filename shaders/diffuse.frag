@@ -17,8 +17,8 @@ layout(push_constant) uniform constants{
     varp  vec4 camera_direction;
 } PushConstants;
 
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput matNorm;
-layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput depthBuffer;
+layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
+layout(input_attachment_index = 1, set = 0, binding = 1) uniform  subpassInput depthBuffer;
 
 layout(set = 0, binding = 2, r16i       ) uniform iimage3D  blocks;
 layout(set = 0, binding = 3, r8ui       ) uniform uimage3D  blockPalette;
@@ -114,12 +114,14 @@ struct Material{
 };
 varp vec3 load_norm(){
     // varp vec3 norm = (imageLoad(matNorm, pixel).gba);
-    varp vec3 norm = (subpassLoad(matNorm).gba);
+    // varp vec3 norm = normalize(((subpassLoad(matNorm).gba)/1.0)*2.0 - 1.0);
+    varp vec3 norm = normalize(((subpassLoad(matNorm).gba/255.0)*2.0 - 1.0));
     // subpass
     return norm;
 }
 varp int load_mat(){
-    varp int mat = int(round(subpassLoad(matNorm).x*127.0))+127;
+    varp int mat = int((subpassLoad(matNorm).x));
+    // varp int mat = 9;
     // varp int mat = int(subpassLoad(matNorm).x);
     return mat;
 }

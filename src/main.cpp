@@ -24,10 +24,10 @@ int main() {
     if (engine.render.measureAll){
         printf("%-22s: %7.3f: %7.3f\n", engine.render.timestampNames[0], 0.0f);
         
-        float timestampPeriod = engine.render.physicalDeviceProperties.limits.timestampPeriod;
+        // float timestampPeriod = engine.render.physicalDeviceProperties.limits.timestampPeriod;
         for (int i=1; i<engine.render.currentTimestamp; i++){
-            float time_point = float(engine.render.timestamps[i] - engine.render.timestamps[0]) * timestampPeriod / 1000000.0f;
-            float time_diff = float(engine.render.timestamps[i] - engine.render.timestamps[i-1]) * timestampPeriod / 1000000.0f;
+            double time_point = double(engine.render.average_ftimestamps[i] - engine.render.average_ftimestamps[0]);
+            double time_diff = double(engine.render.average_ftimestamps[i] - engine.render.average_ftimestamps[i-1]);
             printf("%-22s: %7.3f: %7.3f\n", engine.render.timestampNames[i], time_point, time_diff);
         }
     }
