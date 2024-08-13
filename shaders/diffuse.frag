@@ -20,10 +20,10 @@ layout(push_constant) uniform constants{
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
 layout(input_attachment_index = 1, set = 0, binding = 1) uniform  subpassInput depthBuffer;
 
-layout(set = 0, binding = 2, r16i       ) uniform iimage3D  blocks;
-layout(set = 0, binding = 3, r8ui       ) uniform uimage3D  blockPalette;
-layout(set = 0, binding = 4, r32f       ) uniform image2D   voxelPalette;
-layout(set = 0, binding = 5, rgb10_a2     ) uniform image3D   radianceCache;
+// layout(set = 0, binding = 2, r16i) uniform iimage3D  blocks;
+// layout(set = 0, binding = 3, r8ui) uniform uimage3D  blockPalette;
+layout(set = 0, binding = 2, r32f) uniform image2D   voxelPalette;
+layout(set = 0, binding = 3      ) uniform sampler3D radianceCache;
 
 layout(location = 0) in vec2 non_clip_pos;
 layout(location = 0) out vec4 frame_color;
@@ -38,43 +38,104 @@ vec3 cameraRayDirPlane;
 vec3 horizline;
 vec3 vertiline;
 
-vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
-    ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
-    ivec3 subprobe_pos;
-          subprobe_pos.x  = probe_ipos_clamped.x; //same as local_pos actually but its optimized away and worth it for modularity
-          subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
-    // vec3 light = imageLoad(radianceCache, clamp(subprobe_pos, ivec3(0), world_size)).xyz;
-    vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
-    return clamp(light, 0, 2);
-}
+// vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
+//     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
+//     ivec3 subprobe_pos;
+//           subprobe_pos.x  = probe_ipos_clamped.x; //same as local_pos actually but its optimized away and worth it for modularity
+//           subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
+//     // vec3 light = imageLoad(radianceCache, clamp(subprobe_pos, ivec3(0), world_size)).xyz;
+//     vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
+//     return clamp(light, 0, 2);
+// }
 float square(float a){return a*a;}
 
-vec3 sample_radiance(vec3 position, vec3 normal){
-    vec3 sampled_light;
+// vec3 sample_radiance(vec3 position, vec3 normal){
+//     vec3 sampled_light;
 
-    float total_weight =      0 ;
-     vec3 total_colour = vec3(0);
+//     float total_weight =      0 ;
+//      vec3 total_colour = vec3(0);
 
-    ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
-     vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
+//     ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
+//      vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
 
-    vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
+//     vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
+//     // alpha = vec3(1);
+
+//     for (int i=0; i<8; i++){
+//         //to make it little more readable
+//         ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
+
+//         float probe_weight =     (1);
+//          vec3 probe_colour = vec3(0);
+
+//         vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
+
+//         vec3  probeToPoint = probe_pos - position;
+//         vec3 direction_to_probe = normalize(probeToPoint);
+
+//         vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
+//         probe_weight = trilinear.x * trilinear.y * trilinear.z;
+
+        
+//         /*
+//         actually, not using directional weight **might** increase quality 
+//         by adding extra shadows in corners made of solid blocks
+//         but im still going to use it
+
+//         0.1 clamp to prevent weird cases where occasionally every single one would be 0 - in such cases, it will lead to trilinear
+//         */
+//         float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
+//         // float direction_weight = square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
+//         // float direction_weight = float(dot(direction_to_probe, normal) > 0);
+
+//         probe_weight *= direction_weight;
+        
+//         // const float crushThreshold = 0.2;
+//         // if (probe_weight < crushThreshold) {
+//         //     probe_weight *= probe_weight * probe_weight * (1.0 / square(crushThreshold)); 
+//         // }
+
+//         // probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
+//         // probe_colour = vec3(zero_probe_ipos + offset) / vec3(world_size);
+
+//         probe_weight  = max(1e-7, probe_weight);
+//         total_weight += probe_weight;
+//         total_colour += probe_weight * probe_colour;
+//     }
+
+//     return total_colour / total_weight;
+// }
+
+vec3 sample_radiance(vec3 position){
+    // vec3 sampled_light;
+
+    // float total_weight =      0 ;
+    //  vec3 total_colour = vec3(0);
+
+    // ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
+    //  vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
+
+    vec3 block_pos = position / 16.0;
+    vec3 sampled_light = textureLod(radianceCache, (((block_pos / vec3(world_size)))), 0).rgb;
+
+    return sampled_light;
+    // vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
     // alpha = vec3(1);
 
-    for (int i=0; i<8; i++){
-        //to make it little more readable
-        ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
+    // for (int i=0; i<8; i++){
+    //     //to make it little more readable
+    //     ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
 
-        float probe_weight =     (1);
-         vec3 probe_colour = vec3(0);
+    //     float probe_weight =     (1);
+    //      vec3 probe_colour = vec3(0);
 
-        vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
+    //     vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
 
-        vec3  probeToPoint = probe_pos - position;
-        vec3 direction_to_probe = normalize(probeToPoint);
+    //     vec3  probeToPoint = probe_pos - position;
+    //     vec3 direction_to_probe = normalize(probeToPoint);
 
-        vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
-        probe_weight = trilinear.x * trilinear.y * trilinear.z;
+    //     vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
+    //     probe_weight = trilinear.x * trilinear.y * trilinear.z;
 
         
         /*
@@ -84,27 +145,29 @@ vec3 sample_radiance(vec3 position, vec3 normal){
 
         0.1 clamp to prevent weird cases where occasionally every single one would be 0 - in such cases, it will lead to trilinear
         */
-        float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
+        // float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
         // float direction_weight = square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
         // float direction_weight = float(dot(direction_to_probe, normal) > 0);
 
-        probe_weight *= direction_weight;
+        // probe_weight *= direction_weight;
         
         // const float crushThreshold = 0.2;
         // if (probe_weight < crushThreshold) {
         //     probe_weight *= probe_weight * probe_weight * (1.0 / square(crushThreshold)); 
         // }
 
-        probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
+        // probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
         // probe_colour = vec3(zero_probe_ipos + offset) / vec3(world_size);
 
-        probe_weight  = max(1e-7, probe_weight);
-        total_weight += probe_weight;
-        total_colour += probe_weight * probe_colour;
-    }
+    //     probe_weight  = max(1e-7, probe_weight);
+    //     total_weight += probe_weight;
+    //     total_colour += probe_weight * probe_colour;
+    // }
 
-    return total_colour / total_weight;
+    // return total_colour / total_weight;
 }
+
+
 
 struct Material{
     varp vec3 color;
@@ -184,9 +247,10 @@ void main(void){
     // const highp      vec3 stored_origin = get_origin_from_depth(load_depth(), pos);
     const varp      vec3 stored_normal = load_norm();
 
-    vec3 incoming_light = sample_radiance(stored_origin + 0.1*stored_normal, stored_normal);
+    // vec3 incoming_light = sample_radiance(stored_origin + 0.1*stored_normal, stored_normal);
+    vec3 incoming_light = sample_radiance(stored_origin + stored_normal*6.0);
 
-    final_color = (2.0*incoming_light+stored_mat.emmitance) * stored_mat.color ;
+    final_color = (2.0*incoming_light+stored_mat.emmitance) * stored_mat.color;
     // final_color = stored_mat.color;
     // final_color = incoming_light;
     // final_color = stored_origin;

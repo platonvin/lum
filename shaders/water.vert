@@ -24,7 +24,7 @@ layout(set = 0, binding = 1) uniform sampler2D state;
 
 // layout(location = 0) flat out vec3 norm;
 // layout(location = 1) flat out float fmat;
-layout(location = 0) lowp flat out vec4 mat_norm;
+layout(location = 0) lowp flat out uvec4 mat_norm;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
@@ -153,5 +153,6 @@ void main() {
     // norm = normalize(vec3(1));
     uint mat = uint(30);
     float fmat = (float(mat)-127.0)/127.0;
-    mat_norm = vec4(fmat, norm);
+    vec4 fmat_norm = vec4(fmat, norm);
+    mat_norm = uvec4(((fmat_norm+1.0)/2.0)*255.0);
 }

@@ -8,7 +8,7 @@ precision highp float;
 
 layout(location = 0) lowp flat in uvec4 mat_norm;
 
-layout(location = 0) out uvec4 outMatNorm;
+layout(location = 0) lowp out uvec4 outMatNorm;
 
 void main() {
     // outMatNorm.x = fmat;

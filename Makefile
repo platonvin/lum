@@ -8,7 +8,7 @@ L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
 #-ftrivial-auto-var-init=zero sets "local" vars to 0 by default
 
 # all of them united
-always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero
+always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Wl,--stack,10000000
 debug_specific_flags   = -O0 
 release_specific_flags = -O2 -DNDEBUG 
 
@@ -135,7 +135,7 @@ obj/rel/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer
 obj/rel/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
 	g++ src/renderer/ui.cpp $(Flags) obj/rel/ui.o
 # .PHONY: obj/rel/main.o
-obj/rel/main.o: src/main.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
+obj/rel/main.o: src/main.cpp src/engine.hpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
 	g++ src/main.cpp $(Flags) obj/rel/main.o
 
 
@@ -223,10 +223,10 @@ fun:
 	@echo fun was never an option
 # opt: client_opt
 # client.exe
-# g++ test.cpp -o test
-# test
+test:
+	g++ test.cpp -o test
+	test
 obj_folder = obj/rel
-test: $(obj_dir)/aa.o 
 
 # das=$(addprefix $(obj_dir), "main.o")
 # das = main.o

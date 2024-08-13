@@ -391,6 +391,8 @@ public:
     dmat4 cameraTransform     = identity<dmat4>();
     dmat4 cameraTransform_OLD = identity<dmat4>();
 
+    void update_camera();
+
     void gen_perlin_2d();
     void gen_perlin_3d();
     void start_frame();
@@ -644,6 +646,9 @@ public:
     VkSampler   linearSampler;
     VkSampler   linearSampler_tiled;
     VkSampler  overlaySampler;
+
+    VkSampler  unnormLinear;
+    VkSampler  unnormNearest;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
     vector<Buffer>      stagingWorld;

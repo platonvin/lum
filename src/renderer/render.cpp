@@ -21,6 +21,9 @@ void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize,
     this->fullscreen = fullscreen;
     this->static_block_palette_size = staticBlockPaletteSize;
 
+    //to fix weird mesh culling problems for identity
+    update_camera();
+
     ui_render_interface = new(MyRenderInterface);
     ui_render_interface->render = this;
 
@@ -101,7 +104,7 @@ void Renderer::createImages(){
     create_Image_Storages(&world,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R16_SINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
@@ -109,15 +112,15 @@ void Renderer::createImages(){
     create_Image_Storages(&radianceCache,
         VK_IMAGE_TYPE_3D,
         RADIANCE_FORMAT,
-        VK_IMAGE_USAGE_STORAGE_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
-        {RCACHE_RAYS_PER_PROBE * world_size.x, world_size.y, world_size.z}); //TODO: dynamic
+        {world_size.x, world_size.y, world_size.z}); //TODO: dynamic
     create_Image_Storages(&originBlockPalette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
@@ -250,10 +253,10 @@ println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencils},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {originBlockPalette}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {originBlockPalette}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {materialPalette},    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER         , RD_FIRST  , {/*empty*/}, {radianceCache},      unnormLinear,     VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
 
@@ -269,12 +272,12 @@ println
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {radianceCache},      unnormLinear,     VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     deferDescriptorsetup(&smokePipe.setLayout, &smokePipe.sets, {
@@ -414,7 +417,7 @@ println
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     raygenWaterPipe.subpassId = 3;
 println
     create_Raster_Pipeline(&raygenWaterPipe, {
@@ -1028,8 +1031,7 @@ void Renderer::gen_perlin_3d(){
     end_Single_Time_Commands(commandBuffer);
 }
 
-// #include <glm/gtx/string_cast.hpp>
-void Renderer::start_frame() {
+void Renderer::update_camera(){
     dvec3 up = glm::dvec3(0.0f, 0.0f, 1.0f); // Up vector
 
     dmat4 view = glm::lookAt(cameraPos, cameraPos+cameraDir, up);
@@ -1039,8 +1041,14 @@ void Renderer::start_frame() {
     dmat4 projection = glm::ortho(-view_width_in_voxels/2.0, view_width_in_voxels/2.0, view_height_in_voxels/2.0, -view_height_in_voxels/2.0, -0.0, +2000.0); // => *100.0 decoding
     dmat4     worldToScreen = projection * view;
 
-        cameraTransform_OLD = cameraTransform;
+    cameraTransform_OLD = cameraTransform;
     cameraTransform = worldToScreen;
+}
+
+// #include <glm/gtx/string_cast.hpp>
+void Renderer::start_frame() {
+    update_camera();
+    
     vkWaitForFences(device, 1, &frameInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
     vkResetFences  (device, 1, &frameInFlightFences[currentFrame]);
 
@@ -1731,7 +1739,9 @@ void Renderer::updade_grass(vec2 windDirection){
 void Renderer::raygen_map_grass(vec4 shift, int size){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
+    bool x_flip = cameraDir.x < 0;
+    bool y_flip = cameraDir.y < 0;
+    struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {shift, size, iFrame, x_flip, y_flip};
     vkCmdPushConstants(commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
     // const int verts_per_blade = 4*6 + 3; //for triangle list
@@ -2725,6 +2735,9 @@ void Renderer::setupDescriptor(VkDescriptorSetLayout* dsetLayout, vector<VkDescr
                 image_infos[i].imageLayout = descriptions[i].imageLayout;
                 if(descriptions[i].imageSampler != 0) {
                     image_infos[i].sampler = descriptions[i].imageSampler;
+                    if(descriptions[i].type != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER){
+                        crash(descriptor has sampler but type is not for sampler);
+                    }
                 } 
 
                 
@@ -2794,6 +2807,21 @@ void Renderer::createSamplers() {
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &overlaySampler));
+    
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &unnormLinear));
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.magFilter = VK_FILTER_NEAREST;
+    samplerInfo.minFilter = VK_FILTER_NEAREST;
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &unnormNearest));
 }
 
 void Renderer::copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {

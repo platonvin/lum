@@ -13,7 +13,7 @@ layout(location = 0) in VS_OUT {
 // layout(location = 0)      out vec2 old_uv;
 // layout(location = 0) flat out vec3 norm;
 // layout(location = 1) flat out float fmat;
-layout(location = 0) lowp flat out vec4 mat_norm;
+layout(location = 0) lowp flat out uvec4 mat_norm;
 
 layout(binding = 0, set = 0) uniform UniformBufferObject {
     mat4 trans_w2s;
@@ -81,7 +81,8 @@ void main() {
         uint mat = gs_in[0].mat;
         float fmat = (float(mat)-127.0)/127.0;
 
-        mat_norm = vec4(fmat, norm);
+        vec4 fmat_norm = vec4(fmat, norm);
+        mat_norm = uvec4(((fmat_norm+1.0)/2.0)*255.0);
 
         EmitVertex();
     }

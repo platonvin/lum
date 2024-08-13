@@ -29,12 +29,16 @@ vec3 rnVec3(float minValue, float maxValue) {
     return glm::vec3(x, y, z);
 }
 
-bool sort_blocks(struct block_render_request const& lhs, struct block_render_request const& rhs){
+static bool sort_blocks(struct block_render_request const& lhs, struct block_render_request const& rhs){
     // return lhs.index < rhs.index;
     // return lhs.cam_dist > rhs.cam_dist; //what state is more important and does it even matter?
     return lhs.cam_dist >= rhs.cam_dist; //what state is more important and does it even matter?
 }
-
+static bool sort_grass(struct grass_render_request const& lhs, struct grass_render_request const rhs){
+    // printl(lhs.cam_dist);
+    // printl(rhs.cam_dist);
+    return ((lhs.cam_dist) >= (rhs.cam_dist)); //what state is more important and does it even matter?
+}
 quat find_quat(vec3 v1, vec3 v2){
         quat q;
         vec3 a = cross(v1, v2);
@@ -88,6 +92,7 @@ static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
     render.init(48, 48, 16, 15, 8128, float(1.), false, false);
+    // render.init(48, 48, 16, 15, 8128, float(1.), true, false);
     // render.init(48, 48, 16, 15, 8128, float(1.5), false, false);
 // println
     vkDeviceWaitIdle(render.device);
@@ -349,9 +354,9 @@ void Engine::process_animations(){
     tank_lf_leg.shift = body_lf_leg_joint - lf_leg_joint_shift;
     tank_rb_leg.shift = body_rb_leg_joint - rb_leg_joint_shift; 
 }
-
+#include <glm/gtx/string_cast.hpp>
 void Engine::cull_meshes(){
-    que.clear();
+    block_que.clear();
     for(int xx=0; xx<48; xx++){
     for(int yy=0; yy<48; yy++){
     for(int zz=0; zz<16;  zz++){
@@ -369,12 +374,51 @@ void Engine::cull_meshes(){
             brr.cam_dist = clip_coords.z;
 
             if(is_block_visible(render.cameraTransform, dvec3(brr.pos))){
-                que.push_back(brr);
+                block_que.push_back(brr);
             }
         }
         assert(block_id <= render.static_block_palette_size);
     }}}
-    std::sort(que.begin(), que.end(), &sort_blocks);
+    std::sort(block_que.begin(), block_que.end(), &sort_blocks);
+
+    grass_que.clear();
+    // grass_que.clear();
+    for(int xx=0; xx<16; xx++){
+    for(int yy=0; yy<16; yy++){
+        struct grass_render_request grr = {};
+        // int block_id = render.origin_world(4+xx,4+yy,1);
+        grr.pos = ivec3(64+xx*16, 64+yy*16, 16);
+        // grr.pos = ivec3(xx*16, yy*16, 16);
+
+        // printl(grr.position.z);
+        // cout << to_string(grr.pos) << " ";
+        dvec3 clip_coords = (render.cameraTransform * dvec4(grr.pos,1));
+            clip_coords.z = -clip_coords.z;
+        // cout << to_string(clip_coords) << " \n";
+        grr.cam_dist = clip_coords.z;
+        // printl(clip_coords.z);
+        // printl(clip_coords.z);
+
+        // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
+        grass_que.push_back(grr);
+    }}
+    // for(auto g : grass_que){
+    //     printl(g.cam_dist);
+    // }
+    // println
+    std::sort(grass_que.begin(), grass_que.end(), &sort_grass);
+    // printl(grass_que.size());
+    // struct grass_render_request grr = {};
+    // grr.pos = ivec3(64+0*16,64+0*16,16);
+    // vec3 clip_coords = (render.cameraTransform * vec4(grr.pos,1));
+    //     clip_coords.z = -clip_coords.z;
+    // grr.cam_dist = clip_coords.z;
+    // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
+    // grass_que.push_back(grr);
+    // grass_que.push_back(grr);
+    // grass_que.push_back(grr);
+    // printl(grass_que.size());
+    // std::stable_sort()
 }
 
 void Engine::draw()
@@ -398,7 +442,7 @@ void Engine::draw()
             render.update_radiance();
             // render.recalculate_df();
             // render.recalculate_bit();
-
+// println
             render.updade_grass({});
             // render.updade_water(&water, {}, {});
 // println
@@ -421,7 +465,7 @@ void Engine::draw()
 // println
                 render.start_raygen();
 // println
-                    for(auto b : que){
+                    for(auto b : block_que){
                         Mesh* block_mesh = NULL;
                         block_mesh = &block_palette[b.index]->mesh;
                         block_mesh->shift = vec3(b.pos);
@@ -447,12 +491,15 @@ void Engine::draw()
                 render.raygen_map_particles();
 // println      
                 render.raygen_start_grass();
-                    for(int xx=0; xx<16;xx++){
-                    for(int yy=0; yy<16;yy++){
-                        if(render.origin_world(4+xx,4+yy,1) == 0){
-                            render.raygen_map_grass(vec4(64+xx*16,64+yy*16,16,0), 16);
-                        }
-                    }}
+                    // for(int xx=0; xx<16;xx++){
+                    // for(int yy=0; yy<16;yy++){
+                    //     if(render.origin_world(4+xx,4+yy,1) == 0){
+                    //         render.raygen_map_grass(vec4(64+xx*16,64+yy*16,16,0), 16);
+                    //     }
+                    // }}
+                    for(auto g : grass_que){
+                        render.raygen_map_grass(vec4(g.pos,0), 16);
+                    }
                     // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*1,16,0), 16);
                     // render.raygen_map_grass(&grass, vec4(128+16*1,128+16*2,16,0), 16);
                     // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*2,16,0), 16);

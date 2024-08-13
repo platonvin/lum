@@ -18,12 +18,12 @@ layout(push_constant) uniform constants{
 // layout(set = 0, binding = 0, rgba16) uniform image2D frame;
 layout(set = 0, binding = 1-1, rgba8ui) uniform  uimage2D matNorm;
 layout(set = 0, binding = 2-1             ) uniform sampler2D depthBuffer;
-layout(set = 0, binding = 3-1, r16i       ) uniform iimage3D blocks;
-layout(set = 0, binding = 4-1, r8ui       ) uniform uimage3D blockPalette;
-layout(set = 0, binding = 5-1, r32f       ) uniform  image2D voxelPalette;
-layout(set = 0, binding = 6-1, rgb10_a2   ) uniform  image3D radianceCache;
-layout(set = 0, binding = 7-1, r8ui       ) uniform uimage3D distancePalette;
-layout(set = 0, binding = 8-1, r8ui       ) uniform uimage3D bitPalette;
+layout(set = 0, binding = 3-1) uniform isampler3D blocks;
+layout(set = 0, binding = 4-1) uniform usampler3D blockPalette;
+layout(set = 0, binding = 5-1, r32f) uniform  image2D voxelPalette;
+layout(set = 0, binding = 6-1) uniform sampler3D radianceCache;
+// layout(set = 0, binding = 7-1, r8ui       ) uniform uimage3D distancePalette;
+// layout(set = 0, binding = 8-1, r8ui       ) uniform uimage3D bitPalette;
 
 layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
@@ -65,7 +65,9 @@ vec3 get_origin_from_depth(float depth, vec2 clip_pos){
 
 int GetBlock(in ivec3 block_pos){
     int block;
-    block = int((imageLoad(blocks, block_pos).r));
+    // block = int((imageLoad(blocks, block_pos).r));
+    // block = int((textureLod(blocks, (block_pos+0.5)/vec3(world_size), 0).r));
+    block = int((texelFetch(blocks, (block_pos), 0).r));
     return block;
 }
 
@@ -83,43 +85,34 @@ ivec3 voxel_in_bit_palette(ivec3 relative_voxel_pos, int block_id) {
     return relative_voxel_pos + ivec3(0+2*block_x, 0+16*block_y,0);
 }
 
-ivec2 GetVoxel(in ivec3 pos){    
+ivec2 GetVoxel(in vec3 pos){    
     int voxel;
-    ivec3 block_pos = pos / 16;
-    ivec3 relative_voxel_pos = pos % 16;
-    int block_id = GetBlock(block_pos);
+    ivec3 ipos = ivec3(pos);
+    ivec3 iblock_pos = ipos / 16;
+    ivec3 relative_voxel_pos = ipos % 16;
+    int block_id = GetBlock(iblock_pos);
     ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-    voxel = int(imageLoad(blockPalette, voxel_pos).r);
+    voxel = int(texelFetch(blockPalette, (voxel_pos), 0).r);
 
     return ivec2(voxel, block_id);
 }
 
-bool checkVoxel(in ivec3 pos){    
-    ivec3 block_pos = pos / 16;
-    int block_id = GetBlock(block_pos);
+// bool checkVoxel(in ivec3 pos){    
+//     ivec3 block_pos = pos / 16;
+//     int block_id = GetBlock(block_pos);
 
-    ivec3 relative_voxel_pos = pos % 16;
-    ivec3 bit_pos = relative_voxel_pos;
-          bit_pos.x /= 8;
-    int bit_num = relative_voxel_pos.x%8;
+//     ivec3 relative_voxel_pos = pos % 16;
+//     ivec3 bit_pos = relative_voxel_pos;
+//           bit_pos.x /= 8;
+//     int bit_num = relative_voxel_pos.x%8;
 
-    ivec3 voxel_pos = voxel_in_bit_palette(bit_pos, block_id);
-    uint voxel = (imageLoad(bitPalette, voxel_pos).x);
+//     ivec3 voxel_pos = voxel_in_bit_palette(bit_pos, block_id);
+//     uint voxel = (imageLoad(bitPalette, voxel_pos).x);
 
-    bool has_voxel = ((voxel & (1 << bit_num))!=0);
+//     bool has_voxel = ((voxel & (1 << bit_num))!=0);
     
-    return has_voxel;
-}
-
-void SetVoxel(in ivec3 pos, in uint voxel){
-    ivec3 block_pos = pos / 16;
-    ivec3 relative_voxel_pos = pos % 16;
-
-    int block_id = GetBlock(block_pos);
-    ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-    
-    imageStore(blockPalette, voxel_pos, uvec4(voxel));
-}
+//     return has_voxel;
+// }
 
 Material GetMat(in int voxel){
     Material mat;
@@ -133,63 +126,11 @@ Material GetMat(in int voxel){
 return mat;
 }
 
-vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
-    ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
-    ivec3 subprobe_pos;
-          subprobe_pos.x  = probe_ipos_clamped.x; //same as local_pos actually but its optimized away and worth it for modularity
-          subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
-    vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
-    return clamp(light, 0, 2);
-}
-float square(float a){return a*a;}
-
 vec3 sample_radiance(vec3 position, vec3 normal){
-    vec3 sampled_light;
+    vec3 block_pos = (position+normal*6.0) / 16.0;
+    vec3 sampled_light = textureLod(radianceCache, (block_pos+0.5) / vec3(world_size), 0).rgb;
 
-    float total_weight =      0 ;
-     vec3 total_colour = vec3(0);
-
-    ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
-     vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
-
-    vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
-    // alpha = vec3(1);
-
-    for (int i=0; i<8; i++){
-        //weird algo to make it little more readable and maybe low-instruction-cache-but-fast-loops gpu's friendly (if they will ever exist)
-        ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
-
-        float probe_weight =     (1);
-         vec3 probe_colour = vec3(0);
-
-        vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
-
-        vec3  probeToPoint = probe_pos - position;
-        vec3 direction_to_probe = normalize(probeToPoint);
-
-        vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
-        probe_weight = trilinear.x * trilinear.y * trilinear.z;
-
-        
-        /*
-        actually, not using directional weight **might** increase quality 
-        by adding extra shadows in corners made of solid blocks
-        but im still going to use it
-
-        0.1 clamp to prevent weird cases where occasionally every single one would be 0 - in such cases, it will lead to trilinear
-        */
-        float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
-
-        probe_weight *= direction_weight;
-        
-        probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
-
-        probe_weight  = max(1e-7, probe_weight);
-        total_weight += probe_weight;
-        total_colour += probe_weight * probe_colour;
-    }
-
-    return total_colour / total_weight;
+    return sampled_light;
 }
 
 bool initTvals(out vec3 tMax, out vec3 tDelta, out ivec3 blockPos, in vec3 rayOrigin, in vec3 rayDirection){
@@ -212,15 +153,15 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
         out bool left_bounds){
     bool block_hit = false;
 
-    ivec3 voxel_pos = ivec3(0);
+    vec3 voxel_pos = vec3(0);
     // vec3 orig = vec3(0);
     bvec3 currentStepDiretion = bvec3(false);
 
     // int max_steps = 256;
     float max_dist = 16.0*8.0;
 
-    int current_voxel = GetVoxel(voxel_pos).x;
-    int current_block = GetVoxel(voxel_pos).y;
+    int current_voxel = GetVoxel(origin).x;
+    int current_block = GetVoxel(origin).y;
 
     vec3 one_div_dir = 1.0 / direction;    
     bvec3 bprecomputed_corner = greaterThan(direction, vec3(0));
@@ -233,13 +174,13 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
         fraction += 0.5;
 
         vec3 pos = origin + direction*fraction;
-        voxel_pos = ivec3(pos);
+        // voxel_pos = ivec3(pos);
 
-            current_voxel = GetVoxel(voxel_pos).x;
-            current_block = GetVoxel(voxel_pos).y;
+            current_voxel = GetVoxel(pos).x;
+            current_block = GetVoxel(pos).y;
         
             if(current_block == 0){
-                vec3 box_precomp = vec3((voxel_pos / 16)*16) + precomputed_corner;
+                vec3 box_precomp = vec3((ivec3(pos) / 16)*16) + precomputed_corner;
                 vec3 temp = -pos*one_div_dir;
                 vec3 block_corner = box_precomp*one_div_dir + temp;
                 
@@ -255,7 +196,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
             break;
         }
 
-        if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
+        if (any(lessThan(pos,vec3(0))) || any(greaterThanEqual(pos, world_size*vec3(16)))) {
             block_hit = false;
             left_bounds = true;
             break;
@@ -315,138 +256,138 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
     return (current_voxel !=0);
 }
 
-bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, 
-        out float fraction, out vec3 normal, out Material material,
-        out bool left_bounds){
-    bool block_hit = false;
+// bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, 
+//         out float fraction, out vec3 normal, out Material material,
+//         out bool left_bounds){
+//     bool block_hit = false;
 
-    ivec3 steps;
-    steps = ivec3(greaterThan(rayDirection, vec3(0)));
-    steps = 2 * steps + (-1);
+//     ivec3 steps;
+//     steps = ivec3(greaterThan(rayDirection, vec3(0)));
+//     steps = 2 * steps + (-1);
 
-    vec3 fsteps = vec3(steps);
+//     vec3 fsteps = vec3(steps);
 
-    // ivec3 i_tMax = ivec3(0);
-    vec3 tMax = vec3(0);
-    vec3 tDelta = vec3(0);
-    ivec3 voxel_pos = ivec3(0);
-    float block_fraction = 0.0;
-    vec3 orig = vec3(0);
-    bvec3 currentStepDiretion = bvec3(false);
+//     // ivec3 i_tMax = ivec3(0);
+//     vec3 tMax = vec3(0);
+//     vec3 tDelta = vec3(0);
+//     ivec3 voxel_pos = ivec3(0);
+//     float block_fraction = 0.0;
+//     vec3 orig = vec3(0);
+//     bvec3 currentStepDiretion = bvec3(false);
 
-    initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
+//     initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
 
-    int max_steps = 128;
-    int current_voxel = GetVoxel(voxel_pos).x;
+//     int max_steps = 128;
+//     int current_voxel = GetVoxel(voxel_pos).x;
 
-    int iterations = 0;
-    // float _fraction = 0;
-    while (true) {
-        bool xLy = tMax.x <= tMax.y;
-        bool zLx = tMax.z <= tMax.x;
-        bool yLz = tMax.y <= tMax.z;
+//     int iterations = 0;
+//     // float _fraction = 0;
+//     while (true) {
+//         bool xLy = tMax.x <= tMax.y;
+//         bool zLx = tMax.z <= tMax.x;
+//         bool yLz = tMax.y <= tMax.z;
 
-        // ivec3 bools_xyz =    ivec3(xLy, yLz, zLx);
-        // ivec3 bools_n_zxy = ~ivec3((zLx, xLy, yLz));
+//         // ivec3 bools_xyz =    ivec3(xLy, yLz, zLx);
+//         // ivec3 bools_n_zxy = ~ivec3((zLx, xLy, yLz));
 
-        //LOL no perfomance benefit currently but it was there last time i tested it TODO
-        // currentStepDiretion = ivec3(bools_xyz & bools_n_zxy);
-        currentStepDiretion.x = ((( xLy) && (!zLx)));
-        currentStepDiretion.y = ((( yLz) && (!xLy)));
-        currentStepDiretion.z = ((( zLx) && (!yLz)));
+//         //LOL no perfomance benefit currently but it was there last time i tested it TODO
+//         // currentStepDiretion = ivec3(bools_xyz & bools_n_zxy);
+//         currentStepDiretion.x = ((( xLy) && (!zLx)));
+//         currentStepDiretion.y = ((( yLz) && (!xLy)));
+//         currentStepDiretion.z = ((( zLx) && (!yLz)));
 
-        tMax += tDelta * vec3(currentStepDiretion);
+//         tMax += tDelta * vec3(currentStepDiretion);
 
-        // _fraction += dot(tDelta, vec3(currentStepDiretion));
+//         // _fraction += dot(tDelta, vec3(currentStepDiretion));
 
-        voxel_pos += steps * ivec3(currentStepDiretion);
+//         voxel_pos += steps * ivec3(currentStepDiretion);
 
-        // orig += dot(tDelta, vec3(currentStepDiretion)) * rayDirection;
-        // current_voxel = GetVoxel(voxel_pos);
-            int voxel;
-            ivec3 block_pos = voxel_pos / 16;
-            ivec3 relative_voxel_pos = voxel_pos % 16;
-            int block_id = GetBlock(block_pos);
-            //if block_id is zero - teleport to border
-            ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-            voxel = int(imageLoad(blockPalette, _voxel_pos).r);
-            current_voxel = voxel;
+//         // orig += dot(tDelta, vec3(currentStepDiretion)) * rayDirection;
+//         // current_voxel = GetVoxel(voxel_pos);
+//             int voxel;
+//             ivec3 block_pos = voxel_pos / 16;
+//             ivec3 relative_voxel_pos = voxel_pos % 16;
+//             int block_id = GetBlock(block_pos);
+//             //if block_id is zero - teleport to border
+//             ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+//             voxel = int(imageLoad(blockPalette, _voxel_pos).r);
+//             current_voxel = voxel;
 
-            // if(block_id == 0){
-            //         vec3 tFinal = tMax - tDelta;
-            //         // block_fraction += dot(tFinal, vec3(currentStepDiretion));
-            //     vec3 orig = rayOrigin+_fraction*rayDirection;
+//             // if(block_id == 0){
+//             //         vec3 tFinal = tMax - tDelta;
+//             //         // block_fraction += dot(tFinal, vec3(currentStepDiretion));
+//             //     vec3 orig = rayOrigin+_fraction*rayDirection;
 
-            //     vec3 box_min = vec3((voxel_pos/16)*16);
-            //     vec3 box_max = vec3((voxel_pos/16)*16+16);
-            //     // vec2 skip;
+//             //     vec3 box_min = vec3((voxel_pos/16)*16);
+//             //     vec3 box_max = vec3((voxel_pos/16)*16+16);
+//             //     // vec2 skip;
 
-            //         vec3 block_corner1 = (box_min - orig)/rayDirection; //now corners are relative vectors
-            //         vec3 block_corner2 = (box_max - orig)/rayDirection;
-            //         vec3 _t;
-            //         _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
-            //         _t.y = max(block_corner1.y, block_corner2.y);
-            //         _t.z = max(block_corner1.z, block_corner2.z);
+//             //         vec3 block_corner1 = (box_min - orig)/rayDirection; //now corners are relative vectors
+//             //         vec3 block_corner2 = (box_max - orig)/rayDirection;
+//             //         vec3 _t;
+//             //         _t.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+//             //         _t.y = max(block_corner1.y, block_corner2.y);
+//             //         _t.z = max(block_corner1.z, block_corner2.z);
 
-            //         _fraction += min(_t.x, min(_t.y, _t.z))-0.0001;
+//             //         _fraction += min(_t.x, min(_t.y, _t.z))-0.0001;
                     
-            //         // tMax += _t;
-            //         initTvals(tMax, tDelta, voxel_pos, rayOrigin+_fraction*rayDirection, rayDirection); //does not intersect with scene
-            //         // {
-            //         //     vec3 block_corner1 = (floor(effective_origin) - effective_origin)/rayDirection; //now corners are relative vectors
-            //         //     vec3 block_corner2 = (floor(effective_origin) - effective_origin)/rayDirection  + 1.0/rayDirection;
-            //         //     tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
-            //         //     tMax.y = max(block_corner1.y, block_corner2.y);
-            //         //     tMax.z = max(block_corner1.z, block_corner2.z);
+//             //         // tMax += _t;
+//             //         initTvals(tMax, tDelta, voxel_pos, rayOrigin+_fraction*rayDirection, rayDirection); //does not intersect with scene
+//             //         // {
+//             //         //     vec3 block_corner1 = (floor(effective_origin) - effective_origin)/rayDirection; //now corners are relative vectors
+//             //         //     vec3 block_corner2 = (floor(effective_origin) - effective_origin)/rayDirection  + 1.0/rayDirection;
+//             //         //     tMax.x = max(block_corner1.x, block_corner2.x); //1 of theese will be negative so max is just to get positive
+//             //         //     tMax.y = max(block_corner1.y, block_corner2.y);
+//             //         //     tMax.z = max(block_corner1.z, block_corner2.z);
 
-            //         //     blockPos = ivec3(effective_origin); //round origin to block pos
-            //         // }
-            //         // initTvals()
-            //     // block_fraction += skip.x;
-            //         int voxel;
-            //         ivec3 block_pos = voxel_pos / 16;
-            //         ivec3 relative_voxel_pos = voxel_pos % 16;
-            //         int block_id = GetBlock(block_pos);
-            //         //if block_id is zero - teleport to border
-            //         ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-            //         voxel = int(imageLoad(blockPalette, _voxel_pos).r);
-            //         current_voxel = voxel;
-            //     // tMax = vec3(0);
-            // }
+//             //         //     blockPos = ivec3(effective_origin); //round origin to block pos
+//             //         // }
+//             //         // initTvals()
+//             //     // block_fraction += skip.x;
+//             //         int voxel;
+//             //         ivec3 block_pos = voxel_pos / 16;
+//             //         ivec3 relative_voxel_pos = voxel_pos % 16;
+//             //         int block_id = GetBlock(block_pos);
+//             //         //if block_id is zero - teleport to border
+//             //         ivec3 _voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
+//             //         voxel = int(imageLoad(blockPalette, _voxel_pos).r);
+//             //         current_voxel = voxel;
+//             //     // tMax = vec3(0);
+//             // }
             
 
         
-        if (current_voxel != 0){
-            block_hit = true;
-            break;
-        }
-        if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
-            block_hit = false;
-            left_bounds = true;
-            break;
-        }
-        if (iterations++ >= max_steps) {
-            block_hit = false;
-            left_bounds = true;
-            break;
-        }
-    }
+//         if (current_voxel != 0){
+//             block_hit = true;
+//             break;
+//         }
+//         if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
+//             block_hit = false;
+//             left_bounds = true;
+//             break;
+//         }
+//         if (iterations++ >= max_steps) {
+//             block_hit = false;
+//             left_bounds = true;
+//             break;
+//         }
+//     }
 
-    // tMax = i_tMax * tDelta;
+//     // tMax = i_tMax * tDelta;
 
-    normal = -(fsteps * vec3(currentStepDiretion));
-    vec3 tFinal = tMax - tDelta;
-    block_fraction = dot(tFinal, vec3(currentStepDiretion));
-    // block_fraction += dot(tFinal, vec3(currentStepDiretion));
+//     normal = -(fsteps * vec3(currentStepDiretion));
+//     vec3 tFinal = tMax - tDelta;
+//     block_fraction = dot(tFinal, vec3(currentStepDiretion));
+//     // block_fraction += dot(tFinal, vec3(currentStepDiretion));
 
-    material = GetMat(current_voxel);
-    // vec3 diffuse_light = sample_radiance(rayOrigin + rayDirection*block_fraction, normal);
+//     material = GetMat(current_voxel);
+//     // vec3 diffuse_light = sample_radiance(rayOrigin + rayDirection*block_fraction, normal);
 
-    fraction = block_fraction;
-    // fraction = _fraction;
+//     fraction = block_fraction;
+//     // fraction = _fraction;
 
-    return (block_hit);
-}
+//     return (block_hit);
+// }
 
 void ProcessHit_simple(inout vec3 origin, inout vec3 direction, 
                 in float fraction, in vec3 normal, in Material material, 
@@ -661,7 +602,7 @@ void main(void){
     vec3 accumulated_light      = vec3(0);
     vec3 accumulated_reflection = vec3(1);
 
-    origin += normal*0.01;
+    origin += normal*0.1;
     //TODO move to blend so less radiance reads happen
     ProcessHit(origin, direction, //TODO maybe remove sample radiance
             0, normal, mat, 
@@ -673,15 +614,15 @@ void main(void){
     vec2 current_pixel = vec2(gl_FragCoord);
     float current_depth = load_depth(pix);
     
-    if(GetVoxel(ivec3(origin)).x != 0){
-        bool ssr_hit = ssr_traceRay(origin, direction, current_pixel, current_depth, ssr_fraction, ssr_normal, ssr_mat);
-        origin += ssr_fraction * direction;
-        if(ssr_hit){
-            ProcessHit(origin, direction, 
-                0, normal, mat, 
-                accumulated_light, accumulated_reflection);
-        }
-    }
+    // if(GetVoxel(ivec3(origin)).x != 0){
+    //     bool ssr_hit = ssr_traceRay(origin, direction, current_pixel, current_depth, ssr_fraction, ssr_normal, ssr_mat);
+    //     origin += ssr_fraction * direction;
+    //     if(ssr_hit){
+    //         ProcessHit(origin, direction, 
+    //             0, normal, mat, 
+    //             accumulated_light, accumulated_reflection);
+    //     }
+    // }
     // ssr_hit = ssr_traceRay(origin, direction, current_pixel, current_depth, ssr_fraction, ssr_normal, ssr_mat);
     // origin += ssr_fraction * direction;
     // if(ssr_hit){
