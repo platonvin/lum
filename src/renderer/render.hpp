@@ -492,6 +492,7 @@ private:
     void createRenderPass1();
     void createRenderPass2(); //2=3. 
     void createRenderPass3(); //3=2. Cool, right? borrowed from dreambeard
+    void createRenderPassAlt();
 
     VkFormat findSupportedFormat(vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
     
@@ -614,14 +615,16 @@ public:
     VkRenderPass raygen2diffuseRpass;
     VkRenderPass   smoke2glossyRpass;
     VkRenderPass   blur2presentRpass;
+    VkRenderPass   altRpass; //for no downscaling
 
     vector<VkFramebuffer>  rayGenFramebuffers; //for 1st rpass
-    vector<VkFramebuffer>  glossyFramebuffers; //for 3rd rpass. Size of 1
-    vector<VkFramebuffer> overlayFramebuffers; //for 2st rpass.
+    // vector<VkFramebuffer>  glossyFramebuffers; //for 3rd rpass. Size of 1
+    // vector<VkFramebuffer> overlayFramebuffers; //for 2st rpass.
+    vector<VkFramebuffer> altFramebuffers; //for no downscaling
 
     vector<VkCommandBuffer>  computeCommandBuffers; 
     vector<VkCommandBuffer> graphicsCommandBuffers;
-    vector<VkCommandBuffer>     copyCommandBuffers; //runtime copies for ui and runtime grass/water creation. Also does first frame resources
+    vector<VkCommandBuffer>     copyCommandBuffers; //runtime copies for ui. Also does first frame resources
 
     vector<VkSemaphore> imageAvailableSemaphores;
     vector<VkSemaphore> renderFinishedSemaphores; //to sync renering with presenting
@@ -630,7 +633,7 @@ public:
 
     vector<Image> swapchainImages;
            Image highresFrames;
-           Image highresDepthStencils;
+           Image highresDepthStencil;
            Image highresStencils;
            Image highresMatNorms; 
            //downscaled version for memory coherence. TODO:TEST perfomance on tiled 

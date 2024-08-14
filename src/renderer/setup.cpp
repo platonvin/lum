@@ -719,6 +719,207 @@ void Renderer::createRenderPass2(){
     VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &blur2presentRpass));
 }
 
+void Renderer::createRenderPassAlt(){
+    VkAttachmentDescription 
+        ca_mat_norm = {};
+        ca_mat_norm.format = MATNORM_FORMAT;
+        ca_mat_norm.samples = VK_SAMPLE_COUNT_1_BIT;
+        ca_mat_norm.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        ca_mat_norm.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        ca_mat_norm.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        ca_mat_norm.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        ca_mat_norm.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        ca_mat_norm.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_frame = {};
+        a_frame.format = FRAME_FORMAT;
+        a_frame.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_frame.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        a_frame.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        a_frame.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_frame.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_frame.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_frame.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_stencil = {}; //stencil generated in same rpass and unused after
+        a_stencil.format = DEPTH_FORMAT;
+        a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_stencil.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_stencil.flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT;
+    // VkAttachmentDescription 
+    //     a_stencil = {}; //stencil generated in same rpass and unused after
+    //     a_stencil.format = DEPTH_FORMAT;
+    //     a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
+    //     a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    //     a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+    //     a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    //     a_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    //     a_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     a_stencil.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    //     a_stencil.flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT;
+    VkAttachmentDescription 
+        a_far_depth = {}; //for smoke march distance. Is not D32 but just r16 cause not hw depth
+        a_far_depth.format = SECONDARY_DEPTH_FORMAT;
+        a_far_depth.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_far_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_far_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_far_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_far_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_far_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_far_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentDescription 
+        a_near_depth = {}; //for smoke march distance. Is not D32 but just r16 cause not hw depth
+        a_near_depth.format = SECONDARY_DEPTH_FORMAT;
+        a_near_depth.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_near_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_near_depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
+        a_near_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_near_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_near_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_near_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    VkAttachmentReference 
+        aref_mat_norm = {};
+        aref_mat_norm.attachment = 0;
+        aref_mat_norm.layout = VK_IMAGE_LAYOUT_GENERAL;
+    VkAttachmentReference 
+        aref_frame = {};
+        aref_frame.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_frame.attachment = 1;
+    VkAttachmentReference 
+        aref_depth = {};
+        aref_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_depth.attachment = 2;
+    // VkAttachmentReference 
+    //     aref_stencil = {};
+    //     aref_stencil.layout = VK_IMAGE_LAYOUT_GENERAL;
+    //     aref_stencil.attachment = 3;
+    //blends with max/min
+    VkAttachmentReference 
+        aref_far_depth = {};
+        aref_far_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_far_depth.attachment = 3;
+    VkAttachmentReference 
+        aref_near_depth = {};
+        aref_near_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_near_depth.attachment = 4;
+    // vector<VkAttachmentDescription> attachments = {ca_mat_norm, a_frame, a_depth, a_stencil, a_far_depth, a_near_depth};
+    vector<VkAttachmentDescription> attachments = {ca_mat_norm, a_frame, a_stencil, a_far_depth, a_near_depth};
+
+    // vector<VkAttachmentReference> color_attachment_refs = {aref_mat_norm, aref_frame, /*depthRef*/};
+
+    VkSubpassDescription //reads matnorm sets stencil bits
+        fill_stencil_for_reflection_subpass = {};
+        fill_stencil_for_reflection_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        fill_stencil_for_reflection_subpass.colorAttachmentCount = 0;
+        fill_stencil_for_reflection_subpass.pColorAttachments = NULL;
+        fill_stencil_for_reflection_subpass.inputAttachmentCount = 1;
+        fill_stencil_for_reflection_subpass.pInputAttachments = &aref_mat_norm;
+        fill_stencil_for_reflection_subpass.pDepthStencilAttachment = &aref_depth;
+    //fills with 10 on rasterization
+    vector<VkAttachmentReference> fill_smoke_out = {aref_far_depth, aref_near_depth};
+    VkSubpassDescription //rasterizes into stencil bits and far near depth for smoke
+        fill_stencil_for_smoke_subpass = {};
+        fill_stencil_for_smoke_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        fill_stencil_for_smoke_subpass.colorAttachmentCount = fill_smoke_out.size();
+        fill_stencil_for_smoke_subpass.pColorAttachments = fill_smoke_out.data();//writes to it
+        fill_stencil_for_smoke_subpass.inputAttachmentCount = 0;
+        fill_stencil_for_smoke_subpass.pInputAttachments = NULL;
+        fill_stencil_for_smoke_subpass.pDepthStencilAttachment = &aref_depth;
+    //reads from mat_norm and writes to final frame. Tested against 01 bitmask in stencil
+    // vector<VkAttachmentReference> reflection_refs = {aref_mat_norm, aref_depth};
+    vector<VkAttachmentReference> reflection_refs = {};
+    VkSubpassDescription 
+        reflections_subpass = {};
+        reflections_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        reflections_subpass.colorAttachmentCount = 1;
+        reflections_subpass.pColorAttachments = &aref_frame;
+        reflections_subpass.inputAttachmentCount = 0;
+        reflections_subpass.pInputAttachments = NULL;
+        reflections_subpass.pDepthStencilAttachment = &aref_depth;
+    //reads from depth, and writes to final frame. Tested against 10 bitmask in stencil
+    //rendered on top of reflections
+    vector<VkAttachmentReference> smoke_inputss = {aref_near_depth, aref_far_depth};
+    VkSubpassDescription
+        smoke_subpass = {};
+        smoke_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        smoke_subpass.colorAttachmentCount = 1;
+        smoke_subpass.pColorAttachments = &aref_frame;
+        smoke_subpass.inputAttachmentCount = smoke_inputss.size();
+        smoke_subpass.pInputAttachments = smoke_inputss.data();
+        smoke_subpass.pDepthStencilAttachment = &aref_depth;
+    //reads from mat_norm as just image and writes to final frame
+    vector<VkAttachmentReference> blur_attachment_refs = {aref_mat_norm, aref_frame, /*depthRef*/};
+    VkSubpassDescription
+        blur_subpass = {};
+        blur_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        blur_subpass.colorAttachmentCount = 1;
+        blur_subpass.pColorAttachments = &aref_frame;
+        blur_subpass.inputAttachmentCount = blur_attachment_refs.size();
+        blur_subpass.pInputAttachments = blur_attachment_refs.data();
+    VkSubpassDescription 
+        overlay_subpass = {};
+        overlay_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        overlay_subpass.colorAttachmentCount = 1;
+        overlay_subpass.pColorAttachments = &aref_frame;
+
+    VkSubpassDependency full_wait_color = {};
+		full_wait_color.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		full_wait_color.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		full_wait_color.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		full_wait_color.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		full_wait_color.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    VkSubpassDependency full_wait_depth = {};
+        full_wait_depth.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        full_wait_depth.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        full_wait_depth.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        full_wait_depth.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        full_wait_depth.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		// This makes sure that writes to the depth image are done before we try to write to it again
+    vector<VkSubpassDependency> dependencies(1);
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        dependencies[0].dependencyFlags = 0;
+
+    //temporary dev barriers TODO
+    for(int i=0; i<6; i++){
+    for(int j=i+1; j<6; j++){
+        full_wait_depth.srcSubpass = full_wait_color.srcSubpass = i;
+        full_wait_depth.dstSubpass = full_wait_color.dstSubpass = j;
+        dependencies.push_back(full_wait_color);
+        dependencies.push_back(full_wait_depth);
+    }}
+
+    vector<VkSubpassDescription> subpasses = {
+        fill_stencil_for_reflection_subpass, 
+        fill_stencil_for_smoke_subpass, 
+        reflections_subpass, 
+        smoke_subpass, 
+        blur_subpass, 
+        overlay_subpass};
+
+    VkRenderPassCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        createInfo.attachmentCount = attachments.size();
+        createInfo.pAttachments    = attachments.data();
+        createInfo.subpassCount = subpasses.size();
+        createInfo.pSubpasses = subpasses.data();
+        createInfo.dependencyCount = dependencies.size();
+        createInfo.pDependencies = dependencies.data();
+    
+    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &altRpass));
+}
+
+
 void Renderer::destroy_Raster_Pipeline(RasterPipe* pipe){
     vkDestroyPipeline(device, pipe->line, NULL);
     vkDestroyPipelineLayout(device, pipe->lineLayout, NULL);

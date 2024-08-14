@@ -127,7 +127,7 @@ return mat;
 }
 
 vec3 sample_radiance(vec3 position, vec3 normal){
-    vec3 block_pos = (position+normal*6.0) / 16.0;
+    vec3 block_pos = (position+normal*16.0) / 16.0;
     vec3 sampled_light = textureLod(radianceCache, (block_pos+0.5) / vec3(world_size), 0).rgb;
 
     return sampled_light;
@@ -209,7 +209,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
         }
     }
 
-    vec3 before_hit = origin + direction*(fraction-0.5);
+    vec3 before_hit = origin + direction*(fraction-0.7);
 
 //todo:
     if(current_voxel !=0)
@@ -233,7 +233,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
         int current_voxel_id = GetVoxel(voxel_pos).x;
         int iterations = 0;
         [[unroll]] //why
-        while ((iterations++ <= 2) && (current_voxel_id == 0)) {
+        while ((iterations++ <= 3) && (current_voxel_id == 0)) {
             // initTvals(tMax, tDelta, voxel_pos, rayOrigin+dot(tMax - tDelta, fcurrentStepDiretion)*rayDirection, rayDirection); //does not intersect with scene
             // fstep_Diretion =  vec3(0);
             fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));

@@ -53,11 +53,14 @@ println
     //not worth abstracting
     createRenderPass1();
 println
-    createRenderPass3();
+    // createRenderPass3();
+    createRenderPassAlt();
+    blur2presentRpass = altRpass;
+    smoke2glossyRpass = altRpass;
+    // lowresDepthStencil = highresDepthStencil;
 println
-    createRenderPass2();
+    // createRenderPass2();
 println
-
     createSamplers();
 
     printl(swapChainImageFormat)
@@ -66,6 +69,7 @@ println
     create_Command_Buffers( &computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(&graphicsCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     create_Command_Buffers(    &copyCommandBuffers, MAX_FRAMES_IN_FLIGHT);
+println
 
     createSwapchainDependent();
 
@@ -243,16 +247,17 @@ void Renderer::setupDescriptors(){
 
 println
     deferDescriptorsetup(&radiancePipe.setLayout, &radiancePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {radianceCache},      unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,RD_FIRST  , {gpuRadianceUpdates}, {},          NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencils},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencil},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {originBlockPalette}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {materialPalette},    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
@@ -505,7 +510,7 @@ println
         });
 
 println
-    blurPipe.subpassId = 0;
+    blurPipe.subpassId = 0+4;
     create_Raster_Pipeline(&blurPipe, {
             {"shaders/compiled/blurVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/blurFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -514,7 +519,7 @@ println
         swapChainExtent, {NO_BLEND}, 0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 
 println
-    overlayPipe.subpassId = 1;
+    overlayPipe.subpassId = 1+4;
     create_Raster_Pipeline(&overlayPipe, {
             {"shaders/compiled/overlayVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/overlayFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT}, 
@@ -528,15 +533,21 @@ println
 
 println
     create_Compute_Pipeline(&radiancePipe,0, "shaders/compiled/radiance.spv", sizeof(int)*4,                  VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
+println
     create_Compute_Pipeline(&updateGrassPipe,0, "shaders/compiled/updateGrass.spv", sizeof(vec2)*2 + sizeof(float), 0);
+println
     // create_Compute_Pipeline(&updateWaterPipe,0, "shaders/compiled/updateWater.spv", sizeof(float) + sizeof(vec2)*2, 0);
+println
     create_Compute_Pipeline(&genPerlin2dPipe,0, "shaders/compiled/perlin2.spv", 0, 0);
+println
     create_Compute_Pipeline(&genPerlin3dPipe,0, "shaders/compiled/perlin3.spv", 0, 0);
-    create_Compute_Pipeline(&dfxPipe,0, "shaders/compiled/dfx.spv", 0, 0);
-    create_Compute_Pipeline(&dfyPipe,0, "shaders/compiled/dfy.spv", 0, 0);
-    create_Compute_Pipeline(&dfzPipe,0, "shaders/compiled/dfz.spv", 0, 0);
-    create_Compute_Pipeline(&bitmaskPipe,0, "shaders/compiled/bitmask.spv", 0, 0);
+println
+    // create_Compute_Pipeline(&dfxPipe,0, "shaders/compiled/dfx.spv", 0, 0);
+    // create_Compute_Pipeline(&dfyPipe,0, "shaders/compiled/dfy.spv", 0, 0);
+    // create_Compute_Pipeline(&dfzPipe,0, "shaders/compiled/dfz.spv", 0, 0);
+    // create_Compute_Pipeline(&bitmaskPipe,0, "shaders/compiled/bitmask.spv", 0, 0);
     create_Compute_Pipeline(&mapPipe, mapPushLayout, "shaders/compiled/map.spv",      sizeof(mat4) + sizeof(ivec4),   0);
+println
 
 }
 
@@ -550,7 +561,7 @@ void Renderer::createSwapchainDependent() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         {swapChainExtent.width, swapChainExtent.height, 1});
-    create_Image_Storages(&highresDepthStencils,
+    create_Image_Storages(&highresDepthStencil,
         VK_IMAGE_TYPE_2D,
         DEPTH_FORMAT,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
@@ -587,7 +598,7 @@ void Renderer::createSwapchainDependent() {
     } else {
         //set them to the same ptrs
         lowresMatNorm = highresMatNorms;
-        lowresDepthStencil = highresDepthStencils;
+        lowresDepthStencil = highresDepthStencil;
     }
 
         VkImageViewCreateInfo viewInfo = {};
@@ -632,7 +643,7 @@ void Renderer::createSwapchainDependent() {
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         rayGenVeiws[0].push_back(highresMatNorms.view);
         rayGenVeiws[1].push_back(highresFrames.view);
-        rayGenVeiws[2].push_back(highresDepthStencils.view);
+        rayGenVeiws[2].push_back(highresDepthStencil.view);
     }
 
     vector<vector<VkImageView>> interVeiws(5);
@@ -650,13 +661,24 @@ void Renderer::createSwapchainDependent() {
         blurVeiws[1].push_back(highresFrames.view);
     }
     
+    vector<vector<VkImageView>> altVeiws(5);
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
+        altVeiws[0].push_back(highresMatNorms.view);
+        altVeiws[1].push_back(highresFrames.view);
+        altVeiws[2].push_back(stencilViewForDS);
+        altVeiws[3].push_back(farDepth.view);
+        altVeiws[4].push_back(nearDepth.view);
+        // blurVeiws[5].push_back(highresFrames.view);
+    }
     
 println
     create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, raygen2diffuseRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
-    
-    create_N_Framebuffers(&glossyFramebuffers, &interVeiws, smoke2glossyRpass, MAX_FRAMES_IN_FLIGHT, raytraceExtent.width, raytraceExtent.height);
 println
-    create_N_Framebuffers(&overlayFramebuffers, &blurVeiws, blur2presentRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+//     create_N_Framebuffers(&glossyFramebuffers, &interVeiws, smoke2glossyRpass, MAX_FRAMES_IN_FLIGHT, raytraceExtent.width, raytraceExtent.height);
+// println
+//     create_N_Framebuffers(&overlayFramebuffers, &blurVeiws, blur2presentRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
+println
+    create_N_Framebuffers(&altFramebuffers, &altVeiws, altRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
 println
 }
 void Renderer::recreateSwapchainDependent() {
@@ -869,7 +891,7 @@ void Renderer::createSwapchain() {
 }
 
 void Renderer::cleanupSwapchainDependent() {
-    deleteImages(&highresDepthStencils);
+    deleteImages(&highresDepthStencil);
     deleteImages(&highresFrames);    
     deleteImages(&highresMatNorms);
 
@@ -877,7 +899,13 @@ void Renderer::cleanupSwapchainDependent() {
     for (auto framebuffer : rayGenFramebuffers) {
         vkDestroyFramebuffer(device, framebuffer, NULL);
     }
-    for (auto framebuffer : overlayFramebuffers) {
+    // for (auto framebuffer : glossyFramebuffers) {
+    //     vkDestroyFramebuffer(device, framebuffer, NULL);
+    // }
+    // for (auto framebuffer : overlayFramebuffers) {
+    //     vkDestroyFramebuffer(device, framebuffer, NULL);
+    // }
+    for (auto framebuffer : altFramebuffers) {
         vkDestroyFramebuffer(device, framebuffer, NULL);
     }
     for (auto img : swapchainImages) {
@@ -1831,7 +1859,7 @@ void Renderer::start_2nd_spass(){
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
             &highresMatNorms);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &highresDepthStencils);
+            &highresDepthStencil);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
             &maskFrame);
         cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
@@ -1863,7 +1891,7 @@ void Renderer::start_2nd_spass(){
             vkCmdBlitImage(commandBuffer, highresMatNorms.image, VK_IMAGE_LAYOUT_GENERAL, lowresMatNorm.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
                 blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                 blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            vkCmdBlitImage(commandBuffer, highresDepthStencils.image, VK_IMAGE_LAYOUT_GENERAL, lowresDepthStencil.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
+            vkCmdBlitImage(commandBuffer, highresDepthStencil.image, VK_IMAGE_LAYOUT_GENERAL, lowresDepthStencil.image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit, VK_FILTER_NEAREST);
         }
 
         cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
@@ -1897,7 +1925,7 @@ void Renderer::start_2nd_spass(){
     VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = smoke2glossyRpass;
-        renderPassInfo.framebuffer = glossyFramebuffers[currentFrame];
+        renderPassInfo.framebuffer = altFramebuffers[currentFrame];
         renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = {raytraceExtent.width, raytraceExtent.height};
         renderPassInfo.clearValueCount = clearColors.size();
@@ -2010,28 +2038,29 @@ void Renderer::glossy() {
 void Renderer::end_2nd_spass(){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-    vkCmdEndRenderPass(commandBuffer);
+    // vkCmdEndRenderPass(commandBuffer);
 }
 
 //basically samples results from previous smoke & glossy rpass
 void Renderer::collect_glossy() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-    vector<VkClearValue> clearColors = {
-        {}, 
-        {}, 
-        {}
-    };
-    VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = blur2presentRpass;
-        renderPassInfo.framebuffer = overlayFramebuffers[currentFrame];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = swapChainExtent;
-        renderPassInfo.clearValueCount = clearColors.size();
-        renderPassInfo.pClearValues    = clearColors.data();
+    // vector<VkClearValue> clearColors = {
+    //     {}, 
+    //     {}, 
+    //     {}
+    // };
+    // VkRenderPassBeginInfo renderPassInfo = {};
+    //     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    //     renderPassInfo.renderPass = blur2presentRpass;
+    //     renderPassInfo.framebuffer = overlayFramebuffers[currentFrame];
+    //     renderPassInfo.renderArea.offset = {0, 0};
+    //     renderPassInfo.renderArea.extent = swapChainExtent;
+    //     renderPassInfo.clearValueCount = clearColors.size();
+    //     renderPassInfo.pClearValues    = clearColors.data();
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    // vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, blurPipe.line);
 
@@ -2056,9 +2085,9 @@ void Renderer::collect_glossy() {
         struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,0), vec4(cameraDir,0)};
         // vkCmdPushConstants(commandBuffer, blurPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
-        PLACE_TIMESTAMP();
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-        PLACE_TIMESTAMP();
+        // PLACE_TIMESTAMP();
+        // vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        // PLACE_TIMESTAMP();
         // vkCmdDispatch(commandBuffer, (raytraceExtent.width+7)/8, (raytraceExtent.height+7)/8, 1);
 
 }

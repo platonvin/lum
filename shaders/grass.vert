@@ -230,7 +230,7 @@ void main() {
     int blade_x = blade_id % pco.size;
     int blade_y = blade_id / pco.size;
 
-    if(pco.x_flip != 0) blade_x = pco.size - blade_x;
+    if(pco.x_flip == 0) blade_x = pco.size - blade_x;
     if(pco.y_flip != 0) blade_y = pco.size - blade_y;
     
     vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(pco.size));
