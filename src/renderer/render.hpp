@@ -81,6 +81,12 @@ typedef struct PackedVoxelVertex {
     // unsigned char norm;
     MatID_t matID;
 } PackedVoxelVertex;
+typedef struct PackedVoxelQuad {
+    vec<2, unsigned char, defaultp> size;
+    vec<3, unsigned char, defaultp> pos;
+    MatID_t matID;
+    // unsigned char norm;
+} PackedVoxelQuad;
 
 typedef struct Particle {
     vec3 pos;
@@ -107,9 +113,13 @@ typedef struct IndexedVertices {
     vector<Buffer> indexes;
     u32 icount;
 } IndexedVertices;
+typedef struct NonIndexedVertices {
+    vector<Buffer> vertices;
+    u32 vcount;
+} NonIndexedVertices;
 typedef struct FaceBuffers {
-    IndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
-    vector<Buffer> vertexes;
+    NonIndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
+    // vector<Buffer> Pzz, Nzz, zPz, zNz, zzP, zzN;
 } FaceBuffers;
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
@@ -412,7 +422,7 @@ public:
             void recalculate_bit();
         void end_compute();
         void start_raygen();
-            void raygen_mesh(Mesh* mesh);
+            void raygen_mesh(Mesh* mesh); void draw_face_helper(vec3 normal, NonIndexedVertices& buff);
             void update_particles();
             void raygen_map_particles();
             void raygen_start_grass();
@@ -597,6 +607,7 @@ public:
     // RasterPipe lightmapPipe;
 
     RasterPipe raygenBlocksPipe;
+    VkDescriptorSetLayout blocksPushLayout;
     RasterPipe raygenParticlesPipe;
     RasterPipe raygenGrassPipe;
     RasterPipe raygenWaterPipe;

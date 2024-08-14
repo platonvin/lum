@@ -1,4 +1,6 @@
 #include "render.hpp" 
+#include <set>
+#include <glm/gtx/string_cast.hpp>
 
 using namespace std;
 using namespace glm;
@@ -236,7 +238,7 @@ void Renderer::load_block(Block** block, const char* vox_file){
 }
 
 #define free_helper(dir) \
-if(not (*block)->mesh.triangles.dir. indexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.dir. indexes[i].buffer, (*block)->mesh.triangles.dir. indexes[i].alloc);
+if(not (*block)->mesh.triangles.dir.vertices.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.dir.vertices[i].buffer, (*block)->mesh.triangles.dir.vertices[i].alloc);
 void Renderer::free_block(Block** block){
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         // if(not (*block)->mesh.triangles.Pzz.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.vertexes[i].buffer, (*block)->mesh.vertexes[i].alloc);
@@ -247,7 +249,7 @@ void Renderer::free_block(Block** block){
         free_helper(zNz);
         free_helper(zzP);
         free_helper(zzN);
-        if(not (*block)->mesh.triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);\
+        // if(not (*block)->mesh.triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);
     }
 
     if(not((*block)==NULL)) delete (*block);
@@ -276,7 +278,7 @@ void Renderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int 
 //frees only gpu side stuff, not mesh ptr
 #undef  free_helper
 #define free_helper(dir) \
-if(not mesh->triangles.dir. indexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.dir. indexes[i].buffer, mesh->triangles.dir. indexes[i].alloc);
+if(not mesh->triangles.dir.vertices.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.dir.vertices[i].buffer, mesh->triangles.dir.vertices[i].alloc);
 void Renderer::free_mesh(Mesh* mesh){
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++){
         // if(not mesh->vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
@@ -286,7 +288,7 @@ void Renderer::free_mesh(Mesh* mesh){
         free_helper(zNz);
         free_helper(zzP);
         free_helper(zzN);
-        if(not mesh->triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);\
+        // if(not mesh->triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
         if(not mesh->voxels.empty()) vmaDestroyImage(VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
         if(not mesh->voxels.empty()) vkDestroyImageView(device, mesh->voxels[i].view, NULL);
     }
@@ -295,8 +297,89 @@ void Renderer::free_mesh(Mesh* mesh){
 
 // #define 
 // static unsigned char pack_normal(vec<3, unsigned char, defaultp> normal){
-
 // }
+bool operator==(const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
+    return 
+    (one.pos.x == other.pos.x) &&
+    (one.pos.y == other.pos.y) &&
+    (one.pos.z == other.pos.z)
+    ;
+}
+bool operator!=(const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
+    return ! (one == other);
+}
+bool operator<(const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
+    return one != other;
+}
+
+PackedVoxelQuad pack_quad(const array<PackedVoxelVertex, 6> vertices, uvec3 norm){
+    PackedVoxelQuad quad = {};
+    vector<PackedVoxelVertex> uniq;
+
+    unsigned char mat = vertices[0].matID;
+    
+    for (auto v : vertices){
+        cout << glm::to_string(v.pos) << " \n";
+        // uniq.insert(v);    
+        for (auto _v : uniq){
+            if (v == _v) {
+                goto label;
+            }
+        }
+        uniq.push_back(v);
+        label:
+        ;
+        // assert(mat == v.matID);
+    }
+    assert(uniq.size() == 4);
+    cout << " \n";
+
+    uvec3  low = uvec3(+10000); //_corner
+    uvec3 high = uvec3(0); //_corner
+    uvec3 diff = {};
+    for (auto v :uniq){
+        cout << glm::to_string(v.pos) << " \n";
+        low =  glm::min(low,  uvec3(v.pos));
+        high = glm::max(high, uvec3(v.pos));
+    }
+    //general direction is from negative to positive
+    diff = high - low;
+    assert(any(greaterThan(diff, {0,0,0})));
+
+    uvec3 plane = uvec3(1) - abs(norm);
+    cout << glm::to_string(plane) << " \n";
+    cout << glm::to_string(diff) << " \n";
+
+    assert(((diff.x == 0) == (plane.x == 0))); 
+    assert(((diff.y == 0) == (plane.y == 0))); 
+    assert(((diff.z == 0) == (plane.z == 0))); 
+
+    if(abs(norm).x == 1){
+        quad.size.x = diff.y;
+        quad.size.y = diff.z;
+    } else if(abs(norm).y == 1){
+        quad.size.x = diff.x;
+        quad.size.y = diff.z;
+    } else if(abs(norm).z == 1){
+        quad.size.x = diff.x;
+        quad.size.y = diff.y;
+    }
+    quad.pos = low;
+
+    return quad;
+}
+
+void repack_helper(vector<PackedVoxelVertex>& vs, vector<PackedVoxelQuad>& qs, uvec3 norm){
+    assert((vs.size()%6)==0);
+    for(int i=0; i<vs.size()/6; i++){
+        qs.push_back(pack_quad({
+            vs[i+0], vs[i+1], vs[i+2],
+            vs[i+3], vs[i+4], vs[i+5],
+            }, norm));
+    }
+}
+
+//defenetly not an example of highly optimized code
 void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size){
     ogt::ogt_voxel_meshify_context ctx = {};
     
@@ -309,7 +392,7 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
 
     // ogt::ogt_mesh_remove_duplicate_vertices(&ctx, ogt_mesh);
     ogt::ogt_int_mesh* ogt_mesh =  ogt::my_int_mesh_from_paletted_voxels(&ctx, (const u8*)Voxels, x_size, y_size, z_size);
-    ogt::my_int_mesh_optimize(&ctx, ogt_mesh);
+    // ogt::my_int_mesh_optimize(&ctx, ogt_mesh);
 
 // println
     vector<VoxelVertex      >        verts(ogt_mesh->vertex_count);
@@ -323,6 +406,7 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
         // packed_posNorm.z |= (ogt_mesh->vertices[i].normal.z != 0)? (POS_NORM_BIT_MASK) : 0;
         verts[i].norm = ivec3(ogt_mesh->vertices[i].normal);
         verts[i].pos  = uvec3(ogt_mesh->vertices[i].pos);
+        // printl((int)verts[i].pos.x);
         verts[i].matID = (MatID_t)ogt_mesh->vertices[i].palette_index;
 
         assert(verts[i].norm != (vec<3, signed char, defaultp>)(0));
@@ -333,12 +417,12 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
         packed_verts[i].matID = (MatID_t)ogt_mesh->vertices[i].palette_index;
     }
 
-    vector<u16> verts_Pzz = {};
-    vector<u16> verts_Nzz = {};
-    vector<u16> verts_zPz = {};
-    vector<u16> verts_zNz = {};
-    vector<u16> verts_zzP = {};
-    vector<u16> verts_zzN = {};
+    vector<PackedVoxelVertex> verts_Pzz = {};
+    vector<PackedVoxelVertex> verts_Nzz = {};
+    vector<PackedVoxelVertex> verts_zPz = {};
+    vector<PackedVoxelVertex> verts_zNz = {};
+    vector<PackedVoxelVertex> verts_zzP = {};
+    vector<PackedVoxelVertex> verts_zzN = {};
 
     for(u32 i=0; i<ogt_mesh->index_count; i++){
         u32 index = ogt_mesh->indices[i];
@@ -346,12 +430,12 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
         vec<3, signed char, defaultp> norm = verts[provoking_index].norm;
 
         //where is my clang-tidy disable specific warning #pragma?..
-        if     (norm == vec<3, signed char, defaultp>(+1,0,0)) verts_Pzz.push_back(index);
-        else if(norm == vec<3, signed char, defaultp>(-1,0,0)) verts_Nzz.push_back(index);
-        else if(norm == vec<3, signed char, defaultp>(0,+1,0)) verts_zPz.push_back(index);
-        else if(norm == vec<3, signed char, defaultp>(0,-1,0)) verts_zNz.push_back(index);
-        else if(norm == vec<3, signed char, defaultp>(0,0,+1)) verts_zzP.push_back(index);
-        else if(norm == vec<3, signed char, defaultp>(0,0,-1)) verts_zzN.push_back(index);
+        if     (norm == vec<3, signed char, defaultp>(+1,0,0)) verts_Pzz.push_back(packed_verts[index]);
+        else if(norm == vec<3, signed char, defaultp>(-1,0,0)) verts_Nzz.push_back(packed_verts[index]);
+        else if(norm == vec<3, signed char, defaultp>(0,+1,0)) verts_zPz.push_back(packed_verts[index]);
+        else if(norm == vec<3, signed char, defaultp>(0,-1,0)) verts_zNz.push_back(packed_verts[index]);
+        else if(norm == vec<3, signed char, defaultp>(0,0,+1)) verts_zzP.push_back(packed_verts[index]);
+        else if(norm == vec<3, signed char, defaultp>(0,0,-1)) verts_zzN.push_back(packed_verts[index]);
         else {
             printl((int)norm.x);
             printl((int)norm.y);
@@ -359,31 +443,53 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
             crash(unrecognized normal);
         }
     }
+
+    // vector<PackedVoxelQuad> quads_Pzz = {};
+    // vector<PackedVoxelQuad> quads_Nzz = {};
+    // vector<PackedVoxelQuad> quads_zPz = {};
+    // vector<PackedVoxelQuad> quads_zNz = {};
+    // vector<PackedVoxelQuad> quads_zzP = {};
+    // vector<PackedVoxelQuad> quads_zzN = {};
+
+    //Repack Mechanics?
+    // repack_helper(verts_Pzz, quads_Pzz, {+1,0,0});
+    // repack_helper(verts_Nzz, quads_Nzz, {-1,0,0});
+    // repack_helper(verts_zPz, quads_zPz, {0,+1,0});
+    // repack_helper(verts_zNz, quads_zNz, {0,-1,0});
+    // repack_helper(verts_zzP, quads_zzP, {0,0,+1});
+    // repack_helper(verts_zzN, quads_zzN, {0,0,-1});
+    
+    // for(u32 i=0; i<verts_Pzz.size(); i++){
+    //     cout << glm::to_string(verts_Pzz[i].pos) << " ";
+    //     if(i % 3 == 2) cout << "\n";
+    // }
+    // cout << "end of vcheck\n";
 // println
-    mesh->triangles.vertexes = create_elemBuffers<PackedVoxelVertex>(packed_verts.data(), ogt_mesh->vertex_count, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    // mesh->triangles.vertexes = create_elemBuffers<PackedVoxelVertex>(packed_verts.data(), ogt_mesh->vertex_count, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 // println
     // printl(verts_Pzz.data());
     // printl(verts_Pzz.size());
-
-    mesh->triangles.Pzz.indexes = create_elemBuffers<u16>(verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.Nzz.indexes = create_elemBuffers<u16>(verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zPz.indexes = create_elemBuffers<u16>(verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zNz.indexes = create_elemBuffers<u16>(verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzP.indexes = create_elemBuffers<u16>(verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzN.indexes = create_elemBuffers<u16>(verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-// println
     assert(verts_Pzz.size()!=0);
     assert(verts_Nzz.size()!=0);
     assert(verts_zPz.size()!=0);
     assert(verts_zNz.size()!=0);
     assert(verts_zzP.size()!=0);
     assert(verts_zzN.size()!=0);
-    mesh->triangles.Pzz.icount = verts_Pzz.size();
-    mesh->triangles.Nzz.icount = verts_Nzz.size();
-    mesh->triangles.zPz.icount = verts_zPz.size();
-    mesh->triangles.zNz.icount = verts_zNz.size();
-    mesh->triangles.zzP.icount = verts_zzP.size();
-    mesh->triangles.zzN.icount = verts_zzN.size();
+
+    mesh->triangles.Pzz.vertices = create_elemBuffers<PackedVoxelVertex>(verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    mesh->triangles.Nzz.vertices = create_elemBuffers<PackedVoxelVertex>(verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    mesh->triangles.zPz.vertices = create_elemBuffers<PackedVoxelVertex>(verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    mesh->triangles.zNz.vertices = create_elemBuffers<PackedVoxelVertex>(verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    mesh->triangles.zzP.vertices = create_elemBuffers<PackedVoxelVertex>(verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    mesh->triangles.zzN.vertices = create_elemBuffers<PackedVoxelVertex>(verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+// println
+    //ATTENTION: NOT A MISTAKE
+    mesh->triangles.Pzz.vcount = verts_Pzz.size();
+    mesh->triangles.Nzz.vcount = verts_Nzz.size();
+    mesh->triangles.zPz.vcount = verts_zPz.size();
+    mesh->triangles.zNz.vcount = verts_zNz.size();
+    mesh->triangles.zzP.vcount = verts_zzP.size();
+    mesh->triangles.zzN.vcount = verts_zzN.size();
     // mesh->icount = ogt_mesh->index_count;
     mesh->shift = vec3(0);
     mesh->rot = quat_identity<float, defaultp>();

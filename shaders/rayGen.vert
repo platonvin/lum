@@ -5,6 +5,9 @@
 precision varp int;
 precision varp float;
 
+#extension GL_EXT_shader_8bit_storage : enable
+#extension GL_EXT_shader_16bit_storage : enable
+
 layout(location = 0) in varp uvec3 posIn;
 // layout(location = 1) in varp ivec3 normIn;
 layout(location = 1) in varp uint MatIDIn;

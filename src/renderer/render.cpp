@@ -300,6 +300,11 @@ println
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {maskFrame}, scaled? linearSampler : nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
+        // create_DescriptorSetLayout({
+        //     VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // per-quad attributes
+        //     }, 
+        //     VK_SHADER_STAGE_VERTEX_BIT, &blocksPushLayout, 
+        //     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     deferDescriptorsetup(&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
@@ -1606,10 +1611,25 @@ static VkBuffer old_buff = NULL;
 static bool is_face_visible(vec3 normal, vec3 camera_dir) {
     return (dot(normal, camera_dir) < 0.0f);
 }
+
+#define CHECK_N_DRAW(__norm, __dir) \
+if(is_face_visible(mesh->rot*__norm, cameraDir)) {\
+    draw_face_helper(__norm, (*mesh).triangles.__dir);\
+}
+
+void Renderer::draw_face_helper(vec3 normal, NonIndexedVertices& buff){
+    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+
+        VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &buff.vertices[currentFrame].buffer, offsets);
+    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 32, sizeof(vec4), &normal);
+    vkCmdDraw(commandBuffer, buff.vcount, 1, 0, 0);
+}
+
 void Renderer::raygen_mesh(Mesh *mesh) {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-        VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
+        // VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
     
     //TODO:
@@ -1619,46 +1639,20 @@ void Renderer::raygen_mesh(Mesh *mesh) {
     (*mesh).old_rot   = (*mesh).rot;
     (*mesh).old_shift = (*mesh).shift;
 
+
     // glm::mult
     // if(old_buff != (*mesh).indexes[currentFrame].buffer) {
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     // printl((*mesh).triangles.Pzz.icount);
-    if(is_face_visible(mesh->rot*vec3(+1,0,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Pzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        vec4 _normal = vec4(mesh->rot*vec3(+1,0,0),0);
-        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
-        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.Pzz.icount, 1, 0, 0, 0);
-    }
-    if(is_face_visible(mesh->rot*vec3(-1,0,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.Nzz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        vec4 _normal = vec4(mesh->rot*vec3(-1,0,0),0);
-        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
-        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.Nzz.icount, 1, 0, 0, 0);
-    }
-    if(is_face_visible(mesh->rot*vec3(0,+1,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zPz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        vec4 _normal = vec4(mesh->rot*vec3(0,+1,0),0);
-        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
-        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zPz.icount, 1, 0, 0, 0);
-    }
-    if(is_face_visible(mesh->rot*vec3(0,-1,0), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zNz.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        vec4 _normal = vec4(mesh->rot*vec3(0,-1,0),0);
-        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
-        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zNz.icount, 1, 0, 0, 0);
-    }
-    if(is_face_visible(mesh->rot*vec3(0,0,+1), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzP.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        vec4 _normal = vec4(mesh->rot*vec3(0,0,+1),0);
-        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
-        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zzP.icount, 1, 0, 0, 0);
-    }
-    if(is_face_visible(mesh->rot*vec3(0,0,-1), cameraDir)) {
-        vkCmdBindIndexBuffer(commandBuffer, (*mesh).triangles.zzN.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        vec4 _normal = vec4(mesh->rot*vec3(0,0,-1),0);
-        vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(raygen_pushconstant), sizeof(vec4), &_normal);
-        vkCmdDrawIndexed(commandBuffer, (*mesh).triangles.zzN.icount, 1, 0, 0, 0);
-    }
+    // if(is_face_visible(mesh->rot*vec3(+1,0,0), cameraDir)) {
+    //     draw_face_helper(vec3(+1,0,0), (*mesh).triangles.Pzz);
+    // }
+    CHECK_N_DRAW(vec3(+1,0,0), Pzz);
+    CHECK_N_DRAW(vec3(-1,0,0), Nzz);
+    CHECK_N_DRAW(vec3(0,+1,0), zPz);
+    CHECK_N_DRAW(vec3(0,-1,0), zNz);
+    CHECK_N_DRAW(vec3(0,0,+1), zzP);
+    CHECK_N_DRAW(vec3(0,0,-1), zzN);
         // old_buff = (*mesh).indexes[currentFrame].buffer;
     // }
 }

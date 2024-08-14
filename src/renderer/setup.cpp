@@ -1373,6 +1373,7 @@ void Renderer::createLogicalDevice(){
         deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
         deviceFeatures.geometryShader = VK_TRUE;
         deviceFeatures.independentBlend = VK_TRUE;
+        // deviceFeatures.shaderint;
 
     VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
