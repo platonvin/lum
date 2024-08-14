@@ -307,7 +307,8 @@ println
         //     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     deferDescriptorsetup(&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-    }, VK_SHADER_STAGE_VERTEX_BIT);
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {}, {originBlockPalette}, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // setup_RayGen_Particles_Descriptors();
 println
     deferDescriptorsetup(&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
@@ -399,11 +400,11 @@ println
             {"shaders/compiled/rayGenVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{
-            {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelVertex, pos)},
+            {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelCircuit, pos)},
             // {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
-            {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
+            // {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
         }, 
-        sizeof(PackedVoxelVertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)*2), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 
 println
@@ -411,7 +412,7 @@ println
     create_Raster_Pipeline(&raygenParticlesPipe, {
             {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenParticlesGeom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
-            {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+            {"shaders/compiled/rayGenParticlesFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{
             {VK_FORMAT_R32G32B32_SFLOAT, offsetof(Particle, pos)},
             {VK_FORMAT_R32G32B32_SFLOAT, offsetof(Particle, vel)},
@@ -1614,19 +1615,20 @@ static bool is_face_visible(vec3 normal, vec3 camera_dir) {
 
 #define CHECK_N_DRAW(__norm, __dir) \
 if(is_face_visible(mesh->rot*__norm, cameraDir)) {\
-    draw_face_helper(__norm, (*mesh).triangles.__dir);\
+    draw_face_helper(__norm, (*mesh).triangles.__dir, block_id);\
 }
 
-void Renderer::draw_face_helper(vec3 normal, NonIndexedVertices& buff){
+void Renderer::draw_face_helper(vec3 normal, NonIndexedVertices& buff, int block_id){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
         VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &buff.vertices[currentFrame].buffer, offsets);
-    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 32, sizeof(vec4), &normal);
+    struct {vec3 n; float id;} nid = {normal, float(block_id)};
+    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 32, sizeof(nid), &nid);
     vkCmdDraw(commandBuffer, buff.vcount, 1, 0, 0);
 }
 
-void Renderer::raygen_mesh(Mesh *mesh) {
+void Renderer::raygen_mesh(Mesh *mesh, int block_id) {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
         // VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};

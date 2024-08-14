@@ -87,6 +87,9 @@ typedef struct PackedVoxelQuad {
     MatID_t matID;
     // unsigned char norm;
 } PackedVoxelQuad;
+typedef struct PackedVoxelCircuit {
+    vec<3, unsigned char, defaultp> pos;
+} PackedVoxelCircuit;
 
 typedef struct Particle {
     vec3 pos;
@@ -422,7 +425,7 @@ public:
             void recalculate_bit();
         void end_compute();
         void start_raygen();
-            void raygen_mesh(Mesh* mesh); void draw_face_helper(vec3 normal, NonIndexedVertices& buff);
+            void raygen_mesh(Mesh* mesh, int block_id); void draw_face_helper(vec3 normal, NonIndexedVertices& buff, int block_id);
             void update_particles();
             void raygen_map_particles();
             void raygen_start_grass();

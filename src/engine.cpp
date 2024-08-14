@@ -473,17 +473,17 @@ void Engine::draw()
 
                         // printl(block_palette[b.index]->mesh.triangles.Pzz.icount);
                         
-                        render.raygen_mesh(block_mesh);
+                        render.raygen_mesh(block_mesh, b.index);
                     }
                     
-                    render.raygen_mesh(&tank_body);
-                    render.raygen_mesh(&tank_head);
+//                     render.raygen_mesh(&tank_body, 0);
+//                     render.raygen_mesh(&tank_head, 0);
                      
-                    render.raygen_mesh(&tank_rf_leg);
-                    render.raygen_mesh(&tank_lb_leg);
-// println
-                    render.raygen_mesh(&tank_lf_leg);
-                    render.raygen_mesh(&tank_rb_leg);
+//                     render.raygen_mesh(&tank_rf_leg, 0);
+//                     render.raygen_mesh(&tank_lb_leg, 0);
+// // println
+//                     render.raygen_mesh(&tank_lf_leg, 0);
+//                     render.raygen_mesh(&tank_rb_leg, 0);
 
 // println
                 render.update_particles();
