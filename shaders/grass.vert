@@ -236,7 +236,7 @@ void main() {
     vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(pco.size));
 
     vec3 normal;
-    float rand01 = rand(relative_pos*7.132);
+    float rand01 = rand(relative_pos*7.132 + pco.shift.xy);
     vec3 rel2world = get_blade_vert(blade_vertex_id, normal, rand01, relative_pos);
 
     vec2 rel2tile_shift = relative_pos * 16.0; //for visibility
@@ -251,7 +251,9 @@ void main() {
 
     vec3 norm = normal;
     // norm = normalize(vec3(1));
-    uint mat = uint(9);
+
+    //little coloring
+    uint mat = (rand01 > (rand(pco.shift.xy) - length(relative_pos - 8.0)/24.0))? uint(9) : uint(10);
     float fmat = (float(mat)-127.0)/127.0;
     vec4 fmat_norm = vec4(fmat, norm);
     mat_norm = uvec4(((fmat_norm+1.0)/2.0)*255.0);

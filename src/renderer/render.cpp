@@ -1618,21 +1618,22 @@ if(is_face_visible(mesh->rot*__norm, cameraDir)) {\
     draw_face_helper(__norm, (*mesh).triangles.__dir, block_id);\
 }
 
-void Renderer::draw_face_helper(vec3 normal, NonIndexedVertices& buff, int block_id){
+void Renderer::draw_face_helper(vec3 normal, IndexedVertices& buff, int block_id){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
+    vkCmdBindIndexBuffer(commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
         VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &buff.vertices[currentFrame].buffer, offsets);
     struct {vec3 n; float id;} nid = {normal, float(block_id)};
     vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 32, sizeof(nid), &nid);
-    vkCmdDraw(commandBuffer, buff.vcount, 1, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, buff.icount, 1, 0, 0, 0);
 }
 
 void Renderer::raygen_mesh(Mesh *mesh, int block_id) {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-        // VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
+        VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     
     //TODO:
     struct {quat r1; vec4 s1;} raygen_pushconstant = {(*mesh).rot, vec4((*mesh).shift,0)};

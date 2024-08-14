@@ -121,8 +121,8 @@ typedef struct NonIndexedVertices {
     u32 vcount;
 } NonIndexedVertices;
 typedef struct FaceBuffers {
-    NonIndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
-    // vector<Buffer> Pzz, Nzz, zPz, zNz, zzP, zzN;
+    IndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
+    vector<Buffer> vertexes;
 } FaceBuffers;
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
@@ -425,7 +425,7 @@ public:
             void recalculate_bit();
         void end_compute();
         void start_raygen();
-            void raygen_mesh(Mesh* mesh, int block_id); void draw_face_helper(vec3 normal, NonIndexedVertices& buff, int block_id);
+            void raygen_mesh(Mesh* mesh, int block_id); void draw_face_helper(vec3 normal, IndexedVertices& buff, int block_id);
             void update_particles();
             void raygen_map_particles();
             void raygen_start_grass();

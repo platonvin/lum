@@ -6,7 +6,7 @@ layout(location = 0) out vec4 frame_color;
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
 layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput inFrame;
 
-layout(set = 0, binding = 2) uniform sampler2D lowres_frame;
+layout(set = 0, binding = 2) uniform sampler2D depthBuffer;
 
 vec3 load_norm(){
     vec3 norm = (subpassLoad(matNorm).gba);
@@ -32,11 +32,14 @@ void main() {
     vec4 old_color = subpassLoad(inFrame);
 
 
-    int mat = load_mat();
+    // int mat = load_mat();
     // frame_color = sin(old_color * 42.2);
-    vec4 lowres_color = texture(lowres_frame, non_clip_pos);
-    frame_color = mix(old_color, lowres_color, lowres_color.a);
+    // vec4 lowres_color = texture(lowres_frame, non_clip_pos);
+    // frame_color = mix(old_color, lowres_color, lowres_color.a);
     // frame_color = lowres_color;
     // frame_color = vec4(vec3(mat)/256.0,1);
     // frame_color = vec4(non_clip_pos, 0.0, 0.0);
+
+    vec3 norm = load_norm();
+    
 } 
