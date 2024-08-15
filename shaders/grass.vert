@@ -14,7 +14,7 @@ but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 
 */
 
-layout(push_constant) uniform readonly PushConstants{
+layout(push_constant) uniform restrict readonly PushConstants{
     vec4 shift;
     int size; //total size*size blades
     int time; //seed
@@ -24,7 +24,7 @@ layout(push_constant) uniform readonly PushConstants{
 } pco;
 const int size = 16; //total size*size blades
 
-layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
 } ubo;
 layout(set = 0, binding = 1) uniform sampler2D state;

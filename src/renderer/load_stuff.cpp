@@ -433,7 +433,7 @@ void Renderer::make_vertices(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
     vector<u16> verts_zzP = {};
     vector<u16> verts_zzN = {};
 
-    printl(ogt_mesh->index_count);
+    // printl(ogt_mesh->index_count);
 
     for(u32 i=0; i<ogt_mesh->index_count; i++){
         u32 index = ogt_mesh->indices[i];

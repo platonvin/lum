@@ -13,13 +13,13 @@ precision highp float;
 
 layout(set = 0, binding = 0) uniform isampler3D blocks;
 layout(set = 0, binding = 1) uniform usampler3D blockPalette;
-layout(set = 0, binding = 2, r32f       ) uniform readonly image2D voxelPalette;
+layout(set = 0, binding = 2, r32f       ) uniform restrict readonly image2D voxelPalette;
 // layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // A2B10G10R10_UNORM_PACK32
 layout(set = 0, binding = 3) uniform sampler3D radianceCache2read;
-layout(set = 0, binding = 4, rgb10_a2) uniform writeonly image3D radianceCache2write;
+layout(set = 0, binding = 4, rgb10_a2) uniform restrict writeonly image3D radianceCache2write;
 
-layout(std430,set = 0, binding = 5) readonly buffer ReqBuffer{
+layout(std430,set = 0, binding = 5) restrict readonly buffer ReqBuffer{
 	ivec4 updateReqests[];
 } reqBuffer;
 
@@ -27,7 +27,7 @@ layout(std430,set = 0, binding = 5) readonly buffer ReqBuffer{
 layout(constant_id = 1) const int BLOCK_PALETTE_SIZE_X = 64;
 layout(constant_id = 2) const float REACTIVNESS = 0.01;
 
-layout(push_constant) uniform readonly constants{
+layout(push_constant) uniform restrict readonly constants{
     varp int timeSeed;
     varp int iters;
     varp int size;

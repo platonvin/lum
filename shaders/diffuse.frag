@@ -11,7 +11,7 @@ precision highp float;
 
 #define highp
 
-layout(push_constant) uniform readonly constants{
+layout(push_constant) uniform restrict readonly constants{
     vec3 camera_pos;
      int timeSeed;
      vec4 camera_direction;
@@ -22,7 +22,7 @@ layout(input_attachment_index = 1, set = 0, binding = 1) uniform  subpassInput d
 
 // layout(set = 0, binding = 2, r16i) uniform iimage3D  blocks;
 // layout(set = 0, binding = 3, r8ui) uniform uimage3D  blockPalette;
-layout(set = 0, binding = 2, r32f) readonly uniform image2D voxelPalette;
+layout(set = 0, binding = 2, r32f) restrict readonly uniform image2D voxelPalette;
 layout(set = 0, binding = 3      ) uniform sampler3D radianceCache;
 
 layout(location = 0) in vec2 non_clip_pos;

@@ -17,13 +17,13 @@ layout(location = 1) out vec3 sample_point;
 layout(location = 2) flat out uint sample_block;
 
 //no reason to move up in pipeline cause sm load is like ~ 6% in vs
-layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
 } ubo;
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 
 //quatornions!
-layout(push_constant) uniform readonly constants{
+layout(push_constant) uniform restrict readonly constants{
     vec4 rot;
     vec4 shift;
     vec4 normal;
