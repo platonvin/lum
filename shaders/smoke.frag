@@ -13,12 +13,12 @@ precision highp int;
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput smoke_depth_far;
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_near;
 // layout(set = 0, binding = 2, r16i  ) uniform iimage3D blocks;
-layout(set = 0, binding = 2, rgba16) uniform image3D radianceCache;
+layout(set = 0, binding = 2, rgba16) uniform readonly image3D radianceCache;
 layout(set = 0, binding = 3) uniform sampler3D noise;
 
 const ivec3 world_size = ivec3(48,48,16);
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly constants{
     vec3 camera_pos;
      int timeSeed;
      vec4 camera_direction;

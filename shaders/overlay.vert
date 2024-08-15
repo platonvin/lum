@@ -8,7 +8,7 @@ layout(location = 1) out vec4 fragColor;
 
 
 
-layout(push_constant) uniform constant {
+layout(push_constant) uniform readonly constant {
     vec4 shift_size;
     mat4 transform;
 } pco;

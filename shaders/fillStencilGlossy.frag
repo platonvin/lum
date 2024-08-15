@@ -1,7 +1,7 @@
 #version 450 
 
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
-layout(set = 0, binding = 1, r32f       ) uniform image2D   voxelPalette;
+layout(set = 0, binding = 1, r32f       ) readonly uniform image2D voxelPalette;
 
 //stencils smooth surface pixels bit at 01 from 00 to 01
 

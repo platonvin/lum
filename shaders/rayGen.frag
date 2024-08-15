@@ -6,7 +6,7 @@ layout(early_fragment_tests) in;
 precision varp int;
 precision varp float;
 
-layout(binding = 0, set = 0) uniform UniformBufferObject {
+layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
     mat4 trans_w2s;
 } ubo;
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;

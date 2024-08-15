@@ -9,12 +9,12 @@ precision highp int;
 precision highp float;
 // #extension GL_KHR_shader_subgroup_arithmetic : enable
 
-#define varp highp
+#define highp
 
 layout(push_constant) uniform constants{
-    varp vec3 camera_pos;
-    varp  int timeSeed;
-    varp  vec4 camera_direction;
+    vec3 camera_pos;
+     int timeSeed;
+     vec4 camera_direction;
 } PushConstants;
 
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
@@ -22,7 +22,7 @@ layout(input_attachment_index = 1, set = 0, binding = 1) uniform  subpassInput d
 
 // layout(set = 0, binding = 2, r16i) uniform iimage3D  blocks;
 // layout(set = 0, binding = 3, r8ui) uniform uimage3D  blockPalette;
-layout(set = 0, binding = 2, r32f) uniform image2D   voxelPalette;
+layout(set = 0, binding = 2, r32f) readonly uniform image2D voxelPalette;
 layout(set = 0, binding = 3      ) uniform sampler3D radianceCache;
 
 layout(location = 0) in vec2 non_clip_pos;
@@ -30,9 +30,9 @@ layout(location = 0) out vec4 frame_color;
 
 #define RAYS_PER_PROBE (32)
 ivec2 size;
-const varp ivec3 world_size = ivec3(48,48,16);
-const varp float view_width  = 1920.0 / 10.0; //in block_diags
-const varp float view_height = 1080.0 / 10.0; //in blocks
+const ivec3 world_size = ivec3(48,48,16);
+const float view_width  = 1920.0 / 10.0; //in block_diags
+const float view_height = 1080.0 / 10.0; //in blocks
 
 vec3 cameraRayDirPlane;
 vec3 horizline;
@@ -170,22 +170,22 @@ vec3 sample_radiance(vec3 position){
 
 
 struct Material{
-    varp vec3 color;
-    varp float emmitance;
-    varp float roughness;
-    varp float transparancy;
+    vec3 color;
+    float emmitance;
+    float roughness;
+    float transparancy;
 };
-varp vec3 load_norm(){
-    // varp vec3 norm = (imageLoad(matNorm, pixel).gba);
-    // varp vec3 norm = normalize(((subpassLoad(matNorm).gba)/1.0)*2.0 - 1.0);
-    varp vec3 norm = normalize(((subpassLoad(matNorm).gba/255.0)*2.0 - 1.0));
+vec3 load_norm(){
+    // vec3 norm = (imageLoad(matNorm, pixel).gba);
+    // vec3 norm = normalize(((subpassLoad(matNorm).gba)/1.0)*2.0 - 1.0);
+    vec3 norm = normalize(((subpassLoad(matNorm).gba/255.0)*2.0 - 1.0));
     // subpass
     return norm;
 }
-varp int load_mat(){
-    varp int mat = int((subpassLoad(matNorm).x));
-    // varp int mat = 9;
-    // varp int mat = int(subpassLoad(matNorm).x);
+int load_mat(){
+    int mat = int((subpassLoad(matNorm).x));
+    // int mat = 9;
+    // int mat = int(subpassLoad(matNorm).x);
     return mat;
 }
 highp float load_depth(){
@@ -193,7 +193,7 @@ highp float load_depth(){
     highp float depth_encoded = (subpassLoad(depthBuffer).x);
     return (depth_encoded)*1000.0;
 }
-Material GetMat(in varp int voxel){
+Material GetMat(in int voxel){
     Material mat;
 
     mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
@@ -212,11 +212,11 @@ Material GetMat(in varp int voxel){
     // mat.emmitance = .0;
 return mat;
 }
-varp vec3 get_origin_from_depth(varp float depth, varp vec2 uv_pos){
-    const varp vec2 view_size = vec2(view_width, view_height);
-    const varp vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
+vec3 get_origin_from_depth(float depth, vec2 uv_pos){
+    const vec2 view_size = vec2(view_width, view_height);
+    const vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
     
-    varp vec3 origin = PushConstants.camera_pos.xyz + 
+    vec3 origin = PushConstants.camera_pos.xyz + 
         (horizline*clip_pos_scaled.x) + 
         (vertiline*clip_pos_scaled.y) +
         (PushConstants.camera_direction.xyz*depth);
@@ -235,17 +235,17 @@ void main(void){
     vertiline = normalize(cross(PushConstants.camera_direction.xyz, horizline));
     
     ivec2 pix = ivec2(gl_FragCoord.xy);
-    const varp vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
+    const vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
 
     vec3 final_color = vec3(0);
 
     const       Material stored_mat = GetMat(load_mat());
-    const varp      vec3 stored_accumulated_reflection = vec3(1);
-    const varp      vec3 stored_accumulated_light = vec3(0);
+    const      vec3 stored_accumulated_reflection = vec3(1);
+    const      vec3 stored_accumulated_light = vec3(0);
     const highp      vec3 stored_direction = PushConstants.camera_direction.xyz;
     const highp      vec3 stored_origin = get_origin_from_depth(load_depth(), non_clip_pos);
     // const highp      vec3 stored_origin = get_origin_from_depth(load_depth(), pos);
-    const varp      vec3 stored_normal = load_norm();
+    const      vec3 stored_normal = load_norm();
 
     // vec3 incoming_light = sample_radiance(stored_origin + 0.1*stored_normal, stored_normal);
     vec3 incoming_light = sample_radiance(stored_origin + stored_normal*6.0);

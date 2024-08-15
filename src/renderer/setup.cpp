@@ -854,7 +854,7 @@ void Renderer::createRenderPassAlt(){
         smoke_subpass.pInputAttachments = smoke_inputss.data();
         smoke_subpass.pDepthStencilAttachment = &aref_depth;
     //reads from mat_norm as just image and writes to final frame
-    vector<VkAttachmentReference> blur_attachment_refs = {aref_mat_norm, aref_frame, /*depthRef*/};
+    vector<VkAttachmentReference> blur_attachment_refs = {aref_mat_norm, aref_depth};
     VkSubpassDescription
         blur_subpass = {};
         blur_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;

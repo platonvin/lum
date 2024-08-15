@@ -14,17 +14,17 @@ but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 
 */
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly PushConstants{
     vec4 shift;
     int size; //total size*size blades
     int time; //seed
     int x_flip;
     int y_flip;
 } pco;
+const int size = 16; //total size*size blades
 
-layout(binding = 0, set = 0) uniform UniformBufferObject {
+layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
     mat4 trans_w2s;
-    // mat4 trans_w2s_old; //just leave it
 } ubo;
 layout(set = 0, binding = 1) uniform sampler2D state;
 
@@ -48,19 +48,17 @@ const int BLADES_PER_INSTANCE = 1;
 const int VERTICES_PER_BLADE = 11; //3 for padding
 const int MAX_HEIGHT = 5;
 
-float rand(vec2 co){
-    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+uint hash21(uvec2 p){
+    p *= uvec2(73333,7777);
+    p ^= (uvec2(3333777777)>>(p>>28));
+    uint n = p.x*p.y;
+    return n^(n>>15);
 }
 
-vec3 bezier(vec3 p0, vec3 p1, vec3 p2, float t){
-    vec3 a = mix(p0, p1, t);
-    vec3 b = mix(p1, p2, t);
-    return   mix(a,  b,  t);
-}
-float bezier(float p0, float p1, float p2, float t){
-    float a = mix(p0, p1, t);
-    float b = mix(p1, p2, t);
-    return   mix(a,  b,  t);
+float rand(vec2 p){
+    uint h = hash21(floatBitsToUint(p));
+
+    return float(h)*(1.0/float(0xffffffffU));
 }
 
 float get_blade_width(float height){
@@ -208,38 +206,27 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
 
     displace_blade(rnd01, vertex, normal);
 
-    vertex.z *= 3.0; // increase height
+    vertex.z *= 1.0 + rnd01*2.0; // increase height
 
     return vertex;
 }
 void main() {
-    // int global_vertex_id = gl_VertexIndex;
-    // int blade_id = global_vertex_id / VTX_IN_BLADE;    
-    // int blade_vertex_id = global_vertex_id % VTX_IN_BLADE;
-
-    // int sub_blade_vertex
     int sub_blade_id = gl_VertexIndex / VERTICES_PER_BLADE;
-    
     int blade_id = gl_InstanceIndex*BLADES_PER_INSTANCE + sub_blade_id;    
     int blade_vertex_id = gl_VertexIndex % VERTICES_PER_BLADE;
-
-    // if(blade_vertex_id == VERTICES_PER_BLADE-1) rel2world = vec3(1.0/0.0);
-    // if(blade_vertex_id == VERTICES_PER_BLADE-2) rel2world = vec3(1.0/0.0);
-    // if(blade_vertex_id == VERTICES_PER_BLADE-3) rel2world = vec3(1.0/0.0);
+    int blade_x = blade_id % size;
+    int blade_y = blade_id / size;
+    //for faster depth testing
+    if(pco.x_flip == 0) blade_x = size - blade_x;
+    if(pco.y_flip != 0) blade_y = size - blade_y;
     
-    int blade_x = blade_id % pco.size;
-    int blade_y = blade_id / pco.size;
-
-    if(pco.x_flip == 0) blade_x = pco.size - blade_x;
-    if(pco.y_flip != 0) blade_y = pco.size - blade_y;
-    
-    vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(pco.size));
+    vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(size));
 
     vec3 normal;
-    float rand01 = rand(relative_pos*7.132 + pco.shift.xy);
+    float rand01 = rand(relative_pos + pco.shift.xy);
     vec3 rel2world = get_blade_vert(blade_vertex_id, normal, rand01, relative_pos);
 
-    vec2 rel2tile_shift = relative_pos * 16.0; //for visibility
+    vec2 rel2tile_shift = relative_pos * 16.0;
     vec3 rel2tile = rel2world + vec3(rel2tile_shift,0);
 
     vec4 world_pos = vec4(rel2tile,1) + pco.shift;

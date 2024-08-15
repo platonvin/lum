@@ -16,12 +16,12 @@ layout(push_constant) uniform constants{
 } pco;
 
 // layout(set = 0, binding = 0, rgba16) uniform image2D frame;
-layout(set = 0, binding = 1-1, rgba8ui) uniform  uimage2D matNorm;
-layout(set = 0, binding = 2-1             ) uniform sampler2D depthBuffer;
-layout(set = 0, binding = 3-1) uniform isampler3D blocks;
-layout(set = 0, binding = 4-1) uniform usampler3D blockPalette;
-layout(set = 0, binding = 5-1, r32f) uniform  image2D voxelPalette;
-layout(set = 0, binding = 6-1) uniform sampler3D radianceCache;
+layout(set = 0, binding = 1-1, rgba8ui) uniform readonly uimage2D matNorm;
+layout(set = 0, binding = 2-1         ) uniform sampler2D depthBuffer;
+layout(set = 0, binding = 3-1         ) uniform isampler3D blocks;
+layout(set = 0, binding = 4-1         ) uniform usampler3D blockPalette;
+layout(set = 0, binding = 5-1,    r32f) uniform readonly image2D voxelPalette;
+layout(set = 0, binding = 6-1         ) uniform sampler3D radianceCache;
 // layout(set = 0, binding = 7-1, r8ui       ) uniform uimage3D distancePalette;
 // layout(set = 0, binding = 8-1, r8ui       ) uniform uimage3D bitPalette;
 
@@ -469,11 +469,11 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
 //     return mat;
 // }
 vec3 load_norm(ivec2 pixel){
-    vec3 norm = ((imageLoad(matNorm, pixel).gba)/255.0)*2.0 - 1.0;
+    vec3 norm = (((imageLoad(matNorm, pixel).gba)/255.0)*2.0 - 1.0);
     return norm;
 }
 int load_mat(ivec2 pixel){
-    int mat = int(round(imageLoad(matNorm, pixel).x));
+    int mat = int((imageLoad(matNorm, pixel).x));
     return mat;
 }
 float load_depth(vec2 pixel){

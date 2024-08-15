@@ -16,12 +16,12 @@ layout(location = 0) out VS_OUT {
     flat uint mat;
 } vs_out;
 
-layout(binding = 0, set = 0) uniform UniformBufferObject {
+layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
     mat4 trans_w2s;
     // mat4 trans_w2s_old;
 } ubo;
-layout(set = 0, binding = 1, r16i)  uniform iimage3D blocks;
-layout(set = 0, binding = 2, r8ui) uniform uimage3D blockPalette;
+layout(set = 0, binding = 1, r16i) uniform  readonly iimage3D blocks;
+layout(set = 0, binding = 2, r8ui) uniform writeonly uimage3D blockPalette;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
