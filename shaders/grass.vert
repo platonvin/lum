@@ -20,6 +20,7 @@ layout(push_constant) uniform readonly PushConstants{
     int time; //seed
     int x_flip;
     int y_flip;
+    vec4 camdir;
 } pco;
 const int size = 16; //total size*size blades
 
@@ -45,8 +46,8 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
 // const int BLADES_PER_INSTANCE = 2;
 // const int VERTICES_PER_BLADE = 11+3; //3 for padding
 const int BLADES_PER_INSTANCE = 1;
-const int VERTICES_PER_BLADE = 11; //3 for padding
-const int MAX_HEIGHT = 5;
+const int VERTICES_PER_BLADE = 6;
+const int MAX_HEIGHT = 3;
 
 uint hash21(uvec2 p){
     p *= uvec2(73333,7777);
@@ -159,15 +160,12 @@ void wiggle_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal, in vec
     float descale = sqrt(new_size / old_size);
     vertex /= descale;
 
-
     return;
 }
 
 /*
 blade structure - triangle strip, by triangle index
- 10
-8  9
-6  7
+ 6
 4  5
 2  3
 0  1
@@ -179,7 +177,7 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
     float z_height = float(iindex / 2);
     float x_pos = float(iindex % 2);
     //top vertex
-    if(iindex == 10) x_pos = 0.5; 
+    if(iindex == (VERTICES_PER_BLADE-1)) x_pos = 0.5; 
 
     vertex = vec3(x_pos,0,z_height);
 
@@ -197,6 +195,7 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
 
     vertex.y *= 3.7; // increase width
     vertex.x *= 3.7; // increase width
+    vertex.z *= 5./3.;
 
     curve_blade_vert(rnd01, vertex, normal);
 
@@ -206,7 +205,8 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
 
     displace_blade(rnd01, vertex, normal);
 
-    vertex.z *= 1.0 + rnd01*2.0; // increase height
+    // increase height
+    vertex.z *= 1.5 + (rnd01*1.5)*(rnd01*1.5);//less uniform distribution
 
     return vertex;
 }
@@ -236,11 +236,15 @@ void main() {
     // // uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     gl_Position  = vec4(clip_coords, 1);    
 
+    //TODO probably can just flip x/y
+    if(dot(pco.camdir.xyz,normal) > 0) normal = -normal;
+
     vec3 norm = normal;
     // norm = normalize(vec3(1));
 
     //little coloring
-    uint mat = (rand01 > (rand(pco.shift.xy) - length(relative_pos - 8.0)/24.0))? uint(9) : uint(10);
+    uint mat = (rand01 > (rand(pco.shift.yx) - length(relative_pos - 8.0)/32.0))? uint(9) : uint(10);
+    // uint mat = (rand01 > (rand(pco.shift.yx)))? uint(9) : uint(10);
     float fmat = (float(mat)-127.0)/127.0;
     vec4 fmat_norm = vec4(fmat, norm);
     mat_norm = uvec4(((fmat_norm+1.0)/2.0)*255.0);

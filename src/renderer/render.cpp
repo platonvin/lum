@@ -428,7 +428,7 @@ println
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2 + sizeof(vec4), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     raygenWaterPipe.subpassId = 3;
 println
     create_Raster_Pipeline(&raygenWaterPipe, {
@@ -1766,13 +1766,13 @@ void Renderer::raygen_map_grass(vec4 shift, int size){
 
     bool x_flip = cameraDir.x < 0;
     bool y_flip = cameraDir.y < 0;
-    struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {shift, size, iFrame, x_flip, y_flip};
+    struct {vec4 _shift; int _size, _time; int xf, yf; vec4 camdir;} raygen_pushconstant = {shift, size, iFrame, x_flip, y_flip, vec4(cameraDir,0)};
     vkCmdPushConstants(commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
     // const int verts_per_blade = 4*6 + 3; //for triangle list
     // const int verts_per_blade = 11+3; //for triangle strip
     // const int blade_per_instance = 2; //for triangle strip
-    const int verts_per_blade = 11; //for triangle strip
+    const int verts_per_blade = 6; //for triangle strip
     const int blade_per_instance = 1; //for triangle strip
     vkCmdDraw(commandBuffer, 
         verts_per_blade*blade_per_instance, 

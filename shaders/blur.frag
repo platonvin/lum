@@ -150,5 +150,5 @@ void main() {
     obfuscation = clamp((obfuscation), 0.0, 0.7);
     frame_color = vec4(vec3(0.0), obfuscation);
     // frame_color = vec4(vec3(0.0), 0);
-    frame_color = vec4(vec3(1-obfuscation), 1);
+    // frame_color = vec4(vec3(1-obfuscation), 1);
 } 
