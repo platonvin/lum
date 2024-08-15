@@ -11,7 +11,7 @@ precision highp float;
 
 #define highp
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly constants{
     vec3 camera_pos;
      int timeSeed;
      vec4 camera_direction;
@@ -117,6 +117,7 @@ vec3 sample_radiance(vec3 position){
 
     vec3 block_pos = position / 16.0;
     vec3 sampled_light = textureLod(radianceCache, (((block_pos / vec3(world_size)))), 0).rgb;
+    // vec3 sampled_light = texture(radianceCache, (block_pos / vec3(world_size))).rgb;
 
     return sampled_light;
     // vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);

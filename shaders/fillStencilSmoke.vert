@@ -3,11 +3,11 @@
 // layout (location = 0) out vec2 outUV;
 layout (location = 0) out float end_depth;
 
-layout(binding = 0, set = 0) uniform UniformBufferObject {
+layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
     mat4 trans_w2s;
 } ubo;
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly constants{
     vec4 originSize;
 } pco;
 

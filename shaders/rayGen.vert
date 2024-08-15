@@ -23,7 +23,7 @@ layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 
 //quatornions!
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly constants{
     vec4 rot;
     vec4 shift;
     vec4 normal;

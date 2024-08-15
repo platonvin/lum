@@ -10,7 +10,7 @@ precision highp int;
 precision highp float;
 // #define highp highp
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly constants{
     vec4 campos;
     vec4 camdir;
 } pco;

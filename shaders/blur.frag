@@ -7,7 +7,7 @@ layout(location = 0) out vec4 frame_color;
 
 #extension GL_EXT_control_flow_attributes : enable
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly constants{
     vec4 campos;
     vec4 camdir;
 } pco;
