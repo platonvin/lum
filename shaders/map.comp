@@ -13,10 +13,10 @@ layout(push_constant) uniform constants{
 } PushConstants;
 
 //blocks and blockPalettes are copies 
-layout(set = 0, binding = 0, r16i) uniform  readonly iimage3D blocks;
-layout(set = 0, binding = 1, r8ui) uniform writeonly uimage3D blockPalette;
+layout(set = 0, binding = 0, r16i) uniform restrict  readonly iimage3D blocks;
+layout(set = 0, binding = 1, r8ui) uniform restrict writeonly uimage3D blockPalette;
 
-layout(set = 1, binding = 0, r8ui) uniform readonly uimage3D modelVoxels;
+layout(set = 1, binding = 0, r8ui) uniform restrict readonly uimage3D modelVoxels;
 
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT

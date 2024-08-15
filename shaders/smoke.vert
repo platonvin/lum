@@ -6,7 +6,7 @@ layout (location = 0) out vec2 outUV; //non_clip_pos
 const float view_width  = 1920.0 / 10.0; //in block_diags
 const float view_height = 1080.0 / 10.0; //in blocks
 
-layout(push_constant) uniform readonly constants{
+layout(push_constant) uniform restrict readonly constants{
     vec3 camera_pos;
      int timeSeed;
      vec4 camera_direction;

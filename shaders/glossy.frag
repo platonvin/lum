@@ -10,17 +10,17 @@ precision highp int;
 precision highp float;
 // #define highp highp
 
-layout(push_constant) uniform readonly constants{
+layout(push_constant) uniform restrict readonly constants{
     vec4 campos;
     vec4 camdir;
 } pco;
 
 // layout(set = 0, binding = 0, rgba16) uniform image2D frame;
-layout(set = 0, binding = 1-1, rgba8ui) uniform readonly uimage2D matNorm;
+layout(set = 0, binding = 1-1, rgba8ui) uniform restrict readonly uimage2D matNorm;
 layout(set = 0, binding = 2-1         ) uniform sampler2D depthBuffer;
 layout(set = 0, binding = 3-1         ) uniform isampler3D blocks;
 layout(set = 0, binding = 4-1         ) uniform usampler3D blockPalette;
-layout(set = 0, binding = 5-1,    r32f) uniform readonly image2D voxelPalette;
+layout(set = 0, binding = 5-1,    r32f) uniform restrict readonly image2D voxelPalette;
 layout(set = 0, binding = 6-1         ) uniform sampler3D radianceCache;
 // layout(set = 0, binding = 7-1, r8ui       ) uniform uimage3D distancePalette;
 // layout(set = 0, binding = 8-1, r8ui       ) uniform uimage3D bitPalette;

@@ -5,10 +5,10 @@
 precision highp int;
 precision highp float;
 
-layout(set = 0, binding = 0, rg16f) uniform writeonly image2D state;
+layout(set = 0, binding = 0, rg16f) uniform restrict writeonly image2D state;
 layout(set = 0, binding = 1) uniform sampler2D perlin_noise;
 
-layout(push_constant) uniform readonly constants{
+layout(push_constant) uniform restrict readonly constants{
     vec2 windDirection, collisionPoint;
     float time;
 } pco;

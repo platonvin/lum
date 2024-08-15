@@ -15,7 +15,7 @@ layout(location = 0) in VS_OUT {
 // layout(location = 1) flat out float fmat;
 layout(location = 0) lowp flat out uvec4 mat_norm;
 
-layout(binding = 0, set = 0) uniform readonly UniformBufferObject {
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
     mat4 trans_w2s_old;
 } ubo;
