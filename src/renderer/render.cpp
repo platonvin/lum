@@ -59,6 +59,7 @@ println
     smoke2glossyRpass = altRpass;
     // lowresDepthStencil = highresDepthStencil;
 println
+    createRenderPassLightmaps();
     // createRenderPass2();
 println
     createSamplers();
@@ -113,6 +114,15 @@ void Renderer::createImages(){
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         world_size); //TODO: dynamic
+    create_Image_Storages(&lightmap,
+        VK_IMAGE_TYPE_2D,
+        LIGHTMAPS_FORMAT,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        {1024, 1024, 1});
+    transition_Image_Layout_Singletime(&waterState, VK_IMAGE_LAYOUT_GENERAL);
     create_Image_Storages(&radianceCache,
         VK_IMAGE_TYPE_3D,
         RADIANCE_FORMAT,
@@ -130,22 +140,22 @@ void Renderer::createImages(){
         VK_IMAGE_ASPECT_COLOR_BIT,
         // {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 32}); //TODO: dynamic
         {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
-    create_Image_Storages(&distancePalette,
-        VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
-    create_Image_Storages(&bitPalette,
-        VK_IMAGE_TYPE_3D,
-        VK_FORMAT_R8_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        {(16/8)*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
+    // create_Image_Storages(&distancePalette,
+    //     VK_IMAGE_TYPE_3D,
+    //     VK_FORMAT_R8_UINT,
+    //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    //     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    //     VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+    //     VK_IMAGE_ASPECT_COLOR_BIT,
+    //     {16*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
+    // create_Image_Storages(&bitPalette,
+    //     VK_IMAGE_TYPE_3D,
+    //     VK_FORMAT_R8_UINT,
+    //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    //     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    //     VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+    //     VK_IMAGE_ASPECT_COLOR_BIT,
+    //     {(16/8)*BLOCK_PALETTE_SIZE_X, 16*BLOCK_PALETTE_SIZE_Y, 16}); //TODO: dynamic
     create_Image_Storages(&materialPalette,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
@@ -173,7 +183,6 @@ void Renderer::createImages(){
         VK_IMAGE_ASPECT_COLOR_BIT,
         {world_size.x*2, world_size.y*2, 1}); //for quality
     transition_Image_Layout_Singletime(&waterState, VK_IMAGE_LAYOUT_GENERAL);
-
     create_Image_Storages(&perlinNoise2d,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R16G16_SNORM,
@@ -232,8 +241,8 @@ void Renderer::createImages(){
     
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         transition_Image_Layout_Singletime(&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
-        transition_Image_Layout_Singletime(&bitPalette, VK_IMAGE_LAYOUT_GENERAL);
-        transition_Image_Layout_Singletime(&distancePalette, VK_IMAGE_LAYOUT_GENERAL);
+        // transition_Image_Layout_Singletime(&bitPalette, VK_IMAGE_LAYOUT_GENERAL);
+        // transition_Image_Layout_Singletime(&distancePalette, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&materialPalette[i], VK_IMAGE_LAYOUT_GENERAL);
     }
 }
@@ -754,12 +763,13 @@ void Renderer::cleanup() {
     deleteImages(&radianceCache);
     deleteImages(&world);
     deleteImages(&originBlockPalette);
-    deleteImages(&distancePalette);
-    deleteImages(&bitPalette);
+    // deleteImages(&distancePalette);
+    // deleteImages(&bitPalette);
     deleteImages(&materialPalette);
     deleteImages(&perlinNoise2d);
     deleteImages(&grassState);
     deleteImages(&waterState);
+    deleteImages(&lightmap);
 
     vkDestroySampler(device, nearestSampler, NULL);
     vkDestroySampler(device,  linearSampler, NULL);

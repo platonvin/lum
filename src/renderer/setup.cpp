@@ -919,6 +919,81 @@ void Renderer::createRenderPassAlt(){
     VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &altRpass));
 }
 
+void Renderer::createRenderPassLightmaps(){
+    VkAttachmentDescription 
+        a_depth = {}; //stencil generated in same rpass and unused after
+        a_depth.format = LIGHTMAPS_FORMAT;
+        a_depth.samples = VK_SAMPLE_COUNT_1_BIT;
+        a_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
+        a_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        a_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        a_depth.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+        a_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    VkAttachmentReference 
+        aref_depth = {};
+        aref_depth.layout = VK_IMAGE_LAYOUT_GENERAL;
+        aref_depth.attachment = 0;
+    // vector<VkAttachmentDescription> attachments = {ca_mat_norm, a_frame, a_depth, a_stencil, a_far_depth, a_near_depth};
+    vector<VkAttachmentDescription> attachments = {a_depth};
+
+    // vector<VkAttachmentReference> color_attachment_refs = {aref_mat_norm, aref_frame, /*depthRef*/};
+
+    VkSubpassDescription
+        subpass = {};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 0;
+        subpass.pColorAttachments = NULL;
+        subpass.inputAttachmentCount = 0;
+        subpass.pInputAttachments = NULL;
+        subpass.pDepthStencilAttachment = &aref_depth;
+
+    VkSubpassDependency full_wait_color = {};
+		full_wait_color.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		full_wait_color.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		full_wait_color.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		full_wait_color.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+		full_wait_color.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    VkSubpassDependency full_wait_depth = {};
+        full_wait_depth.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        full_wait_depth.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        full_wait_depth.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        full_wait_depth.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        full_wait_depth.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		// This makes sure that writes to the depth image are done before we try to write to it again
+    vector<VkSubpassDependency> dependencies(1);
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        dependencies[0].dependencyFlags = 0;
+
+    //temporary dev barriers TODO
+    for(int i=0; i<1; i++){
+    for(int j=i+1; j<1; j++){
+        full_wait_depth.srcSubpass = full_wait_color.srcSubpass = i;
+        full_wait_depth.dstSubpass = full_wait_color.dstSubpass = j;
+        dependencies.push_back(full_wait_color);
+        dependencies.push_back(full_wait_depth);
+    }}
+
+    vector<VkSubpassDescription> subpasses = {
+        subpass};
+
+    VkRenderPassCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        createInfo.attachmentCount = attachments.size();
+        createInfo.pAttachments    = attachments.data();
+        createInfo.subpassCount = subpasses.size();
+        createInfo.pSubpasses = subpasses.data();
+        createInfo.dependencyCount = dependencies.size();
+        createInfo.pDependencies = dependencies.data();
+    
+    VK_CHECK(vkCreateRenderPass(device, &createInfo, NULL, &lightmapRpass));
+}
 
 void Renderer::destroy_Raster_Pipeline(RasterPipe* pipe){
     vkDestroyPipeline(device, pipe->line, NULL);

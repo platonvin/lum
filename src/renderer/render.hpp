@@ -506,7 +506,8 @@ private:
     void createRenderPass2(); //2=3. 
     void createRenderPass3(); //3=2. Cool, right? borrowed from dreambeard
     void createRenderPassAlt();
-
+    void createRenderPassLightmaps();
+    
     VkFormat findSupportedFormat(vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
     
     void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
@@ -645,6 +646,7 @@ public:
 
     vector<VkFence>     frameInFlightFences;    
 
+           Image lightmap;
     vector<Image> swapchainImages;
            Image highresFrames;
            Image highresDepthStencil;
@@ -754,6 +756,7 @@ public:
 
 private:
     const VkFormat FRAME_FORMAT =  VK_FORMAT_R16G16B16A16_UNORM;
+    const VkFormat LIGHTMAPS_FORMAT = VK_FORMAT_D16_UNORM;
     VkFormat DEPTH_FORMAT = VK_FORMAT_UNDEFINED;
     const VkFormat DEPTH_FORMAT_PREFERED =  VK_FORMAT_D24_UNORM_S8_UINT;
     const VkFormat DEPTH_FORMAT_SPARE =  VK_FORMAT_D32_SFLOAT_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end
