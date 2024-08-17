@@ -8,7 +8,7 @@ L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
 #-ftrivial-auto-var-init=zero sets "local" vars to 0 by default
 
 # all of them united
-always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Wl,--stack,10000000
+always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Wl,--stack,1000000
 debug_specific_flags   = -O0 
 release_specific_flags = -O2 -DNDEBUG 
 

@@ -185,6 +185,14 @@ mat2 rotatem(float a) {
 	return m;
 }
 
+const float COLOR_ENCODE_VALUE = 5.0;
+vec3 decode_color(vec3 encoded_color){
+    return encoded_color*COLOR_ENCODE_VALUE;
+}
+vec3 encode_color(vec3 color){
+    return color/COLOR_ENCODE_VALUE;
+}
+
 void main() {
     // smoke_color = vec4(0);
     // outColor = vec4(fragColor, 1.0);
@@ -277,17 +285,17 @@ void main() {
     //1-I because its inverted
     // smoke_color = vec4(vec3(0.3), smoke_opacity);
     // smoke_color = vec4(vec3(0.42-total_dencity/diff), smoke_opacity);
-    smoke_color = vec4(vec3(final_light), smoke_opacity);
+    smoke_color = vec4(encode_color(vec3(final_light)), smoke_opacity);
     // smoke_color.w = 0;
     // }   
     // float mix_ratio = 
-    // smoke_color = vec4(0);
+    // smoke_color = vec4(0.5);
     // vec4 old_color = subpassLoad(inFrame);
     // int mat = load_mat();
-    // frame_color = sin(old_color * 42.2);
+    // smoke_color = sin(old_color * 42.2);
     // frame_color = old_color;
-    // frame_color = vec4(vec3(mat)/256.0,1);
-    // frame_color = vec4(non_clip_pos, 0.0, 0.0);
+    // smoke_color = vec4(vec3(mat)/256.0,1);
+    // smoke_color = vec4(non_clip_pos, 0.0, 0.0);
 
     /*
     raymarch:

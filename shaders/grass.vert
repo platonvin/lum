@@ -11,7 +11,6 @@ this can be fixed by simply packing multiple blades in same instance
 but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 
 *1) Measurements showed that i was clearly was wrong. But strip still faster
-
 */
 
 layout(push_constant) uniform restrict readonly PushConstants{

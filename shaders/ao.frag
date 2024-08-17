@@ -51,6 +51,14 @@ vec3 get_shift_from_depth(float depth_diff, vec2 clip_shift){
     return origin;
 }
 
+const float COLOR_ENCODE_VALUE = 5.0;
+vec3 decode_color(vec3 encoded_color){
+    return encoded_color*COLOR_ENCODE_VALUE;
+}
+vec3 encode_color(vec3 color){
+    return color/COLOR_ENCODE_VALUE;
+}
+
 void main() {
     cameraRayDirPlane = normalize(vec3(pco.camdir.xy, 0));
     horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
@@ -147,8 +155,8 @@ void main() {
     // float obfuscation = total_ao; 
     // obfuscation = (sqrt(obfuscation));
     // obfuscation = obfuscation*obfuscation;
-    obfuscation = clamp((obfuscation), 0.0, 0.7);
-    frame_color = vec4(vec3(0.0), obfuscation);
-    // frame_color = vec4(vec3(0.0), 0);
-    // frame_color = vec4(vec3(1-obfuscation), 1);
+    obfuscation = clamp((obfuscation), 0.0, 0.5);
+    frame_color = (vec4(encode_color(vec3(0.0)), obfuscation));
+    // frame_color = vec4(vec3(1), 0.5);
+    // frame_color = vec4(vec3(initial_depth)/1000.0, .5);
 } 

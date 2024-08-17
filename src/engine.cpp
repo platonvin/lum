@@ -463,6 +463,8 @@ void Engine::draw()
             render.end_compute();
                 // render.raytrace();
 // println
+                render.start_lightmap();
+
                 render.start_raygen();
 // println
                     for(auto b : block_que){
@@ -481,9 +483,10 @@ void Engine::draw()
                      
 //                     render.raygen_mesh(&tank_rf_leg, 0);
 //                     render.raygen_mesh(&tank_lb_leg, 0);
-// // println
+// println
 //                     render.raygen_mesh(&tank_lf_leg, 0);
 //                     render.raygen_mesh(&tank_rb_leg, 0);
+                render.end_lightmap();
 
 // println
                 render.update_particles();
@@ -506,21 +509,23 @@ void Engine::draw()
 
                 render.raygen_start_water();
                     // render.raygen_map_water(&water, vec4(128,128,16+5,0), 16);
+                render.end_raygen();
+// println
+                render.start_2nd_spass();
 // println
                 render.diffuse();
 // println
-                render.end_raygen();
-
-                render.start_2nd_spass();
+                render.ambient_occlusion(); 
+// println
+                render.glossy_raygen();
+// println
+                render.smoke_raygen();
 // println
                 render.glossy();
 // println
                 render.smoke();
 // println
-                render.end_2nd_spass();
-// println
-// println
-            render.collect_glossy(); 
+                render.tonemap();
 // println
             render.start_ui(); 
 // println
@@ -529,6 +534,8 @@ void Engine::draw()
                 ui.draw();
 // println
         render.end_ui(); 
+// println
+        render.end_2nd_spass();
 // println
        render.present();
 // println

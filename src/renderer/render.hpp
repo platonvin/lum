@@ -184,7 +184,8 @@ typedef struct AttrFormOffs{
 
 enum BlendAttachment{
     NO_BLEND,
-    DO_BLEND,
+    BLEND_MIX,
+    BLEND_SUB,
     BLEND_REPLACE_IF_GREATER, //basically max
     BLEND_REPLACE_IF_LESS, //basically max
 };
@@ -397,6 +398,10 @@ public:
     bool fullscreen = false;
     bool resized = false;
 
+
+    dvec3 lightDir = normalize(vec3(0.5, 0.5, -0.9));
+    dmat4 lightTransform = identity<mat4>();
+
     dvec3 cameraPos     = vec3(60, 0, 194);
     dvec3 cameraPos_OLD = cameraPos;
     dvec3 cameraDir     = normalize(vec3(0.6, 1.0, -0.8));
@@ -405,6 +410,7 @@ public:
     dmat4 cameraTransform_OLD = identity<dmat4>();
 
     void update_camera();
+    void update_light_transform();
 
     void gen_perlin_2d();
     void gen_perlin_3d();
@@ -424,6 +430,9 @@ public:
             void recalculate_df();
             void recalculate_bit();
         void end_compute();
+        void start_lightmap(); void lightmap_face_helper(vec3 normal, IndexedVertices& buff, int block_id);
+        void end_lightmap(); //ends somewhere after raygen but operates on separate cmd buf
+            // void start_lightmap();
         void start_raygen();
             void raygen_mesh(Mesh* mesh, int block_id); void draw_face_helper(vec3 normal, IndexedVertices& buff, int block_id);
             void update_particles();
@@ -434,17 +443,20 @@ public:
                 void raygen_start_water();
                     void raygen_map_water(vec4 shift, int size);
                 void raygen_end_water();
+        void end_raygen();
             // void end_raygen_first();
             void diffuse();
+            void ambient_occlusion();
             void start_2nd_spass();
+                void glossy_raygen();
                 void smoke_raygen();// special mesh?
                 void smoke();
                 void glossy();
+                void tonemap();
+                void start_ui();
+                    //ui updates
+                void end_ui();
             void end_2nd_spass();
-        void end_raygen();
-            void collect_glossy();
-            void start_ui();
-            void end_ui();
         void present();
     void end_frame();
         // void inter();
@@ -488,6 +500,7 @@ private:
     void createWindow();
     void createInstance();
     void setupDebug_Messenger();
+    void debugSetName();
     void createSurface();
     SwapChainSupportDetails querySwapchainSupport(VkPhysicalDevice);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice);
@@ -507,7 +520,7 @@ private:
     void createRenderPass3(); //3=2. Cool, right? borrowed from dreambeard
     void createRenderPassAlt();
     void createRenderPassLightmaps();
-    
+
     VkFormat findSupportedFormat(vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
     
     void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
@@ -607,23 +620,23 @@ public:
     VkFormat   swapChainImageFormat;
     VkExtent2D swapChainExtent;
     VkExtent2D  raytraceExtent;
+    VkExtent2D  lightmapExtent;
 
-    // RasterPipe lightmapPipe;
+    RasterPipe lightmapPipe;
 
     RasterPipe raygenBlocksPipe;
     VkDescriptorSetLayout blocksPushLayout;
     RasterPipe raygenParticlesPipe;
     RasterPipe raygenGrassPipe;
     RasterPipe raygenWaterPipe;
-    RasterPipe diffusePipe;
 
+    RasterPipe diffusePipe;
+    RasterPipe aoPipe;
     RasterPipe fillStencilGlossyPipe;
     RasterPipe fillStencilSmokePipe;
     RasterPipe glossyPipe;
     RasterPipe smokePipe;
-
-    RasterPipe blurPipe; // i can use it for both mirror and glow
-
+    RasterPipe tonemapPipe;
     RasterPipe overlayPipe;
 
     VkRenderPass       lightmapRpass;
@@ -632,12 +645,12 @@ public:
     VkRenderPass   blur2presentRpass;
     VkRenderPass   altRpass; //for no downscaling
 
+    vector<VkFramebuffer>  lightmapFramebuffers;
     vector<VkFramebuffer>  rayGenFramebuffers; //for 1st rpass
-    // vector<VkFramebuffer>  glossyFramebuffers; //for 3rd rpass. Size of 1
-    // vector<VkFramebuffer> overlayFramebuffers; //for 2st rpass.
     vector<VkFramebuffer> altFramebuffers; //for no downscaling
 
     vector<VkCommandBuffer>  computeCommandBuffers; 
+    vector<VkCommandBuffer> lightmapCommandBuffers; 
     vector<VkCommandBuffer> graphicsCommandBuffers;
     vector<VkCommandBuffer>     copyCommandBuffers; //runtime copies for ui. Also does first frame resources
 
@@ -681,6 +694,7 @@ public:
            Image          bitPalette; //bitmask of originBlockPalette
     vector<Image> materialPalette;
     
+    vector<Buffer>   light_uniform;
     vector<Buffer>         uniform;
     vector<ivec4>         radianceUpdates;
     Buffer             gpuRadianceUpdates;
@@ -756,7 +770,7 @@ public:
 
 private:
     const VkFormat FRAME_FORMAT =  VK_FORMAT_R16G16B16A16_UNORM;
-    const VkFormat LIGHTMAPS_FORMAT = VK_FORMAT_D16_UNORM;
+    const VkFormat LIGHTMAPS_FORMAT = VK_FORMAT_D32_SFLOAT;
     VkFormat DEPTH_FORMAT = VK_FORMAT_UNDEFINED;
     const VkFormat DEPTH_FORMAT_PREFERED =  VK_FORMAT_D24_UNORM_S8_UINT;
     const VkFormat DEPTH_FORMAT_SPARE =  VK_FORMAT_D32_SFLOAT_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end

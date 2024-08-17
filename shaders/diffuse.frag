@@ -9,12 +9,13 @@ precision highp int;
 precision highp float;
 // #extension GL_KHR_shader_subgroup_arithmetic : enable
 
-#define highp
+// #define highp
 
 layout(push_constant) uniform restrict readonly constants{
     vec3 camera_pos;
      int timeSeed;
      vec4 camera_direction;
+    mat4 lightmap_proj;
 } PushConstants;
 
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
@@ -24,6 +25,7 @@ layout(input_attachment_index = 1, set = 0, binding = 1) uniform  subpassInput d
 // layout(set = 0, binding = 3, r8ui) uniform uimage3D  blockPalette;
 layout(set = 0, binding = 2, r32f) restrict readonly uniform image2D voxelPalette;
 layout(set = 0, binding = 3      ) uniform sampler3D radianceCache;
+layout(set = 0, binding = 4      ) uniform sampler2D lightmap;
 
 layout(location = 0) in vec2 non_clip_pos;
 layout(location = 0) out vec4 frame_color;
@@ -224,6 +226,42 @@ vec3 get_origin_from_depth(float depth, vec2 uv_pos){
     return origin;
 }
 
+//not really nextafter but somewhat close
+float next_after (float x){
+    int ix = floatBitsToInt(x);
+    float fxp1 = intBitsToFloat(ix+128);
+    return fxp1;
+}
+float prev_befor (float x){
+    int ix = floatBitsToInt(x);
+    float fxp1 = intBitsToFloat(ix-128);
+    return fxp1;
+}
+
+float sample_lightmap(vec3 world_pos){
+    vec3 light_clip = (PushConstants.lightmap_proj* vec4(world_pos,1)).xyz; //move up
+         light_clip.z = 1+light_clip.z;
+    
+    float world_depth = light_clip.z;
+
+    vec2 light_uv = (light_clip.xy + 1.0)/2.0;
+    float light_depth = texture(lightmap, light_uv).x;
+
+    if(next_after(world_depth) <= (light_depth)) {
+    // if(abs(light_depth - world_depth) < 0.01) {
+        return 0.15;
+    } else {
+        return 0.0;
+    }
+}
+
+const float COLOR_ENCODE_VALUE = 5.0;
+vec3 decode_color(vec3 encoded_color){
+    return encoded_color*COLOR_ENCODE_VALUE;
+}
+vec3 encode_color(vec3 color){
+    return color/COLOR_ENCODE_VALUE;
+}
 
 // layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
@@ -250,8 +288,9 @@ void main(void){
 
     // vec3 incoming_light = sample_radiance(stored_origin + 0.1*stored_normal, stored_normal);
     vec3 incoming_light = sample_radiance(stored_origin + stored_normal*6.0);
+    float sunlight = sample_lightmap(stored_origin);
 
-    final_color = (2.0*incoming_light+stored_mat.emmitance) * stored_mat.color;
+    final_color = (2.0*incoming_light+stored_mat.emmitance + sunlight) * stored_mat.color;
     // final_color = stored_mat.color;
     // final_color = incoming_light;
     // final_color = stored_origin;
@@ -260,12 +299,13 @@ void main(void){
     // imageStore(outFrame, pix, vec4((stored_normal), 1));
     // final_color = stored_normal;
     // final_color = abs(final_color);
-    float ma = max(final_color.x, max(final_color.y, final_color.z));
+    // float ma = max(final_color.x, max(final_color.y, final_color.z));
     // float mi = min(final_color.x, min(final_color.y, final_color.z));
-    if(ma>1) 
-        final_color /= ma;
+    // if(ma>1) 
+    //     final_color /= ma;
     // else final_color /= mi;
-    frame_color = vec4((final_color),1);
+    frame_color = vec4(encode_color(final_color),1);
 
-    // frame_color = vec4(vec3(load_depth())/1000.0,1);
+    // frame_color = vec4(abs(vec3(load_depth()))/1000.0, 1);
+    // frame_color = vec4(non_clip_pos,0,1);
 }

@@ -565,21 +565,14 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, inout vec2 pix, inout float
     // }
 }
 
-
-
-float luminance(vec3 color){
-    vec3 luminance_const = vec3(0.2126, 0.7152, 0.0722);
-    return dot(color, luminance_const);
-}
 const float COLOR_ENCODE_VALUE = 5.0;
 vec3 decode_color(vec3 encoded_color){
-    return clamp(encoded_color,0,1)*vec3(COLOR_ENCODE_VALUE);
+    return encoded_color*COLOR_ENCODE_VALUE;
 }
 vec3 encode_color(vec3 color){
-    return clamp(color/vec3(COLOR_ENCODE_VALUE), 0,1);
+    return color/COLOR_ENCODE_VALUE;
 }
 
-//TODO: balance
 // layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
     //lowres resolution. out_frame cause in_frame is sampler
@@ -633,6 +626,6 @@ void main(void){
 
     vec3 traced_color = trace_glossy_ray(origin, direction, accumulated_light, accumulated_reflection);
     
-    frame_color = vec4(traced_color, 1.0-mat.roughness);
-    // frame_color = vec4(0);
+    frame_color = vec4(encode_color(traced_color), 1.0-mat.roughness);
+    // frame_color = vec4(1);
 }
