@@ -6,6 +6,13 @@ layout(early_fragment_tests) in;
 precision varp int;
 precision varp float;
 
+layout(push_constant) uniform restrict readonly constants{
+    vec4 rot;
+    vec4 shift;
+    vec4 normal;
+    // int block;
+} pco;
+
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
     vec4 campos;
@@ -14,14 +21,13 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec4 vertiline_scaled;
     vec4 globalLightDir;
     mat4 lightmap_proj;
+    vec2 frame_size;
     int timeseed;
 } ubo;
 
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 
-layout(location = 0) lowp flat in uvec3 unorm;
-layout(location = 1) in vec3 sample_point;
-layout(location = 2) flat in uint sample_block;
+layout(location = 0) in vec3 sample_point;
 
 layout(location = 0) lowp out uvec4 outMatNorm;
 
@@ -52,9 +58,11 @@ void main() {
     // uint uv_encoded = packUnorm2x16(old_uv);
 
     // outOldUv = uv_shift;
+    vec3 norm = uvec3(((pco.normal+1.0)/2.0)*255.0);
+    int sample_block = int(pco.normal.w);
 
     // outMatNorm.x = (float(mat)-127.0)/127.0;
-    outMatNorm.yzw = uvec3(unorm);
+    outMatNorm.yzw = uvec3(norm);
     outMatNorm.x = 9;
 
     ivec3 ipos = ivec3(sample_point);

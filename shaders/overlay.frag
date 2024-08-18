@@ -1,8 +1,11 @@
 #version 450
 
+precision highp float;
+precision highp int;
+
 // layout(location = 0) in vec3 fragColor;
-layout(location = 0) in vec2 fragUV;
-layout(location = 1) in vec4 fragColor;
+layout(location = 0) in mediump vec2 fragUV;
+layout(location = 1) in mediump vec4 fragColor;
 
 layout(set = 0, binding = 0) uniform sampler2D ui_elem_texture;
 

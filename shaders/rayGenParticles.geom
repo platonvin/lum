@@ -23,6 +23,7 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec4 vertiline_scaled;
     vec4 globalLightDir;
     mat4 lightmap_proj;
+    vec2 frame_size;
     int timeseed;
 } ubo;
 

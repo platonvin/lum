@@ -139,8 +139,8 @@ void Renderer::createRenderPass1(){
         ca_depth.samples = VK_SAMPLE_COUNT_1_BIT;
         ca_depth.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
         ca_depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE; 
-        ca_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        ca_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        ca_depth.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        ca_depth.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
         ca_depth.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         ca_depth.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
         
@@ -770,7 +770,7 @@ void Renderer::createRenderPassAlt(){
         a_stencil.samples = VK_SAMPLE_COUNT_1_BIT;
         a_stencil.loadOp  = VK_ATTACHMENT_LOAD_OP_LOAD;
         a_stencil.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; 
-        a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        a_stencil.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         a_stencil.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a_stencil.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
         a_stencil.finalLayout = VK_IMAGE_LAYOUT_GENERAL;

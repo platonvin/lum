@@ -13,9 +13,7 @@ layout(location = 0) in lowp uvec3 posIn;
 // layout(location = 1) in varp ivec3 normIn;
 // layout(location = 1) in varp uint MatIDIn;
 
-layout(location = 0) lowp flat out uvec3 norm;
-layout(location = 1) out vec3 sample_point;
-layout(location = 2) flat out uint sample_block;
+layout(location = 0) out vec3 sample_point;
 
 //no reason to move up in pipeline cause sm load is like ~ 6% in vs
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
@@ -26,6 +24,7 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec4 vertiline_scaled;
     vec4 globalLightDir;
     mat4 lightmap_proj;
+    vec2 frame_size;
     int timeseed;
 } ubo;
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
@@ -35,7 +34,7 @@ layout(push_constant) uniform restrict readonly constants{
     vec4 rot;
     vec4 shift;
     vec4 normal;
-    // uint block_id;
+    int block;
 } pco;
 
 precision highp float;
@@ -62,8 +61,6 @@ void main() {
     // uint mat = uint(MatIDIn);
     // float fmat = (float(mat)-127.0)/127.0;
     // vec4 fmat_norm = vec4(fmat, norm);
-    norm = uvec3(((_fnorm+1.0)/2.0)*255.0);
     
     sample_point = local_pos - _fnorm * 0.5; //for better rounding lol
-    sample_block = uint(pco.normal.w);
 }

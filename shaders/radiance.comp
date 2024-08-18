@@ -13,7 +13,7 @@ precision highp float;
 
 layout(set = 0, binding = 0) uniform isampler3D blocks;
 layout(set = 0, binding = 1) uniform usampler3D blockPalette;
-layout(set = 0, binding = 2, r32f       ) uniform restrict readonly image2D voxelPalette;
+layout(set = 0, binding = 2) uniform sampler2D voxelPalette;
 // layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // A2B10G10R10_UNORM_PACK32
 layout(set = 0, binding = 3) uniform sampler3D radianceCache2read;
@@ -154,17 +154,17 @@ ivec2 GetVoxel(in vec3 pos){
 //     imageStore(blockPalette, voxel_pos, uvec4(voxel));
 // }
 
-Material GetMat(in varp int voxel){
+Material GetMat(in int voxel){
     Material mat;
 
-    mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
-    mat.color.g      = imageLoad(voxelPalette, ivec2(1,voxel)).r;
-    mat.color.b      = imageLoad(voxelPalette, ivec2(2,voxel)).r;
-    mat.emmitance    = imageLoad(voxelPalette, ivec2(4,voxel)).r;
-    mat.roughness    = imageLoad(voxelPalette, ivec2(5,voxel)).r;
-return mat;
+    mat.color.r      = texelFetch(voxelPalette, ivec2(0,voxel), 0).r;
+    mat.color.g      = texelFetch(voxelPalette, ivec2(1,voxel), 0).r;
+    mat.color.b      = texelFetch(voxelPalette, ivec2(2,voxel), 0).r;
+    // mat.transparancy = 1.0 - texelFetch(voxelPalette, ivec2(3,voxel), 0).r;
+    mat.emmitance    =       texelFetch(voxelPalette, ivec2(4,voxel), 0).r;
+    mat.roughness    =       texelFetch(voxelPalette, ivec2(5,voxel), 0).r;
+    return mat;
 }
-
 // vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
 //     // int closest_id = clamp(int(inverseFibonacciPoint(direction).x), 0,RAYS_PER_PROBE-1);
 //     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);

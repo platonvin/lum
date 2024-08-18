@@ -18,16 +18,17 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec4 vertiline_scaled;
     vec4 globalLightDir;
     mat4 lightmap_proj;
+    vec2 frame_size;
     int timeseed;
 } ubo;
 layout(set = 0, binding = 1, rgba8ui) uniform restrict readonly uimage2D matNorm;
 layout(set = 0, binding = 2         ) uniform sampler2D depthBuffer;
 layout(set = 0, binding = 3         ) uniform isampler3D blocks;
 layout(set = 0, binding = 4         ) uniform usampler3D blockPalette;
-layout(set = 0, binding = 5,    r32f) uniform restrict readonly image2D voxelPalette;
+layout(set = 0, binding = 5         ) uniform sampler2D  voxelPalette;
 layout(set = 0, binding = 6         ) uniform sampler3D radianceCache;
 
-layout(location = 0) in vec2 clip_pos;
+// layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
 
 // layout(constant_id = 1) const int MAX_DEPTH = 1;
@@ -110,13 +111,13 @@ ivec2 GetVoxel(in vec3 pos){
 Material GetMat(in int voxel){
     Material mat;
 
-    mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
-    mat.color.g      = imageLoad(voxelPalette, ivec2(1,voxel)).r;
-    mat.color.b      = imageLoad(voxelPalette, ivec2(2,voxel)).r;
-    // mat.transparancy = 1.0 - imageLoad(voxelPalette, ivec2(3,voxel)).r;
-    mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
-    mat.roughness    =       imageLoad(voxelPalette, ivec2(5,voxel)).r;
-return mat;
+    mat.color.r      = texelFetch(voxelPalette, ivec2(0,voxel), 0).r;
+    mat.color.g      = texelFetch(voxelPalette, ivec2(1,voxel), 0).r;
+    mat.color.b      = texelFetch(voxelPalette, ivec2(2,voxel), 0).r;
+    // mat.transparancy = 1.0 - texelFetch(voxelPalette, ivec2(3,voxel), 0).r;
+    mat.emmitance    =       texelFetch(voxelPalette, ivec2(4,voxel), 0).r;
+    mat.roughness    =       texelFetch(voxelPalette, ivec2(5,voxel), 0).r;
+    return mat;
 }
 
 vec3 sample_radiance(vec3 position, vec3 normal){
@@ -577,17 +578,20 @@ void main(void){
 
     Material   mat       = GetMat(load_mat(pix));
     vec3 direction = ubo.camdir.xyz;
+
+    vec2 clip_pos = gl_FragCoord.xy / ubo.frame_size * 2.0 - 1.0;
     vec3 origin    = get_origin_from_depth(load_depth(pix), clip_pos);
           vec3 normal    = load_norm(pix);
 
     vec3 accumulated_light      = vec3(0);
     vec3 accumulated_reflection = vec3(1);
 
-    origin += normal*0.01;
     //TODO move to blend so less radiance reads happen
     ProcessHit(origin, direction, //TODO maybe remove sample radiance
             0, normal, mat, 
             accumulated_light, accumulated_reflection);
+
+    // origin += direction*0.5;
 
     Material ssr_mat;
     float ssr_fraction;

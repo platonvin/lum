@@ -13,7 +13,7 @@ layout(location = 0) lowp out uvec4 outMatNorm;
 void main() {
     // outMatNorm.x = fmat;
     // outMatNorm.gba = normalize(norm.xyz);
-
+    
     outMatNorm = uvec4(mat_norm);
 
 }

@@ -29,7 +29,7 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
 }
 
 //TODO: balance, X>Y>Z for coherence
-layout(local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 //TODO: temp
 void main(void){
     const ivec3 model_size = imageSize(modelVoxels);

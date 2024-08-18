@@ -4,7 +4,7 @@
 #extension GL_EXT_control_flow_attributes : enable
 
 // layout(location = 0) in vec3 zero_origin;
-layout(location = 0) in vec2 clip_pos;
+// layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 smoke_color;
 
 precision highp float;
@@ -19,6 +19,7 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec4 vertiline_scaled;
     vec4 globalLightDir;
     mat4 lightmap_proj;
+    vec2 frame_size;
     int timeseed;
 } ubo;
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_far;
@@ -231,9 +232,10 @@ void main() {
     // for(float fraction = near; fraction <= far; fraction+=step_size){ 
     
     float fraction = near;
-    [[unroll]]
+    // [[unroll]]
     for(int i=0; i<max_steps; i++){
         fraction += step_size;
+            vec2 clip_pos = gl_FragCoord.xy / ubo.frame_size * 2.0 - 1.0;
             position = get_origin_from_depth(fraction, clip_pos);
             vec3 voxel_pos = vec3(position);
             vec3 noise_clip_pos = voxel_pos / 32.0;

@@ -166,7 +166,7 @@ void Renderer::createImages(){
     create_Image_Storages(&materialPalette,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R32_SFLOAT, //try R32G32
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
@@ -217,7 +217,7 @@ void Renderer::createImages(){
     //     sizeof(mat4)*2, true);
     create_Buffer_Storages(&uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        212, false); //no way i write it with sizeof's
+        220, false); //no way i write it with sizeof's
     create_Buffer_Storages(&light_uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         sizeof(mat4), false);
@@ -272,17 +272,17 @@ void Renderer::setupDescriptors(){
     deferDescriptorsetup(&radiancePipe.setLayout, &radiancePipe.sets, {
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette),    nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {radianceCache},      unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,RD_FIRST  , {gpuRadianceUpdates}, {},          NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 // println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencil},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {materialPalette},    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER         , RD_FIRST, {/*empty*/}, {materialPalette},    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache},      unnormLinear,   VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -299,7 +299,7 @@ void Renderer::setupDescriptors(){
 // println
     deferDescriptorsetup(&fillStencilGlossyPipe.setLayout, &fillStencilGlossyPipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette),    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&fillStencilSmokePipe.setLayout, &fillStencilSmokePipe.sets, {
@@ -312,7 +312,7 @@ void Renderer::setupDescriptors(){
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette),    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {radianceCache},      unnormLinear,     VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
@@ -442,7 +442,7 @@ void Renderer::createPipilines(){
             // {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
         }, 
         sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)*2), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)*2 + sizeof(int)), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 
 // println
     raygenParticlesPipe.subpassId = 1;
@@ -718,7 +718,7 @@ void Renderer::createSwapchainDependent() {
         altVeiws[0].push_back(highresMatNorms.view);
         altVeiws[1].push_back(highresFrames.view);
         altVeiws[2].push_back(swapchainImages[i].view);
-        altVeiws[3].push_back(stencilViewForDS);
+        altVeiws[3].push_back(highresDepthStencil.view);
         altVeiws[4].push_back(farDepth.view);
         altVeiws[5].push_back(nearDepth.view);
     }
@@ -1696,11 +1696,13 @@ void Renderer::start_raygen() {
         mat4 trans_w2s; vec4 campos; vec4 camdir;
         vec4 horizline_scaled; vec4 vertiline_scaled;
         vec4 globalLightDir; mat4 lightmap_proj;
+        vec2 size;
         int timeseed;
     } unicopy = {
         mat4(cameraTransform), vec4(cameraPos,0), vec4(cameraDir,0),
         vec4(horizline*view_width,0), vec4(vertiline*view_height,0),
         vec4(lightDir,0), mat4(lightTransform),
+        vec2(swapChainExtent.width, swapChainExtent.height),
         iFrame
     };
     vkCmdUpdateBuffer(commandBuffer, uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
@@ -2782,7 +2784,7 @@ void Renderer::count_Descriptor(const VkDescriptorType type) {
     }
 }
 //in order
-void Renderer::create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags stageFlags, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags) {
+void Renderer::create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags baseStages, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags) {
     vector<VkDescriptorSetLayoutBinding> bindings = {};
 
     for (i32 i=0; i<descriptorTypes.size(); i++) {
@@ -2793,7 +2795,30 @@ void Renderer::create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTyp
             bind.binding = i;
             bind.descriptorType = descriptorTypes[i];
             bind.descriptorCount = 1;
-            bind.stageFlags = stageFlags;
+            bind.stageFlags = baseStages;
+        bindings.push_back(bind);
+    }
+
+    VkDescriptorSetLayoutCreateInfo 
+        layoutInfo = {};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.flags = flags;
+        layoutInfo.bindingCount = bindings.size();
+        layoutInfo.pBindings    = bindings.data();
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, NULL, layout));
+}
+void Renderer::create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, vector<VkShaderStageFlags> stages, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags) {
+    vector<VkDescriptorSetLayoutBinding> bindings = {};
+
+    for (i32 i=0; i<descriptorTypes.size(); i++) {
+        count_Descriptor(descriptorTypes[i]);
+        
+        VkDescriptorSetLayoutBinding 
+            bind = {};
+            bind.binding = i;
+            bind.descriptorType = descriptorTypes[i];
+            bind.descriptorCount = 1;
+            bind.stageFlags = stages[i];
         bindings.push_back(bind);
     }
 
@@ -2854,11 +2879,13 @@ static void allocate_Descriptor(vector<VkDescriptorSet>& sets, VkDescriptorSetLa
     VK_CHECK(vkAllocateDescriptorSets(device, &allocInfo, sets.data()));
 }
 
-void Renderer::deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptorSets, vector<DescriptorInfo> descriptions, VkShaderStageFlags stages, VkDescriptorSetLayoutCreateFlags createFlags) {
+void Renderer::deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptorSets, vector<DescriptorInfo> descriptions, VkShaderStageFlags baseStages, VkDescriptorSetLayoutCreateFlags createFlags) {
     if(*dsetLayout == VK_NULL_HANDLE) {
         vector<VkDescriptorType> descriptorTypes(descriptions.size());
+        vector<VkShaderStageFlags> descriptorStages(descriptions.size());
         for(int i=0; i<descriptions.size(); i++) {
             descriptorTypes[i] = descriptions[i].type;
+            descriptorStages[i] = (descriptions[i].stages==0)? baseStages : descriptions[i].stages;
             // if(not descriptions[i].images.empty()) {
             //     if(descriptions[i].imageSampler != 0) {
             //         descriptorTypes[i] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -2867,11 +2894,11 @@ void Renderer::deferDescriptorsetup(VkDescriptorSetLayout* dsetLayout, vector<Vk
             //     descriptorTypes[i] = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             // } else {crash(what is descriptor type?);}
         }
-        create_DescriptorSetLayout(descriptorTypes, stages, dsetLayout, createFlags);
+        create_DescriptorSetLayout(descriptorTypes, descriptorStages, dsetLayout, createFlags);
     }
     
     descriptor_sets_count += MAX_FRAMES_IN_FLIGHT;
-    DelayedDescriptorSetup delayed_setup = {dsetLayout, descriptorSets, descriptions, stages, createFlags};
+    DelayedDescriptorSetup delayed_setup = {dsetLayout, descriptorSets, descriptions, baseStages, createFlags};
     delayed_descriptor_setups.push_back(delayed_setup);
 }
 

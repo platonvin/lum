@@ -3,8 +3,8 @@
 layout(location = 0) in vec2 posIn;
 layout(location = 1) in vec4 colorIn;
 layout(location = 2) in vec2 UvIn;
-layout(location = 0) out vec2 fragUV;
-layout(location = 1) out vec4 fragColor;
+layout(location = 0) out mediump vec2 fragUV;
+layout(location = 1) out mediump vec4 fragColor;
 
 
 

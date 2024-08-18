@@ -338,6 +338,7 @@ typedef struct DescriptorInfo {
     vector<Image> images;
     VkSampler imageSampler;
     VkImageLayout imageLayout; //ones that will be in use, not current
+    VkShaderStageFlags stages;
 } DescriptorInfo;
 
 typedef struct DelayedDescriptorSetup {
@@ -599,7 +600,8 @@ public:
     u32 INPUT_ATTACHMENT_DESCRIPTOR_COUNT = 0;
     u32 descriptor_sets_count = 0;
     void count_Descriptor(const VkDescriptorType type);
-    void create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags stageFlags, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
+    void create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags baseStages, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
+    void create_DescriptorSetLayout(vector<VkDescriptorType> descriptorTypes, vector<VkShaderStageFlags> stages, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
 public:
     
 

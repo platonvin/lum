@@ -19,19 +19,21 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec4 vertiline_scaled;
     vec4 globalLightDir;
     mat4 lightmap_proj;
+    vec2 frame_size;
     int timeseed;
 } ubo;
+
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput matNorm;
 layout(input_attachment_index = 1, set = 0, binding = 2) uniform  subpassInput depthBuffer;
-layout(set = 0, binding = 3, r32f) restrict readonly uniform image2D voxelPalette;
-layout(set = 0, binding = 4      ) uniform sampler3D radianceCache;
-layout(set = 0, binding = 5      ) uniform sampler2D lightmap;
+layout(set = 0, binding = 3 ) uniform sampler2D voxelPalette;
+layout(set = 0, binding = 4 ) uniform sampler3D radianceCache;
+layout(set = 0, binding = 5 ) uniform sampler2D lightmap;
 
-layout(location = 0) in vec2 clip_pos;
+// layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
 
 #define RAYS_PER_PROBE (32)
-ivec2 size;
+// ivec2 size;
 const ivec3 world_size = ivec3(48,48,16);
 
 // vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
@@ -193,21 +195,13 @@ highp float load_depth(){
 Material GetMat(in int voxel){
     Material mat;
 
-    mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
-    mat.color.g      = imageLoad(voxelPalette, ivec2(1,voxel)).r;
-    mat.color.b      = imageLoad(voxelPalette, ivec2(2,voxel)).r;
-    // mat.transparancy = 1.0 - imageLoad(voxelPalette, ivec2(3,voxel)).r;
-    mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
-    mat.roughness    =       imageLoad(voxelPalette, ivec2(5,voxel)).r;
-    mat.transparancy = 0;
-
-    // mat.smoothness = 0.5;
-    // mat.smoothness = 0;
-    // if(voxel < 30) 
-    // mat.color.rgb = vec3(0.9);
-    // mat.color.rgb = clamp(mat.color.rgb,0.2,1);
-    // mat.emmitance = .0;
-return mat;
+    mat.color.r      = texelFetch(voxelPalette, ivec2(0,voxel), 0).r;
+    mat.color.g      = texelFetch(voxelPalette, ivec2(1,voxel), 0).r;
+    mat.color.b      = texelFetch(voxelPalette, ivec2(2,voxel), 0).r;
+    // mat.transparancy = 1.0 - texelFetch(voxelPalette, ivec2(3,voxel), 0).r;
+    mat.emmitance    =       texelFetch(voxelPalette, ivec2(4,voxel), 0).r;
+    mat.roughness    =       texelFetch(voxelPalette, ivec2(5,voxel), 0).r;
+    return mat;
 }
 
 vec3 get_origin_from_depth(float depth, vec2 clip_pos){
@@ -217,7 +211,10 @@ vec3 get_origin_from_depth(float depth, vec2 clip_pos){
         (ubo.camdir.xyz*depth);
     return origin;
 }
-
+vec3 get_origin_from_depth_interpolated(float depth, vec3 pos_interpol){
+    vec3 origin = pos_interpol + (ubo.camdir.xyz*depth);
+    return origin;
+}
 //not really nextafter but somewhat close
 float next_after (float x){
     int ix = floatBitsToInt(x);
@@ -262,6 +259,8 @@ void main(void){
     const vec3 stored_accumulated_reflection = vec3(1);
     const vec3 stored_accumulated_light = vec3(0);
     const vec3 direction = ubo.camdir.xyz;
+
+    vec2 clip_pos = gl_FragCoord.xy / ubo.frame_size * 2.0 - 1.0;
     const vec3 origin = get_origin_from_depth(load_depth(), clip_pos);
     const      vec3 stored_normal = load_norm();
 
@@ -272,4 +271,5 @@ void main(void){
     frame_color = vec4(encode_color(final_color),1);
     // frame_color = vec4(abs(vec3(load_depth()))/1000.0, 1);
     // frame_color = vec4(clip_pos,0,1);
+    // vec2 a = gl_; 
 }

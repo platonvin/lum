@@ -1,7 +1,7 @@
 #version 450 
 
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
-layout(set = 0, binding = 1, r32f       ) restrict readonly uniform image2D voxelPalette;
+layout(set = 0, binding = 1 ) uniform sampler2D voxelPalette;
 
 //stencils smooth surface pixels bit at 01 from 00 to 01
 
@@ -18,12 +18,12 @@ int load_mat(){
 Material GetMat(in int voxel){
     Material mat;
 
-    mat.color.r      = imageLoad(voxelPalette, ivec2(0,voxel)).r;
-    mat.color.g      = imageLoad(voxelPalette, ivec2(1,voxel)).r;
-    mat.color.b      = imageLoad(voxelPalette, ivec2(2,voxel)).r;
-    // mat.transparancy = 1.0 - imageLoad(voxelPalette, ivec2(3,voxel)).r;
-    mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
-    mat.roughness    =       imageLoad(voxelPalette, ivec2(5,voxel)).r;
+    mat.color.r      = texelFetch(voxelPalette, ivec2(0,voxel), 0).r;
+    mat.color.g      = texelFetch(voxelPalette, ivec2(1,voxel), 0).r;
+    mat.color.b      = texelFetch(voxelPalette, ivec2(2,voxel), 0).r;
+    // mat.transparancy = 1.0 - texelFetch(voxelPalette, ivec2(3,voxel), 0).r;
+    mat.emmitance    =       texelFetch(voxelPalette, ivec2(4,voxel), 0).r;
+    mat.roughness    =       texelFetch(voxelPalette, ivec2(5,voxel), 0).r;
     return mat;
 }
 void main() 
