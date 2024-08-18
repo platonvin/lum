@@ -7,23 +7,30 @@ layout(location = 0) out vec4 frame_color;
 
 #extension GL_EXT_control_flow_attributes : enable
 
-layout(push_constant) uniform restrict readonly constants{
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
+    mat4 trans_w2s;
     vec4 campos;
     vec4 camdir;
-} pco;
-vec3 globalLightDir;
-vec3 cameraRayDirPlane;
-vec3 horizline;
-vec3 vertiline;
+    vec4 horizline_scaled;
+    vec4 vertiline_scaled;
+    vec4 globalLightDir;
+    mat4 lightmap_proj;
+    int timeseed;
+} ubo;
+layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput matNorm;
+layout(set = 0, binding = 2) uniform sampler2D depthBuffer;
+
+// vec3 globalLightDir;
+// vec3 cameraRayDirPlane;
+// vec3 horizline;
+// vec3 vertiline;
 const float PI = 3.1415926535;
 const ivec3 world_size = ivec3(48,48,16);
-const float view_width  = 1920.0 / 10.0; //in block_diags
-const float view_height = 1080.0 / 10.0; //in blocks
+// const float view_width  = 1920.0 / 10.0; //in block_diags
+// const float view_height = 1080.0 / 10.0; //in blocks
 
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
 // layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput inFrame;
 
-layout(set = 0, binding = 1) uniform sampler2D depthBuffer;
 
 vec3 load_norm(){
     vec3 norm = (((subpassLoad(matNorm).gba)/255.0)*2.0 - 1.0);
@@ -41,17 +48,14 @@ float load_depth(vec2 pixel){
 }
 
 vec3 get_shift_from_depth(float depth_diff, vec2 clip_shift){
-    const vec2 view_size = vec2(view_width, view_height);
-    const vec2 clip_shift_scaled = clip_shift*view_size;
-    
-    vec3 origin = 
-        (horizline*clip_shift_scaled.x) + 
-        (vertiline*clip_shift_scaled.y) +
-        (pco.camdir.xyz*depth_diff);
-    return origin;
+    vec3 shift = 
+        (ubo.horizline_scaled.xyz*clip_shift.x) + 
+        (ubo.vertiline_scaled.xyz*clip_shift.y) +
+        (ubo.camdir.xyz*depth_diff);
+    return shift;
 }
 
-const float COLOR_ENCODE_VALUE = 5.0;
+const float COLOR_ENCODE_VALUE = 8.0;
 vec3 decode_color(vec3 encoded_color){
     return encoded_color*COLOR_ENCODE_VALUE;
 }
@@ -60,10 +64,6 @@ vec3 encode_color(vec3 color){
 }
 
 void main() {
-    cameraRayDirPlane = normalize(vec3(pco.camdir.xy, 0));
-    horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
-    vertiline = normalize(cross(pco.camdir.xyz, horizline));
-
     ivec2 size = textureSize(depthBuffer,0);
     
     // vec3 norm = load_norm();
@@ -111,7 +111,7 @@ void main() {
     vec3 norm = load_norm();
     vec2 initial_pix = gl_FragCoord.xy;
     float initial_depth = load_depth(initial_pix);
-    const int sample_count = 10;
+    const int sample_count = 10; //in theory i can do smth with temporal accumulation 
     const float max_radius = 6.0;
     float angle = 00;
     float angle_bias = sin(radians(0));
@@ -122,7 +122,7 @@ void main() {
     
     [[unroll]]
     for(int i=01; i<=sample_count; i++){
-        angle += 0.69420;
+        angle += 0.69420; //best possible step size
         radius = ((float(i)/float(sample_count)))*max_radius;
 
         vec2 screen_shift = radius*vec2(sin(angle), cos(angle));

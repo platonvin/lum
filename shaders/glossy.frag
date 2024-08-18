@@ -10,20 +10,22 @@ precision highp int;
 precision highp float;
 // #define highp highp
 
-layout(push_constant) uniform restrict readonly constants{
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
+    mat4 trans_w2s;
     vec4 campos;
     vec4 camdir;
-} pco;
-
-// layout(set = 0, binding = 0, rgba16) uniform image2D frame;
-layout(set = 0, binding = 1-1, rgba8ui) uniform restrict readonly uimage2D matNorm;
-layout(set = 0, binding = 2-1         ) uniform sampler2D depthBuffer;
-layout(set = 0, binding = 3-1         ) uniform isampler3D blocks;
-layout(set = 0, binding = 4-1         ) uniform usampler3D blockPalette;
-layout(set = 0, binding = 5-1,    r32f) uniform restrict readonly image2D voxelPalette;
-layout(set = 0, binding = 6-1         ) uniform sampler3D radianceCache;
-// layout(set = 0, binding = 7-1, r8ui       ) uniform uimage3D distancePalette;
-// layout(set = 0, binding = 8-1, r8ui       ) uniform uimage3D bitPalette;
+    vec4 horizline_scaled;
+    vec4 vertiline_scaled;
+    vec4 globalLightDir;
+    mat4 lightmap_proj;
+    int timeseed;
+} ubo;
+layout(set = 0, binding = 1, rgba8ui) uniform restrict readonly uimage2D matNorm;
+layout(set = 0, binding = 2         ) uniform sampler2D depthBuffer;
+layout(set = 0, binding = 3         ) uniform isampler3D blocks;
+layout(set = 0, binding = 4         ) uniform usampler3D blockPalette;
+layout(set = 0, binding = 5,    r32f) uniform restrict readonly image2D voxelPalette;
+layout(set = 0, binding = 6         ) uniform sampler3D radianceCache;
 
 layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
@@ -32,14 +34,8 @@ layout(location = 0) out vec4 frame_color;
 // layout(constant_id = 2) const int NUM_SAMPLES = 1; //for 4090 owners i guess
 layout(constant_id = 0) const int BLOCK_PALETTE_SIZE_X = 64;
 
-vec3 globalLightDir;
-vec3 cameraRayDirPlane;
-vec3 horizline;
-vec3 vertiline;
 const float PI = 3.1415926535;
 const ivec3 world_size = ivec3(48,48,16);
-const float view_width  = 1920.0 / 10.0; //in block_diags
-const float view_height = 1080.0 / 10.0; //in blocks
 
  ivec2 size;
 ivec2 pix;
@@ -53,13 +49,10 @@ struct Material{
 };
 
 vec3 get_origin_from_depth(float depth, vec2 clip_pos){
-    const vec2 view_size = vec2(view_width, view_height);
-    const vec2 clip_pos_scaled = clip_pos*view_size;
-    
-    vec3 origin = pco.campos.xyz + 
-        (horizline*clip_pos_scaled.x) + 
-        (vertiline*clip_pos_scaled.y) +
-        (pco.camdir.xyz*depth);
+    vec3 origin = ubo.campos.xyz +
+        (ubo.horizline_scaled.xyz*clip_pos.x) + 
+        (ubo.vertiline_scaled.xyz*clip_pos.y) +
+        (ubo.camdir.xyz*depth);
     return origin;
 }
 
@@ -441,7 +434,7 @@ vec3 trace_glossy_ray(in vec3 rayOrigin, in vec3 rayDirection, in vec3 accumulat
     } else {
         //TODO sample skybox (lol ancient skyboxes)
         
-        float global_light_participance = -dot(direction, globalLightDir);
+        float global_light_participance = -dot(direction, ubo.globalLightDir.xyz);
         if (global_light_participance > 0.9) {
 
             light += (vec3(0.9,0.9,0.6)*0.5) * reflection * (global_light_participance-0.9)*10.0;
@@ -503,12 +496,14 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, inout vec2 pix, inout float
     
     fraction = fraction_step;
 
+    vec3 horizline = normalize(ubo.horizline_scaled.xyz); 
+    vec3 vertiline = normalize(ubo.vertiline_scaled.xyz);
     //pixels movement per 1.0 of direction vector movement
     vec2 dir_proj_to_screen = (vec2(
         dot(direction,horizline),
         dot(direction,vertiline)
     ));
-    float dir_proj_to_camera_dir = -(dot(direction, pco.camdir.xyz)); //idk why
+    float dir_proj_to_camera_dir = -(dot(direction, ubo.camdir.xyz)); //idk why
     
     // [[unroll]]
     while(fraction < 1.0){
@@ -565,7 +560,7 @@ bool ssr_traceRay(in vec3 origin, in vec3 direction, inout vec2 pix, inout float
     // }
 }
 
-const float COLOR_ENCODE_VALUE = 5.0;
+const float COLOR_ENCODE_VALUE = 8.0;
 vec3 decode_color(vec3 encoded_color){
     return encoded_color*COLOR_ENCODE_VALUE;
 }
@@ -578,24 +573,17 @@ void main(void){
     //lowres resolution. out_frame cause in_frame is sampler
     size = imageSize(matNorm);
 
-    globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
-    // globalLightDir = rotateAxis(globalLightDir, vec3(0,0,1), pco.timeSeed.x / 100.0);
-    
-    cameraRayDirPlane = normalize(vec3(pco.camdir.xy, 0));
-    horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
-    vertiline = normalize(cross(pco.camdir.xyz, horizline));
-    
     pix = ivec2(gl_FragCoord.xy);
 
     Material   mat       = GetMat(load_mat(pix));
-    vec3 direction = pco.camdir.xyz;
+    vec3 direction = ubo.camdir.xyz;
     vec3 origin    = get_origin_from_depth(load_depth(pix), clip_pos);
           vec3 normal    = load_norm(pix);
 
     vec3 accumulated_light      = vec3(0);
     vec3 accumulated_reflection = vec3(1);
 
-    origin += normal*0.1;
+    origin += normal*0.01;
     //TODO move to blend so less radiance reads happen
     ProcessHit(origin, direction, //TODO maybe remove sample radiance
             0, normal, mat, 

@@ -11,34 +11,28 @@ precision highp float;
 
 // #define highp
 
-layout(push_constant) uniform restrict readonly constants{
-    vec3 camera_pos;
-     int timeSeed;
-     vec4 camera_direction;
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
+    mat4 trans_w2s;
+    vec4 campos;
+    vec4 camdir;
+    vec4 horizline_scaled;
+    vec4 vertiline_scaled;
+    vec4 globalLightDir;
     mat4 lightmap_proj;
-} PushConstants;
+    int timeseed;
+} ubo;
+layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput matNorm;
+layout(input_attachment_index = 1, set = 0, binding = 2) uniform  subpassInput depthBuffer;
+layout(set = 0, binding = 3, r32f) restrict readonly uniform image2D voxelPalette;
+layout(set = 0, binding = 4      ) uniform sampler3D radianceCache;
+layout(set = 0, binding = 5      ) uniform sampler2D lightmap;
 
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform usubpassInput matNorm;
-layout(input_attachment_index = 1, set = 0, binding = 1) uniform  subpassInput depthBuffer;
-
-// layout(set = 0, binding = 2, r16i) uniform iimage3D  blocks;
-// layout(set = 0, binding = 3, r8ui) uniform uimage3D  blockPalette;
-layout(set = 0, binding = 2, r32f) restrict readonly uniform image2D voxelPalette;
-layout(set = 0, binding = 3      ) uniform sampler3D radianceCache;
-layout(set = 0, binding = 4      ) uniform sampler2D lightmap;
-
-layout(location = 0) in vec2 non_clip_pos;
+layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
 
 #define RAYS_PER_PROBE (32)
 ivec2 size;
 const ivec3 world_size = ivec3(48,48,16);
-const float view_width  = 1920.0 / 10.0; //in block_diags
-const float view_height = 1080.0 / 10.0; //in blocks
-
-vec3 cameraRayDirPlane;
-vec3 horizline;
-vec3 vertiline;
 
 // vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
 //     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
@@ -215,14 +209,12 @@ Material GetMat(in int voxel){
     // mat.emmitance = .0;
 return mat;
 }
-vec3 get_origin_from_depth(float depth, vec2 uv_pos){
-    const vec2 view_size = vec2(view_width, view_height);
-    const vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
-    
-    vec3 origin = PushConstants.camera_pos.xyz + 
-        (horizline*clip_pos_scaled.x) + 
-        (vertiline*clip_pos_scaled.y) +
-        (PushConstants.camera_direction.xyz*depth);
+
+vec3 get_origin_from_depth(float depth, vec2 clip_pos){
+    vec3 origin = ubo.campos.xyz +
+        (ubo.horizline_scaled.xyz*clip_pos.x) + 
+        (ubo.vertiline_scaled.xyz*clip_pos.y) +
+        (ubo.camdir.xyz*depth);
     return origin;
 }
 
@@ -239,7 +231,7 @@ float prev_befor (float x){
 }
 
 float sample_lightmap(vec3 world_pos){
-    vec3 light_clip = (PushConstants.lightmap_proj* vec4(world_pos,1)).xyz; //move up
+    vec3 light_clip = (ubo.lightmap_proj* vec4(world_pos,1)).xyz; //move up
          light_clip.z = 1+light_clip.z;
     
     float world_depth = light_clip.z;
@@ -255,7 +247,7 @@ float sample_lightmap(vec3 world_pos){
     }
 }
 
-const float COLOR_ENCODE_VALUE = 5.0;
+const float COLOR_ENCODE_VALUE = 8.0;
 vec3 decode_color(vec3 encoded_color){
     return encoded_color*COLOR_ENCODE_VALUE;
 }
@@ -263,49 +255,21 @@ vec3 encode_color(vec3 color){
     return color/COLOR_ENCODE_VALUE;
 }
 
-// layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
-    // size = imageSize(matNorm);
-
-    vec3 globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
-
-    cameraRayDirPlane = normalize(vec3(PushConstants.camera_direction.xy, 0));
-    horizline = normalize(cross(cameraRayDirPlane, vec3(0,0,1)));
-    vertiline = normalize(cross(PushConstants.camera_direction.xyz, horizline));
-    
-    ivec2 pix = ivec2(gl_FragCoord.xy);
-    const vec2 pos = vec2(pix) / vec2(size.x - 1, size.y - 1);
-
     vec3 final_color = vec3(0);
 
-    const       Material stored_mat = GetMat(load_mat());
-    const      vec3 stored_accumulated_reflection = vec3(1);
-    const      vec3 stored_accumulated_light = vec3(0);
-    const highp      vec3 stored_direction = PushConstants.camera_direction.xyz;
-    const highp      vec3 stored_origin = get_origin_from_depth(load_depth(), non_clip_pos);
-    // const highp      vec3 stored_origin = get_origin_from_depth(load_depth(), pos);
+    const Material stored_mat = GetMat(load_mat());
+    const vec3 stored_accumulated_reflection = vec3(1);
+    const vec3 stored_accumulated_light = vec3(0);
+    const vec3 direction = ubo.camdir.xyz;
+    const vec3 origin = get_origin_from_depth(load_depth(), clip_pos);
     const      vec3 stored_normal = load_norm();
 
-    // vec3 incoming_light = sample_radiance(stored_origin + 0.1*stored_normal, stored_normal);
-    vec3 incoming_light = sample_radiance(stored_origin + stored_normal*6.0);
-    float sunlight = sample_lightmap(stored_origin);
+    vec3 incoming_light = sample_radiance(origin + stored_normal*6.0);
+    float sunlight = sample_lightmap(origin);
 
     final_color = (2.0*incoming_light+stored_mat.emmitance + sunlight) * stored_mat.color;
-    // final_color = stored_mat.color;
-    // final_color = incoming_light;
-    // final_color = stored_origin;
-    // final_color = vec3(load_depth()/1000.0);
-    // imageStore(outFrame, pix, vec4((final_color), 1));
-    // imageStore(outFrame, pix, vec4((stored_normal), 1));
-    // final_color = stored_normal;
-    // final_color = abs(final_color);
-    // float ma = max(final_color.x, max(final_color.y, final_color.z));
-    // float mi = min(final_color.x, min(final_color.y, final_color.z));
-    // if(ma>1) 
-    //     final_color /= ma;
-    // else final_color /= mi;
     frame_color = vec4(encode_color(final_color),1);
-
     // frame_color = vec4(abs(vec3(load_depth()))/1000.0, 1);
-    // frame_color = vec4(non_clip_pos,0,1);
+    // frame_color = vec4(clip_pos,0,1);
 }

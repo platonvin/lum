@@ -9,13 +9,15 @@ L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
 
 # all of them united
 always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Wl,--stack,1000000
-debug_specific_flags   = -O0 
+   = -O0 
 release_specific_flags = -O2 -DNDEBUG 
 
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
 
-SHADER_FLAGS = --target-env=vulkan1.1 -g
+SHADER_FLAGS = --target-env=vulkan1.1 -O 
+# SHADER_OPT_FLAGS = --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions --scalar-replacement --eliminate-local-single-block --eliminate-local-single-store --simplify-instructions --vector-dce --eliminate-dead-inserts --eliminate-dead-code-aggressive --eliminate-dead-branches --merge-blocks --eliminate-local-multi-store --simplify-instructions --vector-dce --eliminate-dead-inserts --redundancy-elimination --eliminate-dead-code-aggressive --strip-debug
+SHADER_OPT_FLAGS = --target-env=vulkan1.1 -O
 
 deb_objs := \
 	obj/deb/main.o\
@@ -127,41 +129,37 @@ GEOM_TARGETS = $(patsubst $(SHADER_SRC_DIR)/%$(GEOM_EXT), $(SHADER_OUT_DIR)/%Geo
 
 ALL_SHADER_TARGETS = $(COMP_TARGETS) $(VERT_TARGETS) $(FRAG_TARGETS) $(GEOM_TARGETS)
 
-# Default target
 $(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	glslc -o $(SHADER_OUT_DIR)/$*_unopt.spv $< $(SHADER_FLAGS)
+	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*_unopt.spv $(SHADER_OPT_FLAGS)
+	del "$(SHADER_OUT_DIR)\$*_unopt.spv"
 $(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	glslc -o $(SHADER_OUT_DIR)/$*Vert_unopt.spv $< $(SHADER_FLAGS)
+	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*Vert_unopt.spv $(SHADER_OPT_FLAGS)
+	del "$(SHADER_OUT_DIR)\$*Vert_unopt.spv"
 $(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	glslc -o $(SHADER_OUT_DIR)/$*Frag_unopt.spv $< $(SHADER_FLAGS)
+	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*Frag_unopt.spv $(SHADER_OPT_FLAGS)
+	del "$(SHADER_OUT_DIR)\$*Frag_unopt.spv"
 $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	glslc -o $(SHADER_OUT_DIR)/$*Geom_unopt.spv $< $(SHADER_FLAGS)
+	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*Geom_unopt.spv $(SHADER_OPT_FLAGS)
+	del "$(SHADER_OUT_DIR)\$*Geom_unopt.spv"
+
 shaders: $(ALL_SHADER_TARGETS)
 
 debug: Flags=$(debug_flags) 
-# debug: objs=$(deb_objs)
 debug: shaders build_deb
 	client.exe
 release: Flags=$(release_flags)
-# release: objs=$(rel_objs)
 release: shaders build_rel
 	client.exe
 
 fun:
 	@echo fun was never an option
-# opt: client_opt
-# client.exe
 test:
 	g++ test.cpp -o test
 	test
-obj_folder = obj/rel
-
-# das=$(addprefix $(obj_dir), "main.o")
-# das = main.o
-# @echo $(das)
-# @echo das?
-
-
 
 pack:
 	mkdir "package"
@@ -176,7 +174,8 @@ clean:
 	del "obj\deb\*.o" 
 	del "obj\rel\*.o" 
 	del "shaders\compiled\*.spv" 
-	
+cleans:
+	del "shaders\compiled\*.spv" 
 init:
 	mkdir obj
 	mkdir obj\deb

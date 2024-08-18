@@ -10,8 +10,21 @@ thus if we have 11 vertices, we may be*(1) wasting a lot of perfomance
 this can be fixed by simply packing multiple blades in same instance
 but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 
-*1) Measurements showed that i was clearly was wrong. But strip still faster
+*1) Measurements showed that i clearly was wrong. But strip still faster
 */
+
+
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
+    mat4 trans_w2s;
+    vec4 campos;
+    vec4 camdir;
+    vec4 horizline_scaled;
+    vec4 vertiline_scaled;
+    vec4 globalLightDir;
+    mat4 lightmap_proj;
+    int timeseed;
+} ubo;
+layout(set = 0, binding = 1) uniform sampler2D state;
 
 layout(push_constant) uniform restrict readonly PushConstants{
     vec4 shift;
@@ -19,14 +32,7 @@ layout(push_constant) uniform restrict readonly PushConstants{
     int time; //seed
     int x_flip;
     int y_flip;
-    vec4 camdir;
 } pco;
-const int size = 16; //total size*size blades
-
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-} ubo;
-layout(set = 0, binding = 1) uniform sampler2D state;
 
 layout(location = 0) lowp flat out uvec4 mat_norm;
 
@@ -34,6 +40,7 @@ const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 const float PI = 3.1415926535;
 const ivec3 world_size = ivec3(48,48,16);
+const int size = 16; //total size*size blades
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -236,7 +243,7 @@ void main() {
     gl_Position  = vec4(clip_coords, 1);    
 
     //TODO probably can just flip x/y
-    if(dot(pco.camdir.xyz,normal) > 0) normal = -normal;
+    if(dot(ubo.camdir.xyz,normal) > 0) normal = -normal;
 
     vec3 norm = normal;
     // norm = normalize(vec3(1));

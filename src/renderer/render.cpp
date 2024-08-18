@@ -59,10 +59,10 @@ void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize,
     blur2presentRpass = altRpass;
     smoke2glossyRpass = altRpass;
     // lowresDepthStencil = highresDepthStencil;
-println
+// println
     createRenderPassLightmaps();
     // createRenderPass2();
-println
+// println
     createSamplers();
 
     printl(swapChainImageFormat)
@@ -74,17 +74,17 @@ println
     create_Command_Buffers(    &copyCommandBuffers, MAX_FRAMES_IN_FLIGHT);
 // println
 
-println
+// println
     createImages();
-println
+// println
     createSwapchainDependent();
-println
+// println
         
     setupDescriptors();
-println
+// println
 
     createPipilines();
-println
+// println
     
     create_Sync_Objects();
 
@@ -129,7 +129,7 @@ void Renderer::createImages(){
         VK_IMAGE_ASPECT_DEPTH_BIT,
         {lightmapExtent.width, lightmapExtent.height, 1});
     transition_Image_Layout_Singletime(&lightmap, VK_IMAGE_LAYOUT_GENERAL);
-println
+// println
     create_Image_Storages(&radianceCache,
         VK_IMAGE_TYPE_3D,
         RADIANCE_FORMAT,
@@ -217,7 +217,7 @@ println
     //     sizeof(mat4)*2, true);
     create_Buffer_Storages(&uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        sizeof(mat4), false);
+        212, false); //no way i write it with sizeof's
     create_Buffer_Storages(&light_uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         sizeof(mat4), false);
@@ -240,16 +240,16 @@ println
     transition_Image_Layout_Singletime(&world, VK_IMAGE_LAYOUT_GENERAL);
     transition_Image_Layout_Singletime(&radianceCache, VK_IMAGE_LAYOUT_GENERAL);
 
-println
+// println
     // transition_Image_Layout_Singletime(&maskFrame, VK_IMAGE_LAYOUT_GENERAL);
-println
+// println
     if(scaled){
         transition_Image_Layout_Singletime(&lowresDepthStencil, VK_IMAGE_LAYOUT_GENERAL);
         transition_Image_Layout_Singletime(&lowresMatNorm, VK_IMAGE_LAYOUT_GENERAL);
     }
     // transition_Image_Layout_Singletime(&stencil, VK_IMAGE_LAYOUT_GENERAL);
     
-println
+// println
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         transition_Image_Layout_Singletime(&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
         // transition_Image_Layout_Singletime(&bitPalette, VK_IMAGE_LAYOUT_GENERAL);
@@ -279,11 +279,18 @@ void Renderer::setupDescriptors(){
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 // println
     deferDescriptorsetup(&diffusePipe.setLayout, &diffusePipe.sets, {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencil},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE         , RD_FIRST, {/*empty*/}, {materialPalette},    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache},      unnormLinear,   VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+    }, VK_SHADER_STAGE_FRAGMENT_BIT);
+// println
+    deferDescriptorsetup(&aoPipe.setLayout, &aoPipe.sets, { 
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&tonemapPipe.setLayout, &tonemapPipe.sets, {
@@ -300,29 +307,21 @@ void Renderer::setupDescriptors(){
     }, VK_SHADER_STAGE_VERTEX_BIT);
 // println
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (materialPalette),    NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {radianceCache},      unnormLinear,     VK_IMAGE_LAYOUT_GENERAL},
-        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {distancePalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&smokePipe.setLayout, &smokePipe.sets, {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {farDepth}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {nearDepth}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {world},              NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST  , {/*empty*/}, {radianceCache},      NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {perlinNoise3d}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
-    }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
-    deferDescriptorsetup(&aoPipe.setLayout, &aoPipe.sets, { 
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        // {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresFrames},  NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        // if(true)
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
         // create_DescriptorSetLayout({
@@ -466,7 +465,7 @@ void Renderer::createPipilines(){
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2 + sizeof(vec4), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
     raygenWaterPipe.subpassId = 3;
     create_Raster_Pipeline(&raygenWaterPipe, {
@@ -490,7 +489,7 @@ void Renderer::createPipilines(){
             {"shaders/compiled/aoFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {BLEND_MIX}, sizeof(vec4) + sizeof(vec4), NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {BLEND_MIX}, 0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
     fillStencilGlossyPipe.subpassId = 2;
     create_Raster_Pipeline(&fillStencilGlossyPipe, {
@@ -549,7 +548,7 @@ void Renderer::createPipilines(){
             {"shaders/compiled/smokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {BLEND_MIX}, sizeof(vec4) + sizeof(vec4), NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, {
+        swapChainExtent, {BLEND_MIX},0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, {
             //sets 10 bit on rasterization 
             .failOp = VK_STENCIL_OP_KEEP,
             .passOp = VK_STENCIL_OP_KEEP,
@@ -724,20 +723,20 @@ void Renderer::createSwapchainDependent() {
         altVeiws[5].push_back(nearDepth.view);
     }
     
-println
+// println
     vector<vector<VkImageView>> lightmapVeiws(1);
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         lightmapVeiws[0].push_back(lightmap.view);
         // lightmapVeiws[1].push_back(lightmap.view);
     }
     printl(lightmapRpass);
-println
+// println
     create_N_Framebuffers(&lightmapFramebuffers, &lightmapVeiws, lightmapRpass, MAX_FRAMES_IN_FLIGHT, lightmapExtent.width, lightmapExtent.height);
-println
+// println
     create_N_Framebuffers(&rayGenFramebuffers, &rayGenVeiws, raygen2diffuseRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
 // println
 //     create_N_Framebuffers(&glossyFramebuffers, &interVeiws, smoke2glossyRpass, MAX_FRAMES_IN_FLIGHT, raytraceExtent.width, raytraceExtent.height);
-println
+// println
 //     create_N_Framebuffers(&overlayFramebuffers, &blurVeiws, blur2presentRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
 // println
     create_N_Framebuffers(&altFramebuffers, &altVeiws, altRpass, swapchainImages.size(), raytraceExtent.width, raytraceExtent.height);
@@ -1686,7 +1685,24 @@ void Renderer::start_raygen() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
         PLACE_TIMESTAMP();
     
-    struct unicopy {mat4 trans;} unicopy = {cameraTransform};
+
+    dvec3 cameraRayDirPlane = normalize(dvec3(cameraDir.x, cameraDir.y, 0));
+    dvec3 horizline = normalize(cross(cameraRayDirPlane, dvec3(0,0,1)));
+    dvec3 vertiline = normalize(cross(cameraDir, horizline));
+    const double view_width  = 1920.0 / 10.0; //in block_diags
+    const double view_height = 1080.0 / 10.0; //in blocks
+
+    struct unicopy {
+        mat4 trans_w2s; vec4 campos; vec4 camdir;
+        vec4 horizline_scaled; vec4 vertiline_scaled;
+        vec4 globalLightDir; mat4 lightmap_proj;
+        int timeseed;
+    } unicopy = {
+        mat4(cameraTransform), vec4(cameraPos,0), vec4(cameraDir,0),
+        vec4(horizline*view_width,0), vec4(vertiline*view_height,0),
+        vec4(lightDir,0), mat4(lightTransform),
+        iFrame
+    };
     vkCmdUpdateBuffer(commandBuffer, uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
     cmdPipelineBarrier(commandBuffer, 
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -1903,7 +1919,7 @@ void Renderer::raygen_map_grass(vec4 shift, int size){
 
     bool x_flip = cameraDir.x < 0;
     bool y_flip = cameraDir.y < 0;
-    struct {vec4 _shift; int _size, _time; int xf, yf; vec4 camdir;} raygen_pushconstant = {shift, size, iFrame, x_flip, y_flip, vec4(cameraDir,0)};
+    struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {shift, size, iFrame, x_flip, y_flip};
     vkCmdPushConstants(commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
     // const int verts_per_blade = 4*6 + 3; //for triangle list
@@ -2080,11 +2096,6 @@ void Renderer::ambient_occlusion() {
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, aoPipe.lineLayout, 0, 1, &aoPipe.sets[currentFrame], 0, 0);
 
-        cameraPos_OLD = cameraPos;
-        cameraDir_OLD = cameraDir;
-        struct rtpc {vec4 v1, v2;} pushconstant = {vec4(cameraPos,0), vec4(cameraDir,0)};
-        vkCmdPushConstants(commandBuffer, aoPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
-
         PLACE_TIMESTAMP();
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
         PLACE_TIMESTAMP();
@@ -2166,9 +2177,6 @@ void Renderer::smoke() {
         scissor.offset = {0, 0};
         scissor.extent = raytraceExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-        struct rtpc {vec3 pos; int t; vec4 dir;} pushconstant = {vec3(cameraPos), iFrame, vec4(cameraDir,0)};
-        vkCmdPushConstants(commandBuffer, smokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, smokePipe.lineLayout, 0, 1, &smokePipe.sets[currentFrame], 0, 0);
 

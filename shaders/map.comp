@@ -1,18 +1,18 @@
 #version 450 core
 
 //version with world from model
+
 #define varp lowp
 precision highp int;
 precision highp float;
 
 //TODO: move per-workgroup computations to different shader
 //TODO: AND test shared perfomance
-layout(push_constant) uniform constants{
+layout(push_constant) restrict readonly uniform constants{
      mat4 inverse_trans; //map game voxel world to modelVoxels
     ivec4 shift;
-} PushConstants;
+} pco;
 
-//blocks and blockPalettes are copies 
 layout(set = 0, binding = 0, r16i) uniform restrict  readonly iimage3D blocks;
 layout(set = 0, binding = 1, r8ui) uniform restrict writeonly uimage3D blockPalette;
 
@@ -27,13 +27,13 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
 
     return relative_voxel_pos + ivec3(16*block_x, 16*block_y,0);
 }
-//TODO: balance, X>Y>Z for coherence
-layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
+//TODO: balance, X>Y>Z for coherence
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 //TODO: temp
 void main(void){
     const ivec3 model_size = imageSize(modelVoxels);
-    const ivec3 shift = PushConstants.shift.xyz;
+    const ivec3 shift = pco.shift.xyz;
 
     //sqrt(1.5) is for more precise mapping so holes do not appear 
     ivec3 iabsolute_but_relative_to_shift_voxel = ivec3(gl_GlobalInvocationID.xyz);
@@ -46,9 +46,9 @@ void main(void){
 
 
     //part where actual transformation happens
-    //  vec3  relative_vox = (PushConstants.inverse_trans * vec4(absolute_voxel,1)).xyz;
+    //  vec3  relative_vox = (pco.inverse_trans * vec4(absolute_voxel,1)).xyz;
     // ivec3 irelative_vox = ivec3(round(relative_vox.xyz));
-      vec3 model_voxel = (PushConstants.inverse_trans * vec4(world_voxel,1)).xyz;
+      vec3 model_voxel = (pco.inverse_trans * vec4(world_voxel,1)).xyz;
     ivec3 imodel_voxel = ivec3(model_voxel);
 
 

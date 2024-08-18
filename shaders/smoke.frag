@@ -1,28 +1,33 @@
 #version 450
 
 #extension GL_EXT_shader_8bit_storage : enable
+#extension GL_EXT_control_flow_attributes : enable
 
 // layout(location = 0) in vec3 zero_origin;
-layout(location = 0) in vec2 UV;
+layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 smoke_color;
 
 precision highp float;
 precision highp int;
 
 //dont swap
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput smoke_depth_far;
-layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_near;
-// layout(set = 0, binding = 2, r16i  ) uniform iimage3D blocks;
-layout(set = 0, binding = 2, rgba16) uniform restrict readonly image3D radianceCache;
-layout(set = 0, binding = 3) uniform sampler3D noise;
+layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
+    mat4 trans_w2s;
+    vec4 campos;
+    vec4 camdir;
+    vec4 horizline_scaled;
+    vec4 vertiline_scaled;
+    vec4 globalLightDir;
+    mat4 lightmap_proj;
+    int timeseed;
+} ubo;
+layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_far;
+layout(input_attachment_index = 0, set = 0, binding = 2) uniform subpassInput smoke_depth_near;
+layout(set = 0, binding = 3, rgba16) uniform restrict readonly image3D radianceCache;
+layout(set = 0, binding = 4) uniform sampler3D noise;
 
 const ivec3 world_size = ivec3(48,48,16);
 
-layout(push_constant) uniform restrict readonly constants{
-    vec3 camera_pos;
-     int timeSeed;
-     vec4 camera_direction;
-} PushConstants;
 
 // vec3 load_norm(){
 //     // vec3 norm = (imageLoad(matNorm, pixel).gba);
@@ -154,20 +159,15 @@ float load_depth_near(){
     // return subpassLoad(smoke_depth_far).x;
 }
 
-const float view_width  = 1920.0 / 10.0; //in block_diags
-const float view_height = 1080.0 / 10.0; //in blocks
 vec3 cameraRayDirPlane;
 vec3 horizline;
 vec3 vertiline;
 
-vec3 get_origin_from_depth(float depth, vec2 uv_pos){
-    const vec2 view_size = vec2(view_width, view_height);
-    const vec2 clip_pos_scaled = (2.0*view_size)*(uv_pos)-view_size;
-    
-    vec3 origin = PushConstants.camera_pos.xyz + 
-        (horizline*clip_pos_scaled.x) + 
-        (vertiline*clip_pos_scaled.y) +
-        (PushConstants.camera_direction.xyz*depth);
+vec3 get_origin_from_depth(float depth, vec2 clip_pos){
+    vec3 origin = ubo.campos.xyz +
+        (ubo.horizline_scaled.xyz*clip_pos.x) + 
+        (ubo.vertiline_scaled.xyz*clip_pos.y) +
+        (ubo.camdir.xyz*depth);
     return origin;
 }
 
@@ -185,7 +185,7 @@ mat2 rotatem(float a) {
 	return m;
 }
 
-const float COLOR_ENCODE_VALUE = 5.0;
+const float COLOR_ENCODE_VALUE = 8.0;
 vec3 decode_color(vec3 encoded_color){
     return encoded_color*COLOR_ENCODE_VALUE;
 }
@@ -196,38 +196,21 @@ vec3 encode_color(vec3 color){
 void main() {
     // smoke_color = vec4(0);
     // outColor = vec4(fragColor, 1.0);
-    // vec2 uv = fragUV - vec2(0.5);
-    // vec2 vxx = (fragUV / 2 + vec2(0.5)).xx; 
-    // vec2 uv = fragUV / 2 + vec2(0.5);
-    // uv.x = (vxx.yy).y;
+    // vec2 clip_pos = fragclip_pos - vec2(0.5);
+    // vec2 vxx = (fragclip_pos / 2 + vec2(0.5)).xx; 
+    // vec2 clip_pos = fragclip_pos / 2 + vec2(0.5);
+    // clip_pos.x = (vxx.yy).y;
     // vec2 size = textureSize(ui_elem_texture, 0);
-    cameraRayDirPlane = normalize(vec3(PushConstants.camera_direction.xy, 0));
-    horizline = (cross(cameraRayDirPlane, vec3(0,0,1)));
-    vertiline = normalize(cross(PushConstants.camera_direction.xyz, horizline));
+    vec3 direction = (ubo.camdir.xyz);
     // outColor = final_color;
 
     float near = (load_depth_near());
     float  far = (load_depth_far());
-    // if(near > far){
-    //     float t = near;
-    //     near = far;
-    //     far = t;
-    // }
-    //     if(near < far) smoke_color = vec4(1);
-    //     else smoke_color = vec4(0);
-    // return;
+
     float diff = (far-near);
     
-    // if(diff > 8.0){
-    // smoke_color = vec4(vec3(1), 0.04*diff);
 
-    
-    vec3 direction = normalize(PushConstants.camera_direction.xyz);
-
-    // vec3 origin = zero_origin + direction * abs(near);
-
-    int max_steps = 16;
-    // float step_size = 0.15;
+    int max_steps = 8; //does not really matter
     float step_size = diff/float(max_steps);
 
     //https://en.wikipedia.org/wiki/Beer%E2%80%93Lambert_law
@@ -244,20 +227,26 @@ void main() {
 
     float total_dencity = 0;
 
-    for(float fraction = near; fraction < far; fraction+=step_size){
-            position = get_origin_from_depth(fraction, UV);
+    // never do this
+    // for(float fraction = near; fraction <= far; fraction+=step_size){ 
+    
+    float fraction = near;
+    [[unroll]]
+    for(int i=0; i<max_steps; i++){
+        fraction += step_size;
+            position = get_origin_from_depth(fraction, clip_pos);
             vec3 voxel_pos = vec3(position);
-            vec3 noise_uv = voxel_pos / 32.0;
+            vec3 noise_clip_pos = voxel_pos / 32.0;
         vec4 noises;
                 vec3 wind_direction = vec3(1,0,0);
                 mat2 wind_rotate = rotatem(1.6);
-            noises.x = texture(noise, noise_uv/1.0 + wind_direction*PushConstants.timeSeed/3500.0).x;
+            noises.x = texture(noise, noise_clip_pos/1.0 + wind_direction*ubo.timeseed/3500.0).x;
                 wind_direction.xy *= wind_rotate;
-            noises.y = texture(noise, noise_uv/2.1 + wind_direction*PushConstants.timeSeed/3000.0).y;
+            noises.y = texture(noise, noise_clip_pos/2.1 + wind_direction*ubo.timeseed/3000.0).y;
                 wind_direction.xy *= wind_rotate;
-            noises.z = texture(noise, noise_uv/3.2 + wind_direction*PushConstants.timeSeed/2500.0).z;
+            noises.z = texture(noise, noise_clip_pos/3.2 + wind_direction*ubo.timeseed/2500.0).z;
                 wind_direction.xy *= wind_rotate;
-            noises.w = texture(noise, noise_uv/4.3 + wind_direction*PushConstants.timeSeed/2000.0).w;
+            noises.w = texture(noise, noise_clip_pos/4.3 + wind_direction*ubo.timeseed/2000.0).w;
 
         float close_to_border = clamp(diff,0.1,16.0)/16.0;
 

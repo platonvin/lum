@@ -20,6 +20,13 @@ layout(location = 2) flat out uint sample_block;
 //no reason to move up in pipeline cause sm load is like ~ 6% in vs
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
+    vec4 campos;
+    vec4 camdir;
+    vec4 horizline_scaled;
+    vec4 vertiline_scaled;
+    vec4 globalLightDir;
+    mat4 lightmap_proj;
+    int timeseed;
 } ubo;
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 

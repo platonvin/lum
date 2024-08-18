@@ -24,16 +24,7 @@ Material GetMat(in int voxel){
     // mat.transparancy = 1.0 - imageLoad(voxelPalette, ivec2(3,voxel)).r;
     mat.emmitance    =       imageLoad(voxelPalette, ivec2(4,voxel)).r;
     mat.roughness    =       imageLoad(voxelPalette, ivec2(5,voxel)).r;
-    // mat.roughness = 1.0;
-    // mat.transparancy = 0;
-
-    // mat.smoothness = 0.5;
-    // mat.smoothness = 0;
-    // if(voxel < 30) 
-    // mat.color.rgb = vec3(0.9);
-    // mat.color.rgb = clamp(mat.color.rgb,0.2,1);
-    // mat.emmitance = .0;
-return mat;
+    return mat;
 }
 void main() 
 {

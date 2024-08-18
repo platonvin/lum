@@ -7,7 +7,7 @@ layout(location = 0) out vec4 frame_color;
 
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput rendered_frame;
 
-const float COLOR_ENCODE_VALUE = 5.0;
+const float COLOR_ENCODE_VALUE = 8.0;
 vec3 decode_color(vec3 encoded_color){
     return encoded_color*COLOR_ENCODE_VALUE;
 }
