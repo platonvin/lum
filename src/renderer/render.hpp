@@ -286,6 +286,9 @@ public:
     Type& operator()(int x, int y, int z) {
         return this->memory [x + _size.x*y + (_size.x*_size.y)*z];
     }
+    Type& operator()(ivec3 v) {
+        return (*this) (v.x, v.y, v.z);
+    }
     void deallocate(){
         free(memory);
     }
@@ -409,6 +412,9 @@ public:
     dvec3 cameraDir_OLD = normalize(vec3(0.6, 1.0, -0.8));
     dmat4 cameraTransform     = identity<dmat4>();
     dmat4 cameraTransform_OLD = identity<dmat4>();
+    double pixelsInVoxel = 5.0;
+    dvec2 originViewSize = dvec2(1920,1080);
+    dvec2 viewSize = originViewSize / pixelsInVoxel;
 
     void update_camera();
     void update_light_transform();

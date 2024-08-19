@@ -160,17 +160,24 @@ void Renderer::createRenderPass1(){
 
     //uses vertices to produce mat_norm image
     const int SP_BLOCKS = 0;
-    const int SP_PARTS = SP_BLOCKS+1;
-    const int SP_GRASS = SP_PARTS+1;
-    const int SP_WATER = SP_GRASS+1;
+    const int SP_MODELS = SP_BLOCKS+1;
+    const int SP_PARTS  = SP_MODELS+1;
+    const int SP_GRASS  = SP_PARTS+1;
+    const int SP_WATER  = SP_GRASS+1;
     // const int SP_DIFFUSE = SP_WATER+1;
     // const int SP_GLOSSY = SP_DIFFUSE+1;
     VkSubpassDescription 
-        raygen_subpass = {};
-        raygen_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        raygen_subpass.pDepthStencilAttachment = &aref_depth;
-        raygen_subpass.colorAttachmentCount = 1;
-        raygen_subpass.pColorAttachments = &aref_mat_norm;
+        raygen_blocks_subpass = {};
+        raygen_blocks_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        raygen_blocks_subpass.pDepthStencilAttachment = &aref_depth;
+        raygen_blocks_subpass.colorAttachmentCount = 1;
+        raygen_blocks_subpass.pColorAttachments = &aref_mat_norm;
+    VkSubpassDescription 
+        raygen_models_subpass = {};
+        raygen_models_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        raygen_models_subpass.pDepthStencilAttachment = &aref_depth;
+        raygen_models_subpass.colorAttachmentCount = 1;
+        raygen_models_subpass.pColorAttachments = &aref_mat_norm;
     VkSubpassDescription 
         raygen_particles_subpass = {};
         raygen_particles_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -257,29 +264,39 @@ void Renderer::createRenderPass1(){
 		dependencies[3].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		dependencies[3].dependencyFlags = 0;
 
-        wait.srcSubpass = SP_BLOCKS;
-        wait.dstSubpass = SP_PARTS;
-        wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
-		wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
-		wait.srcAccessMask = VK_ACCESS_NONE;
-		wait.dstAccessMask = VK_ACCESS_NONE;
-    dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_BLOCKS;
-        wait.dstSubpass = SP_GRASS;
-        wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
-		wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
-		wait.srcAccessMask = VK_ACCESS_NONE;
-		wait.dstAccessMask = VK_ACCESS_NONE;
-    dependencies.push_back(wait);
+    //temporary dev barriers TODO
+    for(int i=0; i<5; i++){
+    for(int j=i+1; j<5; j++){
+        full_wait_depth.srcSubpass = full_wait_color.srcSubpass = i;
+        full_wait_depth.dstSubpass = full_wait_color.dstSubpass = j;
+        dependencies.push_back(full_wait_color);
+        dependencies.push_back(full_wait_depth);
+    }}
 
-        wait.srcSubpass = SP_BLOCKS;
-        wait.dstSubpass = SP_WATER;
-        wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
-		wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
-		wait.srcAccessMask = VK_ACCESS_NONE;
-		wait.dstAccessMask = VK_ACCESS_NONE;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_BLOCKS;
+    //     wait.dstSubpass = SP_PARTS;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
+	// 	wait.srcAccessMask = VK_ACCESS_NONE;
+	// 	wait.dstAccessMask = VK_ACCESS_NONE;
+    // dependencies.push_back(wait);
+
+    //     wait.srcSubpass = SP_BLOCKS;
+    //     wait.dstSubpass = SP_GRASS;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
+	// 	wait.srcAccessMask = VK_ACCESS_NONE;
+	// 	wait.dstAccessMask = VK_ACCESS_NONE;
+    // dependencies.push_back(wait);
+
+    //     wait.srcSubpass = SP_BLOCKS;
+    //     wait.dstSubpass = SP_WATER;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
+	// 	wait.srcAccessMask = VK_ACCESS_NONE;
+	// 	wait.dstAccessMask = VK_ACCESS_NONE;
+    // dependencies.push_back(wait);
 
     //     wait.srcSubpass = SP_BLOCKS;
     //     wait.dstSubpass = SP_DIFFUSE;
@@ -311,21 +328,21 @@ void Renderer::createRenderPass1(){
 	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     // dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_PARTS;
-        wait.dstSubpass = SP_GRASS;
-        wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
-		wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
-		wait.srcAccessMask = VK_ACCESS_NONE;
-		wait.dstAccessMask = VK_ACCESS_NONE;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_PARTS;
+    //     wait.dstSubpass = SP_GRASS;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
+	// 	wait.srcAccessMask = VK_ACCESS_NONE;
+	// 	wait.dstAccessMask = VK_ACCESS_NONE;
+    // dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_PARTS;
-        wait.dstSubpass = SP_WATER;
-        wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
-		wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
-		wait.srcAccessMask = VK_ACCESS_NONE;
-		wait.dstAccessMask = VK_ACCESS_NONE;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_PARTS;
+    //     wait.dstSubpass = SP_WATER;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
+	// 	wait.srcAccessMask = VK_ACCESS_NONE;
+	// 	wait.dstAccessMask = VK_ACCESS_NONE;
+    // dependencies.push_back(wait);
 
     //     wait.srcSubpass = SP_PARTS;
     //     wait.dstSubpass = SP_DIFFUSE;
@@ -351,14 +368,14 @@ void Renderer::createRenderPass1(){
 	// 	wait.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 	// 	wait.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
     // dependencies.push_back(wait);
-        wait.srcSubpass = SP_BLOCKS;
-        wait.dstSubpass = SP_PARTS;
-		wait.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
-		wait.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-		wait.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-		wait.dependencyFlags = VK_DEPENDENCY_DEVICE_GROUP_BIT;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_BLOCKS;
+    //     wait.dstSubpass = SP_PARTS;
+	// 	wait.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+	// 	wait.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+	// 	wait.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+	// 	wait.dependencyFlags = VK_DEPENDENCY_DEVICE_GROUP_BIT;
+    // dependencies.push_back(wait);
     //     wait.srcSubpass = SP_PARTS;
     //     wait.dstSubpass = SP_GLOSSY;
     //     wait.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -381,13 +398,13 @@ void Renderer::createRenderPass1(){
 	// 	wait.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     // dependencies.push_back(wait);
 
-        wait.srcSubpass = SP_GRASS;
-        wait.dstSubpass = SP_WATER;
-        wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
-		wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
-		wait.srcAccessMask = VK_ACCESS_NONE;
-		wait.dstAccessMask = VK_ACCESS_NONE;
-    dependencies.push_back(wait);
+    //     wait.srcSubpass = SP_GRASS;
+    //     wait.dstSubpass = SP_WATER;
+    //     wait.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;    //no waiting 
+	// 	wait.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; //no waiting
+	// 	wait.srcAccessMask = VK_ACCESS_NONE;
+	// 	wait.dstAccessMask = VK_ACCESS_NONE;
+    // dependencies.push_back(wait);
 
     //     wait.srcSubpass = SP_GRASS;
     //     wait.dstSubpass = SP_DIFFUSE;
@@ -465,7 +482,7 @@ void Renderer::createRenderPass1(){
     // dependencies.push_back(wait);
 
     // vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, raygen_grass_subpass, raygen_water_subpass, diffuse_fs, glossy_fs};
-    vector<VkSubpassDescription> subpasses = {raygen_subpass, raygen_particles_subpass, raygen_grass_subpass, raygen_water_subpass};
+    vector<VkSubpassDescription> subpasses = {raygen_blocks_subpass, raygen_models_subpass, raygen_particles_subpass, raygen_grass_subpass, raygen_water_subpass};
 
     VkRenderPassCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1686,7 +1703,7 @@ void Renderer::createInstance(){
 
     vector<VkValidationFeatureEnableEXT> enabledFeatures = {
         // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT, 
-        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+        // VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
     };
 
     VkValidationFeaturesEXT features = {};

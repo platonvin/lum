@@ -10,7 +10,7 @@ precision highp int;
 precision highp float;
 // #define highp highp
 
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
+layout(binding = 0, set = 0) restrict readonly uniform UniformBufferObject  {
     mat4 trans_w2s;
     vec4 campos;
     vec4 camdir;
@@ -21,12 +21,12 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec2 frame_size;
     int timeseed;
 } ubo;
-layout(set = 0, binding = 1, rgba8ui) uniform restrict readonly uimage2D matNorm;
-layout(set = 0, binding = 2         ) uniform sampler2D depthBuffer;
-layout(set = 0, binding = 3         ) uniform isampler3D blocks;
-layout(set = 0, binding = 4         ) uniform usampler3D blockPalette;
-layout(set = 0, binding = 5         ) uniform sampler2D  voxelPalette;
-layout(set = 0, binding = 6         ) uniform sampler3D radianceCache;
+layout(set = 0, binding = 1) uniform usampler2D matNorm;
+layout(set = 0, binding = 2) uniform sampler2D depthBuffer;
+layout(set = 0, binding = 3) uniform isampler3D blocks;
+layout(set = 0, binding = 4) uniform usampler3D blockPalette;
+layout(set = 0, binding = 5) uniform sampler2D  voxelPalette;
+layout(set = 0, binding = 6) uniform sampler3D radianceCache;
 
 // layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
@@ -463,11 +463,11 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
 //     return mat;
 // }
 vec3 load_norm(ivec2 pixel){
-    vec3 norm = (((imageLoad(matNorm, pixel).gba)/255.0)*2.0 - 1.0);
+    vec3 norm = (((texelFetch(matNorm, pixel, 0).gba)/255.0)*2.0 - 1.0);
     return norm;
 }
 int load_mat(ivec2 pixel){
-    int mat = int((imageLoad(matNorm, pixel).x));
+    int mat = int((texelFetch(matNorm, pixel, 0).x));
     return mat;
 }
 float load_depth(vec2 pixel){
@@ -572,7 +572,7 @@ vec3 encode_color(vec3 color){
 // layout(local_size_x = 8, local_size_y = 8) in;
 void main(void){
     //lowres resolution. out_frame cause in_frame is sampler
-    size = imageSize(matNorm);
+    size = textureSize(matNorm, 0);
 
     pix = ivec2(gl_FragCoord.xy);
 

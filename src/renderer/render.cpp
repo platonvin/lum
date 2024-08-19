@@ -298,7 +298,7 @@ void Renderer::setupDescriptors(){
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&fillStencilGlossyPipe.setLayout, &fillStencilGlossyPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette),    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
@@ -308,7 +308,7 @@ void Renderer::setupDescriptors(){
 // println
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {lowresMatNorm}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresMatNorms}, nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
@@ -434,18 +434,18 @@ void Renderer::createPipilines(){
 
     raygenBlocksPipe.subpassId = 0;
     create_Raster_Pipeline(&raygenBlocksPipe, {
-            {"shaders/compiled/rayGenVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
-            {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+            {"shaders/compiled/rayGenBlocksVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/rayGenBlocksFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{
             {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelCircuit, pos)},
             // {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
             // {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
         }, 
         sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)*2 + sizeof(int)), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {NO_BLEND}, (sizeof(vec4)*2 + sizeof(uvec4)), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 
 // println
-    raygenParticlesPipe.subpassId = 1;
+    raygenParticlesPipe.subpassId = 2;
     create_Raster_Pipeline(&raygenParticlesPipe, {
             {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenParticlesGeom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
@@ -459,7 +459,7 @@ void Renderer::createPipilines(){
         sizeof(Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
         swapChainExtent, {NO_BLEND}, 0, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
-    raygenGrassPipe.subpassId = 2;
+    raygenGrassPipe.subpassId = 3;
     create_Raster_Pipeline(&raygenGrassPipe, {
             {"shaders/compiled/grassVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -467,7 +467,7 @@ void Renderer::createPipilines(){
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
         swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
-    raygenWaterPipe.subpassId = 3;
+    raygenWaterPipe.subpassId = 4;
     create_Raster_Pipeline(&raygenWaterPipe, {
             {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -718,7 +718,7 @@ void Renderer::createSwapchainDependent() {
         altVeiws[0].push_back(highresMatNorms.view);
         altVeiws[1].push_back(highresFrames.view);
         altVeiws[2].push_back(swapchainImages[i].view);
-        altVeiws[3].push_back(highresDepthStencil.view);
+        altVeiws[3].push_back(stencilViewForDS);
         altVeiws[4].push_back(farDepth.view);
         altVeiws[5].push_back(nearDepth.view);
     }
@@ -1123,11 +1123,10 @@ void Renderer::gen_perlin_3d(){
 void Renderer::update_camera(){
     dvec3 up = glm::dvec3(0.0f, 0.0f, 1.0f); // Up vector
 
+    viewSize = originViewSize / pixelsInVoxel;
+
     dmat4 view = glm::lookAt(cameraPos, cameraPos+cameraDir, up);
-    const double voxel_in_pixels = 5.0; //we want voxel to be around 10 pixels in width / height
-    const double  view_width_in_voxels = 1920.0 / voxel_in_pixels; //todo make dynamic and use spec constnats
-    const double view_height_in_voxels = 1080.0 / voxel_in_pixels;
-    dmat4 projection = glm::ortho(-view_width_in_voxels/2.0, view_width_in_voxels/2.0, view_height_in_voxels/2.0, -view_height_in_voxels/2.0, -0.0, +2000.0); // => *(2000.0/2) for decoding
+    dmat4 projection = glm::ortho(-viewSize.x/2.0, viewSize.x/2.0, viewSize.y/2.0, -viewSize.y/2.0, -0.0, +2000.0); // => *(2000.0/2) for decoding
     dmat4     worldToScreen = projection * view;
 
     cameraTransform_OLD = cameraTransform;
@@ -1344,10 +1343,12 @@ void Renderer::update_radiance() {
         // int block_id = current_world(xx,yy,zz);
         //yeah kinda slow... but who cares on less then a million blocks?
         int sum_of_neighbours = 0;
-        for(int dx=-1; dx<=+1; dx++) {
-        for(int dy=-1; dy<=+1; dy++) {
-        for(int dz=-1; dz<=+1; dz++) {
-            sum_of_neighbours += current_world(xx+dx,yy+dy,zz+dz); 
+        for(int dx=-1; (dx<=+1); dx++) {
+        for(int dy=-1; (dy<=+1); dy++) {
+        for(int dz=-1; (dz<=+1); dz++) {
+            ivec3 test_block = ivec3(xx+dx,yy+dy,zz+dz);
+            // test_block = clamp(test_block, ivec3(0), world_size-1);
+            sum_of_neighbours += current_world(test_block); 
         }}}
         // TODO: finish dynamic update system, integrate with RaVE
         if(sum_of_neighbours != 0) {
@@ -1689,8 +1690,6 @@ void Renderer::start_raygen() {
     dvec3 cameraRayDirPlane = normalize(dvec3(cameraDir.x, cameraDir.y, 0));
     dvec3 horizline = normalize(cross(cameraRayDirPlane, dvec3(0,0,1)));
     dvec3 vertiline = normalize(cross(cameraDir, horizline));
-    const double view_width  = 1920.0 / 10.0; //in block_diags
-    const double view_height = 1080.0 / 10.0; //in blocks
 
     struct unicopy {
         mat4 trans_w2s; vec4 campos; vec4 camdir;
@@ -1700,7 +1699,7 @@ void Renderer::start_raygen() {
         int timeseed;
     } unicopy = {
         mat4(cameraTransform), vec4(cameraPos,0), vec4(cameraDir,0),
-        vec4(horizline*view_width,0), vec4(vertiline*view_height,0),
+        vec4(horizline*viewSize.x/2.0, 0), vec4(vertiline*viewSize.y/2.0, 0),
         vec4(lightDir,0), mat4(lightTransform),
         vec2(swapChainExtent.width, swapChainExtent.height),
         iFrame
@@ -1764,10 +1763,15 @@ void Renderer::draw_face_helper(vec3 normal, IndexedVertices& buff, int block_id
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
     // VkCommandBuffer &lightmap_commandBuffer = lightmapCommandBuffers[currentFrame];
 
+    assert(buff.indexes.data());
+    assert(block_id);
     vkCmdBindIndexBuffer(commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
         VkDeviceSize offsets[] = {0};
-    struct {vec3 n; float id;} nid = {normal, float(block_id)};
-    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 32, sizeof(nid), &nid);
+        
+    // vec3 norm = uvec3(((pco.normal+1.0)/2.0)*255.0);
+    uvec3 normal_encoded = uvec3(((normal+1.f)/2.f)*255.f);
+    struct {vec4 fn; uvec4 un;} norms = {vec4(normal, float(block_id)), uvec4(normal_encoded, block_id)};
+    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 16, sizeof(norms), &norms);
     vkCmdDrawIndexed(commandBuffer, buff.icount, 1, 0, 0, 0);
 
     // vkCmdBindIndexBuffer(lightmap_commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
@@ -1790,7 +1794,7 @@ void Renderer::raygen_mesh(Mesh *mesh, int block_id) {
     vkCmdBindVertexBuffers(lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
     
     //TODO:
-    struct {quat r1; vec4 s1;} raygen_pushconstant = {(*mesh).rot, vec4((*mesh).shift,0)};
+    struct {vec4 shift;} raygen_pushconstant = {vec4((*mesh).shift,0)};
     vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
     vkCmdPushConstants(lightmap_commandBuffer, lightmapPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
@@ -1840,6 +1844,7 @@ void Renderer::update_particles() {
 void Renderer::raygen_map_particles() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
+    vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     //go to next no matter what
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     
@@ -1998,18 +2003,18 @@ void Renderer::start_2nd_spass(){
     }
 
     // if(scaled){
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &highresFrames);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &highresMatNorms);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &highresDepthStencil);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &maskFrame);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &lowresMatNorm);
-        cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
-            &lowresDepthStencil);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &highresFrames);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &highresMatNorms);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &highresDepthStencil);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &maskFrame);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &lowresMatNorm);
+        // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
+        //     &lowresDepthStencil);
 
     VkClearValue 
         far = {};
@@ -2296,10 +2301,10 @@ void Renderer::end_ui() {
         blit.dstOffsets[1].y = swapChainExtent.height;
         blit.dstOffsets[1].z = 1;
 
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                &highresFrames);
+    // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    //             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+    //             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+    //             &highresFrames);
 
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL,
     //             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -2312,10 +2317,10 @@ void Renderer::end_ui() {
     //             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     //             VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_NONE,
     //             &swapchainImages[imageIndex]); 
-    cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
-                &swapchainImages[imageIndex]); 
+    // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    //             VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+    //             &swapchainImages[imageIndex]); 
     // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT, &originBlockPalette[currentFrame]);
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 
     // cmdPipelineBarrier(copyCommandBuffers[currentFrame], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT); 

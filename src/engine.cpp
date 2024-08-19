@@ -31,13 +31,10 @@ vec3 rnVec3(float minValue, float maxValue) {
 
 static bool sort_blocks(struct block_render_request const& lhs, struct block_render_request const& rhs){
     // return lhs.index < rhs.index;
-    // return lhs.cam_dist > rhs.cam_dist; //what state is more important and does it even matter?
-    return lhs.cam_dist >= rhs.cam_dist; //what state is more important and does it even matter?
+    return lhs.cam_dist > rhs.cam_dist; //NEVER CHANGE
 }
 static bool sort_grass(struct grass_render_request const& lhs, struct grass_render_request const rhs){
-    // printl(lhs.cam_dist);
-    // printl(rhs.cam_dist);
-    return ((lhs.cam_dist) >= (rhs.cam_dist)); //what state is more important and does it even matter?
+    return ((lhs.cam_dist) > (rhs.cam_dist)); //NEVER CHANGE
 }
 quat find_quat(vec3 v1, vec3 v2){
         quat q;
@@ -167,18 +164,20 @@ void Engine::handle_input(){
     should_close |= (glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
     
     #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
-    set_key(GLFW_KEY_W, render.cameraPos += dvec3(dvec2(render.cameraDir),0) * 1.4);
-    set_key(GLFW_KEY_S, render.cameraPos -= dvec3(dvec2(render.cameraDir),0) * 1.4);
+    set_key(GLFW_KEY_W, render.cameraPos += dvec3(dvec2(render.cameraDir),0) * 2.5 / render.pixelsInVoxel );
+    set_key(GLFW_KEY_S, render.cameraPos -= dvec3(dvec2(render.cameraDir),0) * 2.5 / render.pixelsInVoxel );
 
     dvec3 camera_direction_to_right = dquat(dvec3(0.0, 0.0, pi<double>()/2.0)) * render.cameraDir;
 
-    set_key(GLFW_KEY_A, render.cameraPos += dvec3(dvec2(camera_direction_to_right),0) * 1.4);
-    set_key(GLFW_KEY_D, render.cameraPos -= dvec3(dvec2(camera_direction_to_right),0) * 1.4);
+    set_key(GLFW_KEY_A, render.cameraPos += dvec3(dvec2(camera_direction_to_right),0) * 2.5 / render.pixelsInVoxel);
+    set_key(GLFW_KEY_D, render.cameraPos -= dvec3(dvec2(camera_direction_to_right),0) * 2.5 / render.pixelsInVoxel);
     // set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
     // set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
     set_key(GLFW_KEY_COMMA  , render.cameraDir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.cameraDir,0));
     set_key(GLFW_KEY_PERIOD , render.cameraDir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.cameraDir,0));
     render.cameraDir = normalize(render.cameraDir); 
+    set_key(GLFW_KEY_PAGE_DOWN, render.pixelsInVoxel /= 1.01);
+    set_key(GLFW_KEY_PAGE_UP  , render.pixelsInVoxel *= 1.01);
     
     vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
     vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
@@ -204,7 +203,7 @@ void Engine::handle_input(){
             set_key(GLFW_KEY_F1+i, render.origin_world(block_to_set.x, block_to_set.y, block_to_set.z) = 10+i);
         }    
         set_key(GLFW_KEY_0, render.origin_world(block_to_set.x, block_to_set.y, block_to_set.z-1) = 0);
-        block_placement_delay = 0.1;
+        // block_placement_delay = 0.1;
     // } else {
     //     block_placement_delay -= delt_time;
     // }
@@ -382,43 +381,19 @@ void Engine::cull_meshes(){
     std::sort(block_que.begin(), block_que.end(), &sort_blocks);
 
     grass_que.clear();
-    // grass_que.clear();
     for(int xx=0; xx<16; xx++){
     for(int yy=0; yy<16; yy++){
         struct grass_render_request grr = {};
-        // int block_id = render.origin_world(4+xx,4+yy,1);
         grr.pos = ivec3(64+xx*16, 64+yy*16, 16);
-        // grr.pos = ivec3(xx*16, yy*16, 16);
 
-        // printl(grr.position.z);
-        // cout << to_string(grr.pos) << " ";
         dvec3 clip_coords = (render.cameraTransform * dvec4(grr.pos,1));
             clip_coords.z = -clip_coords.z;
-        // cout << to_string(clip_coords) << " \n";
         grr.cam_dist = clip_coords.z;
-        // printl(clip_coords.z);
-        // printl(clip_coords.z);
 
         // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
         grass_que.push_back(grr);
     }}
-    // for(auto g : grass_que){
-    //     printl(g.cam_dist);
-    // }
-    // println
     std::sort(grass_que.begin(), grass_que.end(), &sort_grass);
-    // printl(grass_que.size());
-    // struct grass_render_request grr = {};
-    // grr.pos = ivec3(64+0*16,64+0*16,16);
-    // vec3 clip_coords = (render.cameraTransform * vec4(grr.pos,1));
-    //     clip_coords.z = -clip_coords.z;
-    // grr.cam_dist = clip_coords.z;
-    // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
-    // grass_que.push_back(grr);
-    // grass_que.push_back(grr);
-    // grass_que.push_back(grr);
-    // printl(grass_que.size());
-    // std::stable_sort()
 }
 
 void Engine::draw()
@@ -466,9 +441,11 @@ void Engine::draw()
                 render.start_lightmap();
 
                 render.start_raygen();
-// println
+// println  
+                // printl(block_que.size());
                     for(auto b : block_que){
                         Mesh* block_mesh = NULL;
+
                         block_mesh = &block_palette[b.index]->mesh;
                         block_mesh->shift = vec3(b.pos);
                         block_mesh->old_shift = vec3(b.pos);
@@ -501,11 +478,12 @@ void Engine::draw()
                     //     }
                     // }}
                     for(auto g : grass_que){
-                        render.raygen_map_grass(vec4(g.pos,0), 16);
+                        render.raygen_map_grass(vec4(g.pos,0), 10);
                     }
                     // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*1,16,0), 16);
                     // render.raygen_map_grass(&grass, vec4(128+16*1,128+16*2,16,0), 16);
                     // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*2,16,0), 16);
+// println
 
                 render.raygen_start_water();
                     // render.raygen_map_water(&water, vec4(128,128,16+5,0), 16);

@@ -10,7 +10,7 @@ L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
 # all of them united
 always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Wl,--stack,1000000
 debug_specific_flags   = -O0 
-release_specific_flags = -O2 -DNDEBUG 
+release_specific_flags = -O2 -DNDEBUG
 
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
@@ -158,7 +158,7 @@ release: shaders build_rel
 fun:
 	@echo fun was never an option
 test:
-	g++ test.cpp -o test
+	g++ -pg test.cpp -o test -Wl,--stack,1000000
 	test
 
 pack:

@@ -2,14 +2,14 @@
 layout(early_fragment_tests) in;
 
 #define varp highp
-
 precision varp int;
 precision varp float;
 
-layout(push_constant) uniform restrict readonly constants{
-    vec4 rot;
+layout(push_constant) uniform restrict coherent readonly constants{
+    // vec4 rot;
     vec4 shift;
-    vec4 normal;
+    vec4 fnormal; //not encoded
+    uvec4 unormal; //encoded
     // int block;
 } pco;
 
@@ -58,12 +58,11 @@ void main() {
     // uint uv_encoded = packUnorm2x16(old_uv);
 
     // outOldUv = uv_shift;
-    vec3 norm = uvec3(((pco.normal+1.0)/2.0)*255.0);
-    int sample_block = int(pco.normal.w);
+    int sample_block = int(pco.unormal.w);
 
-    // outMatNorm.x = (float(mat)-127.0)/127.0;
-    outMatNorm.yzw = uvec3(norm);
-    outMatNorm.x = 9;
+    // vec3 norm = uvec3(((pco.normal+1.0)/2.0)*255.0);
+    outMatNorm.yzw = uvec3(pco.unormal.xyz);
+    // outMatNorm.x = 9;
 
     ivec3 ipos = ivec3(sample_point);
 

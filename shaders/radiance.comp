@@ -17,7 +17,7 @@ layout(set = 0, binding = 2) uniform sampler2D voxelPalette;
 // layout(set = 0, binding = 3, rgba16     ) uniform image3D radianceCache;
 // A2B10G10R10_UNORM_PACK32
 layout(set = 0, binding = 3) uniform sampler3D radianceCache2read;
-layout(set = 0, binding = 4, rgb10_a2) uniform restrict writeonly image3D radianceCache2write;
+layout(set = 0, binding = 4, rgb10_a2) uniform writeonly coherent image3D radianceCache2write;
 
 layout(std430,set = 0, binding = 5) restrict readonly buffer ReqBuffer{
 	ivec4 updateReqests[];

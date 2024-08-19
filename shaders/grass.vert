@@ -41,7 +41,7 @@ const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 const float PI = 3.1415926535;
 const ivec3 world_size = ivec3(48,48,16);
-const int size = 16; //total size*size blades
+const int size = 10; //total size*size blades
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -68,13 +68,14 @@ float rand(vec2 p){
 
     return float(h)*(1.0/float(0xffffffffU));
 }
+float square(float a){return a*a;}
 
 float get_blade_width(float height){
     float max_height = float(MAX_HEIGHT-1);
 
     // return (max_height+height) / max_height;
     // return 1.0;
-    return (max_height-height) / max_height;
+    return ((max_height-height) / max_height);
 }
 
 //ONLY WORKS WITH BLADE NON TRANSFORMED VERTS
@@ -165,7 +166,7 @@ void wiggle_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal, in vec
     float new_size = (vertex.z*vertex.z) + dot(vertex.xy, vertex.xy);
     // float len
     float descale = sqrt(new_size / old_size);
-    vertex /= descale;
+    // vertex /= descale;
 
     return;
 }
@@ -200,9 +201,9 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
     vec3 n2 = vec3(+0.5,1,0);
     normal = normalize(mix(n1,n2,x_pos));
 
-    vertex.y *= 3.7; // increase width
+    // vertex.y *= 3.7; // increase width
     vertex.x *= 3.7; // increase width
-    vertex.z *= 5./3.;
+    vertex.z *= 6./3.;
 
     curve_blade_vert(rnd01, vertex, normal);
 
