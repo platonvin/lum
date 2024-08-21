@@ -19,6 +19,10 @@ struct grass_render_request{
     ivec3 pos;
     float cam_dist;
 };
+// struct water_render_request{
+//     ivec3 pos;
+//     float cam_dist;
+// };
 
 class Engine {
 public:
@@ -28,6 +32,7 @@ public:
     //cpu culled sorted array of blocks to raygen as example. You egnine responsible for doing this, bot renderer
     vector<block_render_request> block_que = {};
     vector<grass_render_request> grass_que = {};
+    vector<grass_render_request> water_que = {};
     bool should_close = false;
     
     void setup_graphics();

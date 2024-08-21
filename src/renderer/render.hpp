@@ -694,6 +694,7 @@ public:
     VkSampler  nearestSampler;
     VkSampler   linearSampler;
     VkSampler   linearSampler_tiled;
+    VkSampler   linearSampler_tiled_mirrored;
     VkSampler  overlaySampler;
 
     VkSampler  unnormLinear;

@@ -169,12 +169,16 @@ pack:
 	copy "shaders/compiled" "package/shaders/compiled"
 	copy "assets" "package/assets"
 	powershell Compress-Archive -Update package package.zip
+cleans:
+	del "shaders\compiled\*.spv" 
+cleand:
+	del "obj\deb\*.o" 
+cleanr:
+	del "obj\rel\*.o"  
 clean:
 	del "obj\*.o" 
 	del "obj\deb\*.o" 
 	del "obj\rel\*.o" 
-	del "shaders\compiled\*.spv" 
-cleans:
 	del "shaders\compiled\*.spv" 
 init:
 	mkdir obj

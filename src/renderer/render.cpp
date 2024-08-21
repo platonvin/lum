@@ -186,7 +186,7 @@ void Renderer::createImages(){
     transition_Image_Layout_Singletime(&grassState, VK_IMAGE_LAYOUT_GENERAL);
     create_Image_Storages(&waterState,
         VK_IMAGE_TYPE_2D,
-        VK_FORMAT_R16G16_SFLOAT,
+        VK_FORMAT_R16G16B16A16_SFLOAT,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         0,
@@ -374,7 +374,7 @@ void Renderer::setupDescriptors(){
 
     deferDescriptorsetup(&raygenWaterPipe.setLayout, &raygenWaterPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {waterState}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, {waterState}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
 
     deferDescriptorsetup(&genPerlin2dPipe.setLayout, &genPerlin2dPipe.sets, {
@@ -505,7 +505,7 @@ void Renderer::createPipilines(){
     raygenWaterPipe.subpassId = 4;
     create_Raster_Pipeline(&raygenWaterPipe, 0, {
             {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
-            {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+            {"shaders/compiled/waterFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
         swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
@@ -621,7 +621,7 @@ void Renderer::createPipilines(){
 // println
     create_Compute_Pipeline(&updateGrassPipe,0, "shaders/compiled/updateGrass.spv", sizeof(vec2)*2 + sizeof(float), 0);
 // println
-    // create_Compute_Pipeline(&updateWaterPipe,0, "shaders/compiled/updateWater.spv", sizeof(float) + sizeof(vec2)*2, 0);
+    create_Compute_Pipeline(&updateWaterPipe,0, "shaders/compiled/updateWater.spv", sizeof(float) + sizeof(vec2)*2, 0);
 // println
     create_Compute_Pipeline(&genPerlin2dPipe,0, "shaders/compiled/perlin2.spv", 0, 0);
 // println
@@ -2001,7 +2001,7 @@ void Renderer::lightmap_model(Mesh *model_mesh) {
     vec4 fnormal; //not encoded
     */
     struct {quat rot; vec4 shift;} rotshift = {model_mesh->rot, vec4(model_mesh->shift,0)};
-    vkCmdPushConstants(lightmap_commandBuffer, lightmapModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+    vkCmdPushConstants(lightmap_commandBuffer, lightmapModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT, 
         0, sizeof(rotshift), &rotshift);
 
     CHECK_N_LIGHTMAP_MODEL(vec3(+1,0,0), Pzz);
@@ -2111,6 +2111,27 @@ void Renderer::updade_grass(vec2 windDirection){
     vkCmdDispatch(commandBuffer, (world_size.x*2 +7)/8, (world_size.y*2 +7)/8, 1); //2x8 2x8 1x1
         PLACE_TIMESTAMP();
 }
+void Renderer::updade_water(){
+    VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateWaterPipe.line);
+    struct {vec2 wd; float dt;} pushconstant = {{}, float(iFrame)};
+    vkCmdPushConstants(commandBuffer, updateWaterPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushconstant), &pushconstant);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateWaterPipe.lineLayout, 0, 1, &updateWaterPipe.sets[0], 0, 0);
+
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+        waterState);
+    cmdPipelineBarrier(commandBuffer, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+        waterState);
+
+        PLACE_TIMESTAMP();
+    vkCmdDispatch(commandBuffer, (world_size.x*2 +7)/8, (world_size.y*2 +7)/8, 1); //2x8 2x8 1x1
+        PLACE_TIMESTAMP();
+}
 //blade is hardcoded but it does not really increase perfomance
 //done this way for simplicity, can easilly be replaced
 void Renderer::raygen_map_grass(vec4 shift, int size){
@@ -2167,8 +2188,8 @@ void Renderer::raygen_map_water(vec4 shift, int size){
     struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
     vkCmdPushConstants(commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
-    const int verts_per_water_tape = 32;
-    const int tapes_per_block = 16;
+    const int verts_per_water_tape = 128;
+    const int tapes_per_block = 64;
     vkCmdDraw(commandBuffer, 
         verts_per_water_tape, 
         tapes_per_block, 
@@ -3213,7 +3234,6 @@ void Renderer::createSamplers() {
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &linearSampler_tiled));
-
 
         samplerInfo.magFilter = VK_FILTER_NEAREST;
         samplerInfo.minFilter = VK_FILTER_NEAREST;

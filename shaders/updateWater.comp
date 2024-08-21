@@ -13,9 +13,9 @@ precision highp int;
 precision highp float;
 
 //32x32x6
-layout(set = 0, binding = 0, rg16f) uniform image2D heighmap;
+layout(set = 0, binding = 0, rgba16f) uniform image2D heighmap;
 
-layout(push_constant) uniform constants{
+layout(push_constant) uniform readonly restrict constants{
     vec2 windDirection;
     float time;
 } pco;
@@ -24,16 +24,17 @@ const ivec3 world_size = ivec3(48,48,16);
 const float PI = 3.1415926535;
 const int lods = 6;
 
-float calculate_height(vec2 local_pos){
+float calculate_height(vec2 local_pos, float time){
     float height = 0.0;
     
-    vec2 direction = pco.windDirection;
+    // vec2 direction = pco.windDirection;
+    vec2 direction = vec2(1, 1);
     float ampl = 1.0;
-    for (float freq = 1.0; freq<100.0; freq *= 1.15){
-        ampl *= 0.85;
+    for (float freq = 1.0; freq<20.0; freq *= 1.15){
+        ampl *= 0.8;
         direction.x += 0.1;
         direction = normalize(direction);
-        float T = pco.time;
+        float T = time;
 
         height += ampl*sin(T*freq + dot(direction, local_pos)*2*PI);
     }
@@ -42,9 +43,14 @@ float calculate_height(vec2 local_pos){
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 void main(){
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
-    vec2 pos = (vec2(pix) + 0.5) /32.0;
+    vec2 pos = (vec2(pix) + 0.5) / (48.0*2.0);
 
-    float height = calculate_height(pos);
+    vec4 height;
+    float time = pco.time / 300.0;
+    height.x = calculate_height(pos/1.01, time/1.25);
+    height.y = calculate_height(pos/1.02, time/1.5);
+    height.z = calculate_height(pos/1.03, time/2.5);
+    height.w = calculate_height(pos/1.04, time/3.5);
 
-    imageStore(heighmap, pix, vec4(height,0,0,0));
+    imageStore(heighmap, pix, vec4(height));
 }

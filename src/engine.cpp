@@ -169,20 +169,20 @@ void Engine::handle_input(){
     should_close |= (glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
     
     #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
-    set_key(GLFW_KEY_W, render.cameraPos += dvec3(dvec2(render.cameraDir),0) * 2.5 / render.pixelsInVoxel );
-    set_key(GLFW_KEY_S, render.cameraPos -= dvec3(dvec2(render.cameraDir),0) * 2.5 / render.pixelsInVoxel );
+    set_key(GLFW_KEY_W, render.cameraPos += delt_time* dvec3(dvec2(render.cameraDir),0) * 400.5 / render.pixelsInVoxel );
+    set_key(GLFW_KEY_S, render.cameraPos -= delt_time* dvec3(dvec2(render.cameraDir),0) * 400.5 / render.pixelsInVoxel );
 
     dvec3 camera_direction_to_right = dquat(dvec3(0.0, 0.0, pi<double>()/2.0)) * render.cameraDir;
 
-    set_key(GLFW_KEY_A, render.cameraPos += dvec3(dvec2(camera_direction_to_right),0) * 2.5 / render.pixelsInVoxel);
-    set_key(GLFW_KEY_D, render.cameraPos -= dvec3(dvec2(camera_direction_to_right),0) * 2.5 / render.pixelsInVoxel);
+    set_key(GLFW_KEY_A, render.cameraPos += delt_time* dvec3(dvec2(camera_direction_to_right),0) * 400.5 / render.pixelsInVoxel);
+    set_key(GLFW_KEY_D, render.cameraPos -= delt_time* dvec3(dvec2(camera_direction_to_right),0) * 400.5 / render.pixelsInVoxel);
     // set_key(GLFW_KEY_SPACE     , render.camera_pos += vec3(0,0,+10)/20.0f);
     // set_key(GLFW_KEY_LEFT_SHIFT, render.camera_pos += vec3(0,0,-10)/20.0f);
-    set_key(GLFW_KEY_COMMA  , render.cameraDir = rotate(identity<mat4>(), +0.01f, vec3(0,0,1)) * vec4(render.cameraDir,0));
-    set_key(GLFW_KEY_PERIOD , render.cameraDir = rotate(identity<mat4>(), -0.01f, vec3(0,0,1)) * vec4(render.cameraDir,0));
+    set_key(GLFW_KEY_COMMA  , render.cameraDir = rotate(identity<dmat4>(), +0.60 * delt_time, dvec3(0,0,1)) * dvec4(render.cameraDir,0));
+    set_key(GLFW_KEY_PERIOD , render.cameraDir = rotate(identity<dmat4>(), -0.60 * delt_time, dvec3(0,0,1)) * dvec4(render.cameraDir,0));
     render.cameraDir = normalize(render.cameraDir); 
-    set_key(GLFW_KEY_PAGE_DOWN, render.pixelsInVoxel /= 1.01);
-    set_key(GLFW_KEY_PAGE_UP  , render.pixelsInVoxel *= 1.01);
+    set_key(GLFW_KEY_PAGE_DOWN, render.pixelsInVoxel /= 1.0 + delt_time);
+    set_key(GLFW_KEY_PAGE_UP  , render.pixelsInVoxel *= 1.0 + delt_time);
     
     vec3 tank_direction_forward = tank_body.rot * vec3(0,1,0);
     vec3 tank_direction_right    = tank_body.rot * vec3(1,0,0); //
@@ -402,6 +402,21 @@ void Engine::cull_meshes(){
         grass_que.push_back(grr);
     }}
     std::sort(grass_que.begin(), grass_que.end(), &sort_grass);
+
+    water_que.clear();
+    for(int xx=0; xx<10; xx++){
+    for(int yy=0; yy<4; yy++){
+        struct grass_render_request grr = {};
+        grr.pos = ivec3(xx*16, yy*16, 14);
+
+        dvec3 clip_coords = (render.cameraTransform * dvec4(grr.pos,1));
+            clip_coords.z = -clip_coords.z;
+        grr.cam_dist = clip_coords.z;
+
+        // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
+        water_que.push_back(grr);
+    }}
+    std::sort(water_que.begin(), water_que.end(), &sort_grass);
 }
 
 void Engine::draw()
@@ -427,7 +442,7 @@ void Engine::draw()
             // render.recalculate_bit();
 // println
             render.updade_grass({});
-            // render.updade_water(&water, {}, {});
+            render.updade_water();
 // println
             render.exec_copies();
 // println
@@ -447,6 +462,7 @@ void Engine::draw()
                 // render.raytrace();
 // println
                 render.start_lightmap();
+// println
                 //yeah its wrong
                 render.lightmap_start_blocks();
                     for(auto b : block_que){
@@ -455,6 +471,7 @@ void Engine::draw()
                             block_mesh->shift = vec3(b.pos);
                         render.lightmap_block(block_mesh, b.index, b.pos);
                     }
+// println
                 render.lightmap_start_models();
                     render.lightmap_model(&tank_body);
                     render.lightmap_model(&tank_head);
@@ -463,6 +480,7 @@ void Engine::draw()
                     render.lightmap_model(&tank_lf_leg);
                     render.lightmap_model(&tank_rb_leg);
                 render.end_lightmap();
+// println
 
                 render.start_raygen();
 // println  
@@ -508,7 +526,9 @@ void Engine::draw()
 // println
 
                 render.raygen_start_water();
-                    // render.raygen_map_water(&water, vec4(128,128,16+5,0), 16);
+                    for(auto w : water_que){
+                        render.raygen_map_water(vec4(w.pos,0), 16);
+                    }
                 render.end_raygen();
 // println
                 render.start_2nd_spass();
