@@ -28,6 +28,7 @@ const vector<const char*>   deviceExtensions = {
     VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, //pco / ubo +perfomance
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME, //just explicit control
     VK_KHR_8BIT_STORAGE_EXTENSION_NAME, //just explicit control
+    VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME,
     // VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME
     // VK_NV_device_diagnostic_checkpoints
     // "VK_KHR_shader_non_semantic_info"
@@ -989,14 +990,23 @@ void Renderer::createRenderPassLightmaps(){
     vector<VkAttachmentDescription> attachments = {a_depth};
 
     VkSubpassDescription
-        subpass = {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 0;
-        subpass.pColorAttachments = NULL;
-        subpass.inputAttachmentCount = 0;
-        subpass.pInputAttachments = NULL;
-        subpass.pDepthStencilAttachment = &aref_depth;
-
+        lighmap_blocks_subpass = {};
+        lighmap_blocks_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        lighmap_blocks_subpass.colorAttachmentCount = 0;
+        lighmap_blocks_subpass.pColorAttachments = NULL;
+        lighmap_blocks_subpass.inputAttachmentCount = 0;
+        lighmap_blocks_subpass.pInputAttachments = NULL;
+        lighmap_blocks_subpass.pDepthStencilAttachment = &aref_depth;
+    
+    //not needed
+    // VkSubpassDescription
+    //     lighmat_blocks_subpass = {};
+    //     lighmat_blocks_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    //     lighmat_blocks_subpass.colorAttachmentCount = 0;
+    //     lighmat_blocks_subpass.pColorAttachments = NULL;
+    //     lighmat_blocks_subpass.inputAttachmentCount = 0;
+    //     lighmat_blocks_subpass.pInputAttachments = NULL;
+    //     lighmat_blocks_subpass.pDepthStencilAttachment = &aref_depth;
     VkSubpassDependency full_wait_color = {};
 		full_wait_color.srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
 		full_wait_color.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
@@ -1029,7 +1039,7 @@ void Renderer::createRenderPassLightmaps(){
     }}
 
     vector<VkSubpassDescription> subpasses = {
-        subpass};
+        lighmap_blocks_subpass};
 
     VkRenderPassCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1059,7 +1069,7 @@ static bool stencil_is_empty(VkStencilOpState stencil){
     (stencil.writeMask == 0) &&
     (stencil.reference == 0);
 }
-void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
+void Renderer::create_Raster_Pipeline(RasterPipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
         VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling, Discard discard, const VkStencilOpState stencil){
     
@@ -1222,10 +1232,14 @@ void Renderer::create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shad
         }
         pushRange.stageFlags = stageFlags;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &pipe->setLayout; 
+    vector<VkDescriptorSetLayout> used_dset_layouts = {pipe->setLayout};
+    if(extra_dynamic_layout != 0){
+        used_dset_layouts.push_back(extra_dynamic_layout);
+    }
+    VkPipelineLayoutCreateInfo 
+        pipelineLayoutInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        pipelineLayoutInfo.setLayoutCount = used_dset_layouts.size();
+        pipelineLayoutInfo.pSetLayouts = used_dset_layouts.data(); 
         if(push_size != 0){
             pipelineLayoutInfo.pushConstantRangeCount = 1;
             pipelineLayoutInfo.pPushConstantRanges = &pushRange;
@@ -1510,17 +1524,34 @@ void Renderer::createLogicalDevice(){
         deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
         deviceFeatures.geometryShader = VK_TRUE;
         deviceFeatures.independentBlend = VK_TRUE;
+        deviceFeatures.shaderInt16 = VK_TRUE;
+        // deviceFeatures.storage = VK_TRUE;
+    VkPhysicalDeviceVulkan11Features deviceFeatures11 = {};
+        deviceFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        deviceFeatures11.storagePushConstant16 = VK_TRUE;
+    VkPhysicalDeviceVulkan12Features deviceFeatures12 = {};
+        deviceFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        deviceFeatures12.storagePushConstant8 = VK_TRUE;
+        deviceFeatures12.shaderInt8 = VK_TRUE;
+
+    VkPhysicalDeviceFeatures2 physical_features2 = {};
+        physical_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        physical_features2.pNext = &deviceFeatures12;
+        deviceFeatures12.pNext = &deviceFeatures11;
+        // deviceFeatures11.pNext = &deviceFeatures;
         // deviceFeatures.shaderint;
 
     VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         createInfo.queueCreateInfoCount = queueCreateInfos.size();
         createInfo.pQueueCreateInfos    = queueCreateInfos.data();
-        createInfo.pEnabledFeatures = &deviceFeatures;
+        // createInfo.pEnabledFeatures = &deviceFeatures;
+            physical_features2.features = deviceFeatures;
         createInfo.enabledExtensionCount   = deviceExtensions.size();
         createInfo.ppEnabledExtensionNames = deviceExtensions.data();
         createInfo.enabledLayerCount   = instanceLayers.size();
         createInfo.ppEnabledLayerNames = instanceLayers.data();
+        createInfo.pNext = &physical_features2;
 
     VK_CHECK(vkCreateDevice(physicalDevice, &createInfo, NULL, &device));
 

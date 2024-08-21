@@ -17,7 +17,7 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
 
 //quatornions!
 layout(push_constant) uniform restrict readonly constants{
-    // vec4 rot;
+    vec4 rot;
     vec4 shift;
 } pco;
 
@@ -29,8 +29,8 @@ vec3 qtransform( vec4 q, vec3 v ){
 void main() {
     vec3 fpos = vec3(posIn);
 
-    // vec3 local_pos = qtransform(pco.rot, fpos);
-    vec3 local_pos = fpos;
+    vec3 local_pos = qtransform(pco.rot, fpos);
+    // vec3 local_pos = fpos;
 
     vec4 world_pos = vec4(local_pos + pco.shift.xyz ,1);
 

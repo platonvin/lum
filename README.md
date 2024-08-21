@@ -30,7 +30,7 @@
 - ### Steps  
   - Install Prerequisites, make sure VULKAN_SDK and VCPKG_ROOT are set and Mingw is in the Path
   - Install RmlUi using Vcpkg:\
-`$vcpkg install rmlui --triplet-x64-mingw-static --host-triplet=x64-mingw-static`
+`$vcpkg install rmlui --triplet=x64-mingw-static --host-triplet=x64-mingw-static`
     - you may be able to use other host triplets, but i didnt test it
 
   - Install GLM and GLFW using MSYS2: \

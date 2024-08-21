@@ -30,6 +30,11 @@ vec3 rnVec3(float minValue, float maxValue) {
 }
 
 static bool sort_blocks(struct block_render_request const& lhs, struct block_render_request const& rhs){
+    // if(lhs.index < rhs.index) {
+    //     return true;
+    // } else if(lhs.index == rhs.index){
+    //     return lhs.cam_dist > rhs.cam_dist; 
+    // } else return false;
     // return lhs.index < rhs.index;
     return lhs.cam_dist > rhs.cam_dist; //NEVER CHANGE
 }
@@ -379,6 +384,9 @@ void Engine::cull_meshes(){
         assert(block_id <= render.static_block_palette_size);
     }}}
     std::sort(block_que.begin(), block_que.end(), &sort_blocks);
+    // for (auto b : block_que){
+    //     cout << b.cam_dist << " " << b.index << "\n";
+    // }
 
     grass_que.clear();
     for(int xx=0; xx<16; xx++){
@@ -439,31 +447,45 @@ void Engine::draw()
                 // render.raytrace();
 // println
                 render.start_lightmap();
+                //yeah its wrong
+                render.lightmap_start_blocks();
+                    for(auto b : block_que){
+                        Mesh* block_mesh = NULL;
+                            block_mesh = &block_palette[b.index]->mesh;
+                            block_mesh->shift = vec3(b.pos);
+                        render.lightmap_block(block_mesh, b.index, b.pos);
+                    }
+                render.lightmap_start_models();
+                    render.lightmap_model(&tank_body);
+                    render.lightmap_model(&tank_head);
+                    render.lightmap_model(&tank_rf_leg);
+                    render.lightmap_model(&tank_lb_leg);
+                    render.lightmap_model(&tank_lf_leg);
+                    render.lightmap_model(&tank_rb_leg);
+                render.end_lightmap();
 
                 render.start_raygen();
 // println  
                 // printl(block_que.size());
+                render.raygen_start_blocks();
                     for(auto b : block_que){
                         Mesh* block_mesh = NULL;
 
                         block_mesh = &block_palette[b.index]->mesh;
                         block_mesh->shift = vec3(b.pos);
-                        block_mesh->old_shift = vec3(b.pos);
-
-                        // printl(block_palette[b.index]->mesh.triangles.Pzz.icount);
                         
-                        render.raygen_mesh(block_mesh, b.index);
+                        render.raygen_block(block_mesh, b.index, b.pos);
                     }
                     
-//                     render.raygen_mesh(&tank_body, 0);
-//                     render.raygen_mesh(&tank_head, 0);
+                render.raygen_start_models();
+                    render.raygen_model(&tank_body);
+                    render.raygen_model(&tank_head);
                      
-//                     render.raygen_mesh(&tank_rf_leg, 0);
-//                     render.raygen_mesh(&tank_lb_leg, 0);
+                    render.raygen_model(&tank_rf_leg);
+                    render.raygen_model(&tank_lb_leg);
 // println
-//                     render.raygen_mesh(&tank_lf_leg, 0);
-//                     render.raygen_mesh(&tank_rb_leg, 0);
-                render.end_lightmap();
+                    render.raygen_model(&tank_lf_leg);
+                    render.raygen_model(&tank_rb_leg);
 
 // println
                 render.update_particles();

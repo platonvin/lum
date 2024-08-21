@@ -15,7 +15,7 @@ release_specific_flags = -O2 -DNDEBUG
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
 
-SHADER_FLAGS = --target-env=vulkan1.1 -g -O 
+SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 # SHADER_OPT_FLAGS = --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions --scalar-replacement --eliminate-local-single-block --eliminate-local-single-store --simplify-instructions --vector-dce --eliminate-dead-inserts --eliminate-dead-code-aggressive --eliminate-dead-branches --merge-blocks --eliminate-local-multi-store --simplify-instructions --vector-dce --eliminate-dead-inserts --redundancy-elimination --eliminate-dead-code-aggressive --strip-debug
 SHADER_OPT_FLAGS = --target-env=vulkan1.1
 

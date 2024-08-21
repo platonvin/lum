@@ -8,6 +8,7 @@ ambient + "radiant" diffuse
 precision highp int;
 precision highp float;
 // #extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_EXT_control_flow_attributes : enable
 
 // #define highp
 
@@ -216,32 +217,88 @@ vec3 get_origin_from_depth_interpolated(float depth, vec3 pos_interpol){
     return origin;
 }
 //not really nextafter but somewhat close
-float next_after (float x){
+float next_after (float x, int s){
     int ix = floatBitsToInt(x);
-    float fxp1 = intBitsToFloat(ix+128);
-    return fxp1;
-}
-float prev_befor (float x){
+    float fxp1 = intBitsToFloat(ix+s);
+    return fxp1;}
+float next_after (float x){ return next_after(x, 1);}
+float prev_befor (float x, int s){
     int ix = floatBitsToInt(x);
-    float fxp1 = intBitsToFloat(ix-128);
-    return fxp1;
-}
+    float fxp1 = intBitsToFloat(ix-s);
+    return fxp1;}
+float prev_befor (float x){ return prev_befor(x, 1);}
 
-float sample_lightmap(vec3 world_pos){
-    vec3 light_clip = (ubo.lightmap_proj* vec4(world_pos,1)).xyz; //move up
+float sample_lightmap(vec3 world_pos, vec3 normal){
+    // float b = (float((dot(normal, ubo.globalLightDir.xyz) < 0.0))*2.0 - 1.0);
+    vec3 biased_pos = world_pos;
+    float bias;
+    if(dot(normal, ubo.globalLightDir.xyz) > 0.0){
+        biased_pos -= normal*.9;
+        bias = -0.002;
+    } else {
+        biased_pos += normal*.9;
+        bias = +0.002;
+    }
+
+    vec3 light_clip = (ubo.lightmap_proj* vec4(biased_pos,1)).xyz; //move up
          light_clip.z = 1+light_clip.z;
-    
     float world_depth = light_clip.z;
+    
+    // float bias = 0.0 * (float((dot(normal, ubo.globalLightDir.xyz) < 0.0))*2.0 - 1.0);
 
     vec2 light_uv = (light_clip.xy + 1.0)/2.0;
-    float light_depth = texture(lightmap, light_uv).x;
+    // float bias = 0.0;
 
-    if(next_after(world_depth) <= (light_depth)) {
+    const float PI = 3.15;
+    const int sample_count = 1; //in theory i should do smth with temporal accumulation 
+    const float max_radius = 2.0 / 1000.0;
+    float angle = 00;
+    float normalized_radius = 00;
+    float norm_radius_step = 1.0 / float(sample_count);
+
+    float total_light = 00;
+    float total_weight = 00;
+    vec2 ratio = vec2(1);
+
+    // [[unroll]]
+    // for(int i=00; i<sample_count; i++){
+    //     // angle += 0.69420; //best possible step size
+    //     float radius = (normalized_radius) * max_radius;
+    //     vec2 lighmap_shift = radius*ratio*vec2(sin(angle), cos(angle));
+
+    //     float light_depth = texture(lightmap, light_uv + lighmap_shift).x;
+
+    //     float weight = square(max(light_depth - world_depth, 0));
+    //     weight = 1 - square(normalized_radius);
+    //     total_light += float(((world_depth) <= (light_depth))) * weight;
+    //     total_weight += weight;
+    //     angle += (6.9*PI)/float(sample_count); //to cover evenly
+    //     normalized_radius += norm_radius_step;
+    // }
+    [[unroll]]
+    for(int xx=-1; xx<=+1; xx++){
+    for(int yy=-1; yy<=+1; yy++){
+        // if((xx==00) || (yy==00)) continue;
+        // if((xx!=00) && (yy!=00)) continue;
+        vec2 lighmap_shift = vec2 (xx * 1.0/1024.0, yy * 1.0/1024.0);
+        float light_depth = texture(lightmap, light_uv + lighmap_shift).x;
+
+        float diff = abs(world_depth - light_depth);
+        float weight = 1;
+        total_light += float(((world_depth - bias) <= (light_depth))) * weight;
+        total_weight += weight;
+    }}
+    
+    return ((total_light / total_weight)) * 0.15;
+    
+    // if(((world_depth-bias) <= (light_depth)) && (dot(normal, ubo.globalLightDir.xyz) < 0)) {
+    // float sub = float(dot(normal, ubo.globalLightDir.xyz) > 0);
+    // if((dot(normal, ubo.globalLightDir.xyz) < 0)) {
     // if(abs(light_depth - world_depth) < 0.01) {
-        return 0.15;
-    } else {
-        return 0.0;
-    }
+        // return ((total_light / total_weight)-sub*0.5) * 0.1984;
+    // } else {
+    //     return 0.0;
+    // }
 }
 
 const float COLOR_ENCODE_VALUE = 8.0;
@@ -265,7 +322,7 @@ void main(void){
     const      vec3 stored_normal = load_norm();
 
     vec3 incoming_light = sample_radiance(origin + stored_normal*6.0);
-    float sunlight = sample_lightmap(origin);
+    float sunlight = sample_lightmap(origin, stored_normal);
 
     final_color = (2.0*incoming_light+stored_mat.emmitance + sunlight) * stored_mat.color;
     frame_color = vec4(encode_color(final_color),1);

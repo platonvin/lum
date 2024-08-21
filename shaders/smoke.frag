@@ -232,7 +232,7 @@ void main() {
     // for(float fraction = near; fraction <= far; fraction+=step_size){ 
     
     float fraction = near;
-    // [[unroll]]
+    // [[loop]] 
     for(int i=0; i<max_steps; i++){
         fraction += step_size;
             vec2 clip_pos = gl_FragCoord.xy / ubo.frame_size * 2.0 - 1.0;
@@ -242,6 +242,7 @@ void main() {
         vec4 noises;
                 vec3 wind_direction = vec3(1,0,0);
                 mat2 wind_rotate = rotatem(1.6);
+            //TODO: derivatives? dFxy possibly solves mem access 
             noises.x = texture(noise, noise_clip_pos/1.0 + wind_direction*ubo.timeseed/3500.0).x;
                 wind_direction.xy *= wind_rotate;
             noises.y = texture(noise, noise_clip_pos/2.1 + wind_direction*ubo.timeseed/3000.0).y;

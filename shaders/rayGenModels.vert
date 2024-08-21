@@ -1,20 +1,19 @@
 #version 450
 
 #define varp highp
-
 precision varp int;
 precision varp float;
 
 #extension GL_EXT_shader_8bit_storage : enable
 #extension GL_EXT_shader_16bit_storage : enable
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
+#extension GL_EXT_scalar_block_layout : enable
 
 layout(location = 0) in lowp uvec3 posIn;
-// layout(location = 1) in varp uint MatIDIn;
-
 layout(location = 0) out vec3 sample_point;
+layout(location = 1) out flat uint normal_encoded;
+layout(location = 2) out vec3 n;
 
-//no reason to move up in pipeline cause sm load is like ~ 6% in vs
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
     vec4 campos;
@@ -26,18 +25,13 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     vec2 frame_size;
     int timeseed;
 } ubo;
-layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 
 //quatornions!
-layout(push_constant) uniform restrict readonly constants{
+layout(scalar, push_constant) uniform restrict readonly constants{
     vec4 rot;
     vec4 shift;
     vec4 fnormal; //not encoded
-    uvec4 unormal; //encoded
-    // int block;
 } pco;
-
-precision highp float;
 
 vec3 qtransform( vec4 q, vec3 v ){ 
 	return v + 2.0*cross(cross(v, -q.xyz ) + q.w*v, -q.xyz);
@@ -46,7 +40,7 @@ vec3 qtransform( vec4 q, vec3 v ){
 
 void main() {
     vec3 fpos = vec3(posIn);
-    vec3 fnorm = vec3(pco.fnormal.xyz);
+    vec3 fnorm = normalize(vec3(pco.fnormal.xyz));
 
     vec3 local_pos = qtransform(pco.rot, fpos);
     // vec3 local_pos = fpos;
@@ -63,6 +57,7 @@ void main() {
     // uint mat = uint(MatIDIn);
     // float fmat = (float(mat)-127.0)/127.0;
     // vec4 fmat_norm = vec4(fmat, norm);
-    
-    sample_point = local_pos - _fnorm * 0.5; //for better rounding lol
+    n = _fnorm;
+    normal_encoded = packUnorm4x8(vec4((_fnorm+1.0)/2.0, 0));
+    sample_point = fpos - fnorm * 0.5; //for better rounding lol
 }

@@ -203,7 +203,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
         }
     }
 
-    vec3 before_hit = origin + direction*(fraction-0.7);
+    vec3 before_hit = origin + direction*(fraction-1.5);
 
 //todo:
     if(current_voxel !=0)
@@ -227,7 +227,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
         int current_voxel_id = GetVoxel(voxel_pos).x;
         int iterations = 0;
         [[unroll]] //why
-        while ((iterations++ <= 3) && (current_voxel_id == 0)) {
+        while ((iterations++ <= 4) && (current_voxel_id == 0)) {
             // initTvals(tMax, tDelta, voxel_pos, rayOrigin+dot(tMax - tDelta, fcurrentStepDiretion)*rayDirection, rayDirection); //does not intersect with scene
             // fstep_Diretion =  vec3(0);
             fcurrentStepDiretion.x = float(int((tMax.x <= tMax.y) && (tMax.x <= tMax.z)));

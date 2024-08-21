@@ -134,9 +134,9 @@ typedef struct Mesh {
     vector<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
 
     quat rot;
-    quat old_rot;
+    // quat old_rot;
     vec3 shift;
-    vec3 old_shift;
+    // vec3 old_shift;
 
     // mat4 transform; //used to transform from self coordinate system to world coordinate system
     // mat4 old_transform; //for denoising
@@ -408,8 +408,8 @@ public:
 
     dvec3 cameraPos     = vec3(60, 0, 194);
     dvec3 cameraPos_OLD = cameraPos;
-    dvec3 cameraDir     = normalize(vec3(0.6, 1.0, -0.8));
-    dvec3 cameraDir_OLD = normalize(vec3(0.6, 1.0, -0.8));
+    dvec3 cameraDir     = normalize(vec3(0.61, 1.0, -0.8));
+    dvec3 cameraDir_OLD = normalize(vec3(0.61, 1.0, -0.8));
     dmat4 cameraTransform     = identity<dmat4>();
     dmat4 cameraTransform_OLD = identity<dmat4>();
     double pixelsInVoxel = 5.0;
@@ -437,19 +437,26 @@ public:
             void recalculate_df();
             void recalculate_bit();
         void end_compute();
-        void start_lightmap(); void lightmap_face_helper(vec3 normal, IndexedVertices& buff, int block_id);
+        void start_lightmap();
+            void lightmap_start_blocks();
+                void lightmap_block(Mesh* block_mesh, int block_id, ivec3 shift); void lightmap_block_face(i8vec3 normal, IndexedVertices& buff, int block_id);
+            void lightmap_start_models();
+                void lightmap_model(Mesh* mesh); void lightmap_model_face(vec3 normal, IndexedVertices& buff);
         void end_lightmap(); //ends somewhere after raygen but operates on separate cmd buf
             // void start_lightmap();
-        void start_raygen();
-            void raygen_mesh(Mesh* mesh, int block_id); void draw_face_helper(vec3 normal, IndexedVertices& buff, int block_id);
+            void start_raygen();
+            void raygen_start_blocks();
+                void raygen_block(Mesh* block_mesh, int block_id, ivec3 shift); void draw_block_face(i8vec3 normal, IndexedVertices& buff, int block_id);
+            void raygen_start_models();
+                void raygen_model(Mesh* mesh); void draw_model_face(vec3 normal, IndexedVertices& buff);
             void update_particles();
             void raygen_map_particles();
             void raygen_start_grass();
                 void raygen_map_grass(vec4 shift, int size);
-            void raygen_end_grass();
-                void raygen_start_water();
-                    void raygen_map_water(vec4 shift, int size);
-                void raygen_end_water();
+            // void raygen_end_grass();
+            void raygen_start_water();
+                void raygen_map_water(vec4 shift, int size);
+            // void raygen_end_water();
         void end_raygen();
             // void end_raygen_first();
             void diffuse();
@@ -530,7 +537,7 @@ private:
 
     VkFormat findSupportedFormat(vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
     
-    void create_Raster_Pipeline(RasterPipe* pipe, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
+    void create_Raster_Pipeline(RasterPipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc, 
         u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
         VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling, Discard discard, VkStencilOpState stencil);
     void destroy_Raster_Pipeline(RasterPipe* pipe);
@@ -630,10 +637,12 @@ public:
     VkExtent2D  raytraceExtent;
     VkExtent2D  lightmapExtent;
 
-    RasterPipe lightmapPipe;
+    RasterPipe lightmapBlocksPipe;
+    RasterPipe lightmapModelsPipe;
 
     RasterPipe raygenBlocksPipe;
-    VkDescriptorSetLayout blocksPushLayout;
+    RasterPipe raygenModelsPipe;
+    VkDescriptorSetLayout raygenModelsPushLayout;
     RasterPipe raygenParticlesPipe;
     RasterPipe raygenGrassPipe;
     RasterPipe raygenWaterPipe;
@@ -778,7 +787,7 @@ public:
 
 private:
     const VkFormat FRAME_FORMAT =  VK_FORMAT_R16G16B16A16_UNORM;
-    const VkFormat LIGHTMAPS_FORMAT = VK_FORMAT_D32_SFLOAT;
+    const VkFormat LIGHTMAPS_FORMAT = VK_FORMAT_D16_UNORM;
     VkFormat DEPTH_FORMAT = VK_FORMAT_UNDEFINED;
     const VkFormat DEPTH_FORMAT_PREFERED =  VK_FORMAT_D24_UNORM_S8_UINT;
     const VkFormat DEPTH_FORMAT_SPARE =  VK_FORMAT_D32_SFLOAT_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end

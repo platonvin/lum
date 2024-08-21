@@ -1,6 +1,8 @@
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #include "render.hpp" 
+#include <stdfloat>
+#include <BS_thread_pool.hpp>
 
 using namespace std;
 using namespace glm;
@@ -22,6 +24,7 @@ void Renderer::init(int xSize, int ySize, int zSize, int staticBlockPaletteSize,
     this->static_block_palette_size = staticBlockPaletteSize;
 
     lightmapExtent = {1024,1024};
+    // lightmapExtent = {768,768};
     //to fix weird mesh culling problems for identity
     update_camera();
 
@@ -265,7 +268,10 @@ void Renderer::setupDescriptors(){
         VK_SHADER_STAGE_FRAGMENT_BIT, &overlayPipe.setLayout,
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
 
-    deferDescriptorsetup(&lightmapPipe.setLayout, &lightmapPipe.sets, {
+    deferDescriptorsetup(&lightmapBlocksPipe.setLayout, &lightmapBlocksPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (light_uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+    }, VK_SHADER_STAGE_VERTEX_BIT);
+    deferDescriptorsetup(&lightmapModelsPipe.setLayout, &lightmapModelsPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (light_uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
 // println
@@ -284,13 +290,14 @@ void Renderer::setupDescriptors(){
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencil},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER         , RD_FIRST, {/*empty*/}, {materialPalette},    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache},      unnormLinear,   VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&aoPipe.setLayout, &aoPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&tonemapPipe.setLayout, &tonemapPipe.sets, {
@@ -309,7 +316,7 @@ void Renderer::setupDescriptors(){
     deferDescriptorsetup(&glossyPipe.setLayout, &glossyPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresMatNorms}, nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lowresDepthStencil},   nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST  , {/*empty*/}, {world},              unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette),    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
@@ -334,6 +341,15 @@ void Renderer::setupDescriptors(){
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {}, {originBlockPalette}, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // setup_RayGen_Particles_Descriptors();
+    create_DescriptorSetLayout({
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, // model voxels
+        }, 
+        VK_SHADER_STAGE_FRAGMENT_BIT, &raygenModelsPushLayout, 
+        VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
+        // 0);
+    deferDescriptorsetup(&raygenModelsPipe.setLayout, &raygenModelsPipe.sets, {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+    }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
     deferDescriptorsetup(&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT , (uniform),   {/*empty*/},            NO_SAMPLER, NO_LAYOUT},
@@ -403,6 +419,7 @@ void Renderer::setupDescriptors(){
 
 void Renderer::createPipilines(){
     raygenBlocksPipe.renderPass = raygen2diffuseRpass;
+    raygenModelsPipe.renderPass = raygen2diffuseRpass;
     raygenParticlesPipe.renderPass = raygen2diffuseRpass;
     raygenGrassPipe.renderPass = raygen2diffuseRpass;
     raygenWaterPipe.renderPass = raygen2diffuseRpass;
@@ -416,24 +433,32 @@ void Renderer::createPipilines(){
     tonemapPipe.renderPass = altRpass;
     overlayPipe.renderPass = altRpass;
 
-    lightmapPipe.renderPass = lightmapRpass;
+    lightmapBlocksPipe.renderPass = lightmapRpass;
+    lightmapModelsPipe.renderPass = lightmapRpass;
     //that is why NOT abstracting vulkan is also an option
     //if you cannot guess what things mean by just looking at them maybe read old (0.0.3) release src
 // println
-    lightmapPipe.subpassId = 0;
-    create_Raster_Pipeline(&lightmapPipe, {
-            {"shaders/compiled/lightmapVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
-            // {"shaders/compiled/rayGenFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT}, lightmaps dont need it
+    lightmapBlocksPipe.subpassId = 0;
+    create_Raster_Pipeline(&lightmapBlocksPipe, 0, {
+            {"shaders/compiled/lightmapBlocksVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            //doesnt need fragment
         },{
             {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelCircuit, pos)},
-            // {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
-            // {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
+        }, 
+        sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        lightmapExtent, {NO_BLEND}, (sizeof(i16vec4)), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+    lightmapModelsPipe.subpassId = 0;
+    create_Raster_Pipeline(&lightmapModelsPipe, 0, {
+            {"shaders/compiled/lightmapModelsVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            //doesnt need fragment
+        },{
+            {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelCircuit, pos)},
         }, 
         sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         lightmapExtent, {NO_BLEND}, (sizeof(quat) + sizeof(vec4)), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 
     raygenBlocksPipe.subpassId = 0;
-    create_Raster_Pipeline(&raygenBlocksPipe, {
+    create_Raster_Pipeline(&raygenBlocksPipe, 0, {
             {"shaders/compiled/rayGenBlocksVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenBlocksFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{
@@ -442,11 +467,21 @@ void Renderer::createPipilines(){
             // {VK_FORMAT_R8_UINT, offsetof(PackedVoxelVertex, matID)},
         }, 
         sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        swapChainExtent, {NO_BLEND}, (sizeof(vec4)*2 + sizeof(uvec4)), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+        swapChainExtent, {NO_BLEND}, (12), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 
 // println
+    raygenModelsPipe.subpassId = 1;
+    create_Raster_Pipeline(&raygenModelsPipe, raygenModelsPushLayout, {
+            {"shaders/compiled/rayGenModelsVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
+            {"shaders/compiled/rayGenModelsFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        },{
+            {VK_FORMAT_R8G8B8_UINT, offsetof(PackedVoxelCircuit, pos)},
+        }, 
+        sizeof(PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        swapChainExtent, {NO_BLEND}, (sizeof(vec4)*3), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
+// println
     raygenParticlesPipe.subpassId = 2;
-    create_Raster_Pipeline(&raygenParticlesPipe, {
+    create_Raster_Pipeline(&raygenParticlesPipe, 0, {
             {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/rayGenParticlesGeom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
             {"shaders/compiled/rayGenParticlesFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -460,7 +495,7 @@ void Renderer::createPipilines(){
         swapChainExtent, {NO_BLEND}, 0, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
     raygenGrassPipe.subpassId = 3;
-    create_Raster_Pipeline(&raygenGrassPipe, {
+    create_Raster_Pipeline(&raygenGrassPipe, 0, {
             {"shaders/compiled/grassVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
@@ -468,7 +503,7 @@ void Renderer::createPipilines(){
         swapChainExtent, {NO_BLEND}, sizeof(vec4) + sizeof(int)*2 + sizeof(int)*2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
     raygenWaterPipe.subpassId = 4;
-    create_Raster_Pipeline(&raygenWaterPipe, {
+    create_Raster_Pipeline(&raygenWaterPipe, 0, {
             {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*empty*/}, 
@@ -477,14 +512,14 @@ void Renderer::createPipilines(){
 // println
 
     diffusePipe.subpassId = 0;
-    create_Raster_Pipeline(&diffusePipe, {
+    create_Raster_Pipeline(&diffusePipe, 0, {
             {"shaders/compiled/diffuseVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/diffuseFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {NO_BLEND}, sizeof(ivec4) + sizeof(vec4)*4 + sizeof(mat4), NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     aoPipe.subpassId = 1;
-    create_Raster_Pipeline(&aoPipe, {
+    create_Raster_Pipeline(&aoPipe, 0, {
             {"shaders/compiled/aoVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/aoFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
@@ -492,7 +527,7 @@ void Renderer::createPipilines(){
         swapChainExtent, {BLEND_MIX}, 0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 // println
     fillStencilGlossyPipe.subpassId = 2;
-    create_Raster_Pipeline(&fillStencilGlossyPipe, {
+    create_Raster_Pipeline(&fillStencilGlossyPipe, 0, {
             {"shaders/compiled/fillStencilGlossyVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/fillStencilGlossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT}, 
         },{/*fullscreen pass*/}, 
@@ -509,7 +544,7 @@ void Renderer::createPipilines(){
         });
 // println
     fillStencilSmokePipe.subpassId = 3;
-    create_Raster_Pipeline(&fillStencilSmokePipe, {
+    create_Raster_Pipeline(&fillStencilSmokePipe, 0, {
             {"shaders/compiled/fillStencilSmokeVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/fillStencilSmokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*passed as push constants lol*/}, 
@@ -526,7 +561,7 @@ void Renderer::createPipilines(){
         });
 // println
     glossyPipe.subpassId = 4;
-    create_Raster_Pipeline(&glossyPipe, {
+    create_Raster_Pipeline(&glossyPipe, 0, {
             {"shaders/compiled/glossyVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/glossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
@@ -543,7 +578,7 @@ void Renderer::createPipilines(){
         });
 // println
     smokePipe.subpassId = 5;
-    create_Raster_Pipeline(&smokePipe, {
+    create_Raster_Pipeline(&smokePipe, 0, {
             {"shaders/compiled/smokeVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/smokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
@@ -561,7 +596,7 @@ void Renderer::createPipilines(){
 
 // println
     tonemapPipe.subpassId = 6;
-    create_Raster_Pipeline(&tonemapPipe, {
+    create_Raster_Pipeline(&tonemapPipe, 0, {
             {"shaders/compiled/tonemapVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/tonemapFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
@@ -570,7 +605,7 @@ void Renderer::createPipilines(){
 
 // println
     overlayPipe.subpassId = 7;
-    create_Raster_Pipeline(&overlayPipe, {
+    create_Raster_Pipeline(&overlayPipe, 0, {
             {"shaders/compiled/overlayVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
             {"shaders/compiled/overlayFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT}, 
         },{
@@ -1136,12 +1171,13 @@ void Renderer::update_light_transform(){
     dvec3 horizon = normalize(cross(dvec3(1,0,0),lightDir));
     dvec3 up = normalize(cross(horizon,lightDir)); // Up vector
     
-    dvec3 light_pos = dvec3(dvec2(world_size*16),0)/2.0 - 5*16.0*lightDir;
+    // dvec3 light_pos = dvec3(dvec2(world_size*16),0)/2.0 - 5*16.0*lightDir;
+    dvec3 light_pos = dvec3(dvec2(world_size*16),0)/2.0  - 1*16.0*lightDir;
     dmat4 view = glm::lookAt(light_pos, light_pos+lightDir, up);
     const double voxel_in_pixels = 5.0; //we want voxel to be around 10 pixels in width / height
-    const double  view_width_in_voxels = 4000.0 / voxel_in_pixels; //todo make dynamic and use spec constnats
-    const double view_height_in_voxels = 4000.0 / voxel_in_pixels;
-    dmat4 projection = glm::ortho(-view_width_in_voxels/2.0, view_width_in_voxels/2.0, view_height_in_voxels/2.0, -view_height_in_voxels/2.0, -1000.0, +1000.0); // => *(2000.0/2) for decoding
+    const double  view_width_in_voxels = 3000.0 / voxel_in_pixels; //todo make dynamic and use spec constnats
+    const double view_height_in_voxels = 3000.0 / voxel_in_pixels;
+    dmat4 projection = glm::ortho(-view_width_in_voxels/2.0, view_width_in_voxels/2.0, view_height_in_voxels/2.0, -view_height_in_voxels/2.0, -300.0, +300.0); // => *(2000.0/2) for decoding
     dmat4 worldToScreen = projection * view;
     
     lightTransform = worldToScreen;
@@ -1659,9 +1695,33 @@ void Renderer::start_lightmap(){
         renderPassInfo.pClearValues    = clearColors.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+void Renderer::lightmap_start_blocks(){
+    VkCommandBuffer &commandBuffer = lightmapCommandBuffers[currentFrame];
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapPipe.line);
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapPipe.lineLayout, 0, 1, &lightmapPipe.sets[currentFrame], 0, 0);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapBlocksPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapBlocksPipe.lineLayout, 0, 1, &lightmapBlocksPipe.sets[currentFrame], 0, 0);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(lightmapExtent.width );
+        viewport.height = (float)(lightmapExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = lightmapExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+void Renderer::lightmap_start_models(){
+    VkCommandBuffer &commandBuffer = lightmapCommandBuffers[currentFrame];
+    
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapModelsPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapModelsPipe.lineLayout, 0, 1, &lightmapModelsPipe.sets[currentFrame], 0, 0);
 
     VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -1727,6 +1787,11 @@ void Renderer::start_raygen() {
         renderPassInfo.pClearValues    = clearColors.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void Renderer::raygen_start_blocks(){
+    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+        PLACE_TIMESTAMP();
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.line);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.lineLayout, 0, 1, &raygenBlocksPipe.sets[currentFrame], 0, 0);
@@ -1751,72 +1816,200 @@ static bool is_face_visible(vec3 normal, vec3 camera_dir) {
     return (dot(normal, camera_dir) < 0.0f);
 }
 
-#define CHECK_N_DRAW(__norm, __dir) \
-if(is_face_visible(mesh->rot*__norm, cameraDir)) {\
-    draw_face_helper(__norm, (*mesh).triangles.__dir, block_id);\
-}\
-if(!is_face_visible(mesh->rot*__norm, lightDir)){\
-    lightmap_face_helper(__norm, (*mesh).triangles.__dir, block_id);\
+#define CHECK_N_DRAW_BLOCK(__norm, __dir) \
+if(is_face_visible(i8vec3(__norm), cameraDir)) {\
+    draw_block_face(__norm, (*block_mesh).triangles.__dir, block_id);\
 }
-
-void Renderer::draw_face_helper(vec3 normal, IndexedVertices& buff, int block_id){
+void Renderer::draw_block_face(i8vec3 normal, IndexedVertices& buff, int block_id){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
-    // VkCommandBuffer &lightmap_commandBuffer = lightmapCommandBuffers[currentFrame];
 
-    assert(buff.indexes.data());
-    assert(block_id);
+        assert(buff.indexes.data());
+        assert(block_id);
     vkCmdBindIndexBuffer(commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-        VkDeviceSize offsets[] = {0};
-        
-    // vec3 norm = uvec3(((pco.normal+1.0)/2.0)*255.0);
-    uvec3 normal_encoded = uvec3(((normal+1.f)/2.f)*255.f);
-    struct {vec4 fn; uvec4 un;} norms = {vec4(normal, float(block_id)), uvec4(normal_encoded, block_id)};
-    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 16, sizeof(norms), &norms);
-    vkCmdDrawIndexed(commandBuffer, buff.icount, 1, 0, 0, 0);
+    
+    i8 sum = normal.x + normal.y + normal.z;
+    u8 sign = (sum>0)? 0:1;
+    u8vec3 absnorm = abs(normal);
+        // assert(sign != 0);
+        assert((absnorm.x + absnorm.y + absnorm.z) == 1);
+    u8 pbn = (
+        sign << 7 |
+        absnorm.x << 0 |
+        absnorm.y << 1 |
+        absnorm.z << 2);
+    //signBit_4EmptyBits_xBit_yBit_zBit
+    struct {u8vec4 inorm;} norms = {u8vec4(pbn,0,0,0)};
 
-    // vkCmdBindIndexBuffer(lightmap_commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
-    // vkCmdDrawIndexed(lightmap_commandBuffer, buff.icount, 1, 0, 0, 0);
+    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+        8, sizeof(norms), &norms);
+    vkCmdDrawIndexed(commandBuffer, buff.icount, 1, 0, 0, 0);
 }
-void Renderer::lightmap_face_helper(vec3 normal, IndexedVertices& buff, int block_id){
+
+void Renderer::raygen_block(Mesh *block_mesh, int block_id, ivec3 shift) {
+    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+
+        VkBuffer vertexBuffers[] = {(*block_mesh).triangles.vertexes[currentFrame].buffer};
+        VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    /*
+    int16_t block;
+    i16vec3 shift;
+    i8vec4 inorm;
+    */
+    struct {i16 block; i16vec3 shift;} blockshift = {i16(block_id), i16vec3(shift)};
+    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+        0, sizeof(blockshift), &blockshift);
+
+    CHECK_N_DRAW_BLOCK(i8vec3(+1,0,0), Pzz);
+    CHECK_N_DRAW_BLOCK(i8vec3(-1,0,0), Nzz);
+    CHECK_N_DRAW_BLOCK(i8vec3(0,+1,0), zPz);
+    CHECK_N_DRAW_BLOCK(i8vec3(0,-1,0), zNz);
+    CHECK_N_DRAW_BLOCK(i8vec3(0,0,+1), zzP);
+    CHECK_N_DRAW_BLOCK(i8vec3(0,0,-1), zzN);
+}
+
+void Renderer::raygen_start_models(){
+    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+
+    vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.line);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.lineLayout, 0, 1, &raygenModelsPipe.sets[currentFrame], 0, 0);
+
+    VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width  = (float)(swapChainExtent.width );
+        viewport.height = (float)(swapChainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+#define CHECK_N_DRAW_MODEL(__norm, __dir) \
+if(is_face_visible(model_mesh->rot*__norm, cameraDir)) {\
+    draw_model_face(__norm, (*model_mesh).triangles.__dir);\
+}
+void Renderer::draw_model_face(vec3 normal, IndexedVertices& buff){
+    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+
+        assert(buff.indexes.data());
+    vkCmdBindIndexBuffer(commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+    
+    struct {vec4 fnorm;} norms = {vec4(normal,0)};
+
+    vkCmdPushConstants(commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+        32, sizeof(norms), &norms);
+    vkCmdDrawIndexed(commandBuffer, buff.icount, 1, 0, 0, 0);
+}
+void Renderer::raygen_model(Mesh *model_mesh) {
+    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+
+        VkBuffer vertexBuffers[] = {(*model_mesh).triangles.vertexes[currentFrame].buffer};
+        VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    /*
+    vec4 rot;
+    vec4 shift;
+    vec4 fnormal; //not encoded
+    */
+    struct {quat rot; vec4 shift;} rotshift = {model_mesh->rot, vec4(model_mesh->shift,0)};
+    vkCmdPushConstants(commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+        0, sizeof(rotshift), &rotshift);
+        VkDescriptorImageInfo
+            modelVoxelsInfo = {};
+            modelVoxelsInfo.imageView = (*model_mesh).voxels[currentFrame].view; //CHANGE ME
+            modelVoxelsInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            modelVoxelsInfo.sampler = unnormNearest;
+
+        VkWriteDescriptorSet 
+            modelVoxelsWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            modelVoxelsWrite.dstSet = NULL;
+            modelVoxelsWrite.dstBinding = 0;
+            modelVoxelsWrite.dstArrayElement = 0;
+            modelVoxelsWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            modelVoxelsWrite.descriptorCount = 1;
+            modelVoxelsWrite.pImageInfo = &modelVoxelsInfo;
+        vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite};
+
+    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
+
+    CHECK_N_DRAW_MODEL(vec3(+1,0,0), Pzz);
+    CHECK_N_DRAW_MODEL(vec3(-1,0,0), Nzz);
+    CHECK_N_DRAW_MODEL(vec3(0,+1,0), zPz);
+    CHECK_N_DRAW_MODEL(vec3(0,-1,0), zNz);
+    CHECK_N_DRAW_MODEL(vec3(0,0,+1), zzP);
+    CHECK_N_DRAW_MODEL(vec3(0,0,-1), zzN);
+}
+
+#define CHECK_N_LIGHTMAP_BLOCK(__norm, __dir) \
+if(is_face_visible(i8vec3(__norm), lightDir)){\
+    lightmap_block_face(__norm, (*block_mesh).triangles.__dir, block_id);\
+}
+void Renderer::lightmap_block_face(i8vec3 normal, IndexedVertices& buff, int block_id){
     VkCommandBuffer &lightmap_commandBuffer = lightmapCommandBuffers[currentFrame];
 
     vkCmdBindIndexBuffer(lightmap_commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
     vkCmdDrawIndexed(lightmap_commandBuffer, buff.icount, 1, 0, 0, 0);
 }
-
-void Renderer::raygen_mesh(Mesh *mesh, int block_id) {
-    VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
+void Renderer::lightmap_block(Mesh *block_mesh, int block_id, ivec3 shift) {
     VkCommandBuffer &lightmap_commandBuffer = lightmapCommandBuffers[currentFrame];
 
-        VkBuffer vertexBuffers[] = {(*mesh).triangles.vertexes[currentFrame].buffer};
+        VkBuffer vertexBuffers[] = {(*block_mesh).triangles.vertexes[currentFrame].buffer};
         VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindVertexBuffers(lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
+    /*
+    int16_t block;
+    i16vec3 shift;
+    i8vec4 inorm;
+    */
+    struct {i16vec4 shift;} blockshift = {i16vec4(shift,0)};
+    vkCmdPushConstants(lightmap_commandBuffer, lightmapBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT, 
+        0, sizeof(blockshift), &blockshift);
+
+    CHECK_N_LIGHTMAP_BLOCK(i8vec3(+1,0,0), Pzz);
+    CHECK_N_LIGHTMAP_BLOCK(i8vec3(-1,0,0), Nzz);
+    CHECK_N_LIGHTMAP_BLOCK(i8vec3(0,+1,0), zPz);
+    CHECK_N_LIGHTMAP_BLOCK(i8vec3(0,-1,0), zNz);
+    CHECK_N_LIGHTMAP_BLOCK(i8vec3(0,0,+1), zzP);
+    CHECK_N_LIGHTMAP_BLOCK(i8vec3(0,0,-1), zzN);
+}
+#define CHECK_N_LIGHTMAP_MODEL(__norm, __dir) \
+if(is_face_visible(model_mesh->rot*(__norm), lightDir)){\
+    lightmap_model_face(__norm, (*model_mesh).triangles.__dir);\
+}
+void Renderer::lightmap_model_face(vec3 normal, IndexedVertices& buff){
+    VkCommandBuffer &lightmap_commandBuffer = lightmapCommandBuffers[currentFrame];
     
-    //TODO:
-    struct {vec4 shift;} raygen_pushconstant = {vec4((*mesh).shift,0)};
-    vkCmdPushConstants(commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
-    vkCmdPushConstants(lightmap_commandBuffer, lightmapPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
+    vkCmdBindIndexBuffer(lightmap_commandBuffer, buff.indexes[currentFrame].buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(lightmap_commandBuffer, buff.icount, 1, 0, 0, 0);
+}
+void Renderer::lightmap_model(Mesh *model_mesh) {
+    VkCommandBuffer &lightmap_commandBuffer = lightmapCommandBuffers[currentFrame];
 
-    (*mesh).old_rot   = (*mesh).rot;
-    (*mesh).old_shift = (*mesh).shift;
+        VkBuffer vertexBuffers[] = {(*model_mesh).triangles.vertexes[currentFrame].buffer};
+        VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
+    /*
+    vec4 rot;
+    vec4 shift;
+    vec4 fnormal; //not encoded
+    */
+    struct {quat rot; vec4 shift;} rotshift = {model_mesh->rot, vec4(model_mesh->shift,0)};
+    vkCmdPushConstants(lightmap_commandBuffer, lightmapModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+        0, sizeof(rotshift), &rotshift);
 
-
-    // glm::mult
-    // if(old_buff != (*mesh).indexes[currentFrame].buffer) {
-    // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    // printl((*mesh).triangles.Pzz.icount);
-    // if(is_face_visible(mesh->rot*vec3(+1,0,0), cameraDir)) {
-    //     draw_face_helper(vec3(+1,0,0), (*mesh).triangles.Pzz);
-    // }
-    CHECK_N_DRAW(vec3(+1,0,0), Pzz);
-    CHECK_N_DRAW(vec3(-1,0,0), Nzz);
-    CHECK_N_DRAW(vec3(0,+1,0), zPz);
-    CHECK_N_DRAW(vec3(0,-1,0), zNz);
-    CHECK_N_DRAW(vec3(0,0,+1), zzP);
-    CHECK_N_DRAW(vec3(0,0,-1), zzN);
-        // old_buff = (*mesh).indexes[currentFrame].buffer;
-    // }
+    CHECK_N_LIGHTMAP_MODEL(vec3(+1,0,0), Pzz);
+    CHECK_N_LIGHTMAP_MODEL(vec3(-1,0,0), Nzz);
+    CHECK_N_LIGHTMAP_MODEL(vec3(0,+1,0), zPz);
+    CHECK_N_LIGHTMAP_MODEL(vec3(0,-1,0), zNz);
+    CHECK_N_LIGHTMAP_MODEL(vec3(0,0,+1), zzP);
+    CHECK_N_LIGHTMAP_MODEL(vec3(0,0,-1), zzN);
 }
 
 void Renderer::update_particles() {
@@ -1844,7 +2037,6 @@ void Renderer::update_particles() {
 void Renderer::raygen_map_particles() {
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-    vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     //go to next no matter what
     vkCmdNextSubpass(commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     
@@ -2741,7 +2933,7 @@ vector<Image> Renderer::create_RayTrace_VoxelImages(Voxel* voxels, ivec3 size) {
     create_Image_Storages(&voxelImages,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8_UINT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         0, // no VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT
         VK_IMAGE_ASPECT_COLOR_BIT,
