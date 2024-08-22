@@ -1,26 +1,16 @@
 # Lum
-**Lum** is a demo of a voxel engine featuring raytraced lighting with high perfomance. Targets tiled minecraft-dungeons-style blocky graphics with isometric view (but can be used differently)
+**Lum** is a voxel engine I'm developing because none of existing ones suit my needs
 
 ##### Screenshot
-![alt text](screenshot_1.png)
-
-## Features
-- **Raytraced** (actually, path marched) **Light**
-    - **Precise voxel raytracer**: Pure compute shaders without using the *VK_KHR_ray_tracing* extension
-    - **Variance-guided temporal accumulation**: Considers normal and material information for improved quality
-    - **`A-trous edge-preserving spatial denoiser**: Takes normal, material and depth information into account
-    - **Edge-preserving upscaler**: Uses high-resolution G-buffer to guide itself, like FSR but no guessing
-- **Particle system**: A simple particle system to enhance visual effects (who needs an engine without particle system?)
-- **HTML-CSS style Ui**: Utilizes RmlUi for a flexible and modern user interface (**not** immediate mode)
-- **Tiled world**: designed specifically for block-based scenes. (maybe not really a feature, but target audience instead)
-- **Auto mesh generation**: generates and optimizes vertices from .vox files using opengametools (https://github.com/jpaver/opengametools) and meshoptimizer (https://github.com/zeux/meshoptimizer)
+![alt text](screenshot_v0.4.png)
 
 ## Installation 
 - ### Prerequisites
   - **MinGW64 C++ Compiler**: if on windows, follow instructions at https://www.msys2.org/
+    - other compilers support not tested
   - **Vcpkg**: follow instructions at https://vcpkg.io/en/getting-started
   - **Vulkan SDK**: follow instructions at https://vulkan.lunarg.com/sdk/home
-    - obviously, vulkan support required. But you can also use software renderers
+    - obviously, vulkan support required. But you might be able to use CPU implementation 
   - **GNU Make**: installed with MinGW64 as mingw32-make.exe (mingw32-make.exe is refered as make)
 - ### Required Libraries
   - **GLM**: Install via MSYS2
@@ -35,56 +25,118 @@
 
   - Install GLM and GLFW using MSYS2: \
 `$ pacman -S mingw-w64-x86_64-glm mingw-w64-x86_64-glfw`
-    - if not using MSYS2, just make sure necessary libraries and headers are installed in any other way and visible to compiler
+    - if not using MSYS2, just make sure necessary libraries and headers are installed in any other way and visible to your compiler
 
   - Get the repository: \
-`$ git clone https://github.com/platonvin/lum.git` for unstable version or download code from releases    
+`$ git clone https://github.com/platonvin/lum.git` for *unstable* version or download code from releases    
 
   - Navigate to the project directory:\
 `$ cd lum` 
   - Initialize:\
 `$ make init`   
-  - Build:\
-`$ make release -j6`
-    - `$make clean` every time you switch from release to debug and vice versa
-  - Run:\
-`$ ./client.exe`   
+  - Build and run:\
+`$ make release -j10`
+    - `$make clean` if something (-pipe) broke
 
 Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for windows
 
 ## Engine Overview
-### Stages
-  1. **Ray generation**
-       - Generates highres G-buffer via rasterization
-  2. **G-buffer downscaling**
-       - When upscaling is used, downscales images for raytracer, accumulator, and denoiser 
-  3. **Block allocation**
-       - Scene is tiled, and air blocks are all "0", so to translate mesh in scene temporary blocks are allocated and "pointers" to them are written to the scene
-  4. **Mesh translation**
-       - Translates all meshes to "world space" from their "model space"
-  5. **Raytracer pass**
-       - Core raytracer calculations
-  6. **Optional pre-accumulator denoiser pass**
-       - Denoises raytraced image
-  7. **Accumulator**
-       - Mixes pixels with matching ones from previous frames using motion vectors guided by G-buffer
-  8. **Optional post-accumulator denoiser pass**
-       - Denoises accumulated image
-  9. **Upscaler**
-       - Uses G-buffer guided texture filtering to reconstruct highres image
-  10. **Optional post-upscaler denoiser pass**
-       - Denoises upscaled image
-  11. **Ui and presentation**
-       - Renders Ui to copy of the final image and presents it
+```mermaid
+flowchart TD
+%% Nodes
+    Frame[\"Frame"/]
+    Compute[["Compute"]]
+        BAS("Bulding acceleration structure")
+        Radiance("Update radiance")
+    Rpass1(["lighmap pass"])
+        1blocks("blocks")
+        1models("models") 
+    Rpass2(["gbuffer pass"])
+        2blocks("blocks")
+        2models("models") 
+        2particles("particles")
+        2grass("grass")
+        2water("water")
+    Rpass3(["shading pass"])
+            3diffuse("diffuse (radiance + lightmaps)")
+            3ambient("ambient occlusion")
+            3glossy("glossy ray generation")
+            3smoke("smoke ray generation")
+            3glossy("glossy")
+            3smoke("smoke")
+            3tonemapping("tonemapping & color correction")
+            3ui("ui")
+    Graphics[["Graphics"]]
+    Present[["Present"]] 
+
+%% Edge connections between nodes
+    Frame --> Compute
+        Compute --> BAS --> Graphics
+        Compute --> Radiance --> Graphics
+    %% Frame --> Graphics
+    Graphics --> Rpass1
+        Rpass1 --> 1blocks --> Rpass2
+        Rpass1 --> 1models --> Rpass2
+    %% Graphics --> Rpass2
+        Rpass2 --> 2blocks --> Rpass3
+        Rpass2 --> 2models --> Rpass3
+        Rpass2 --> 2particles --> Rpass3
+        Rpass2 --> 2grass --> Rpass3
+        Rpass2 --> 2water --> Rpass3
+    %% Graphics --> Rpass3
+        Rpass3 --> 3diffuse --> Present
+        Rpass3 --> 3ambient --> Present
+        Rpass3 --> 3glossy --> Present
+        Rpass3 --> 3smoke --> Present
+        Rpass3 --> 3tonemapping --> Present
+        Rpass3 --> 3ui --> Present
+    %% Compute --> Graphics
+    %% 3diffuse --> 3ambient
+    %% 3ambient --> 3glossy
+    %% 3glossy --> 3smoke
+    %% Rpass1 --> Rpass2
+    %% Rpass2 --> Rpass3
+    %% Rpass3 --> Present
+
+%% Individual node styling
+    style Frame color:#1E1A1D, fill:#AFAAB9, stroke:#1B2A41
+
+    style Compute color:#1E1A1D, fill:#EDF6F9, stroke:#1B2A41
+    style Graphics color:#1E1A1D, fill:#EDF6F9, stroke:#1B2A41
+
+    style Present color:#1E1A1D, fill:#AFAAB9, stroke:#1B2A41
+
+    style BAS color:#1E1A1D, fill:#D6CA98, stroke:#1B2A41
+    style Radiance color:#1E1A1D, fill:#D6CA98, stroke:#1B2A41
+
+    style Rpass1 color:#1E1A1D, fill:#2C6661, stroke:#1B2A41
+    style 1blocks color:#1E1A1D, fill:#2C666E, stroke:#1B2A41
+    style 1models color:#1E1A1D, fill:#2C666E, stroke:#1B2A41
+
+    style Rpass2 color:#1E1A1D, fill:#7CA975, stroke:#1B2A41
+    style 2blocks color:#1E1A1D, fill:#7CA982, stroke:#1B2A41
+    style 2models color:#1E1A1D, fill:#7CA982, stroke:#1B2A41
+    style 2particles color:#1E1A1D, fill:#7CA982, stroke:#1B2A41
+    style 2grass color:#1E1A1D, fill:#7CA982, stroke:#1B2A41
+    style 2water color:#1E1A1D, fill:#7CA982, stroke:#1B2A41
+
+    style Rpass3 color:#1E1A1D, fill:#83C5B1, stroke:#1B2A41
+    style 3diffuse color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3ambient color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3glossy color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3smoke color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3glossy color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3smoke color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3tonemapping color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+    style 3ui color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
+```
 
 ### Demo controls
-- denoiser and upscaler setting in ui
 - WASD for camera movement
 - Arrows for robot movement
-- Enter for shooting particles
+  - Enter for shooting particles
 - 0 to remove block underneath
 - 1-9 and F1-F5 to place matching blocks (btw world is saved to a file)
 - "<" and ">" to rotate camera
+- "Page Up" and "Page Down" to zoom in/out
 - Esc to close demo
-
-2 Post-Denoiser steps, 1 Final denoiser step and x1.5 upscale ration recommended 

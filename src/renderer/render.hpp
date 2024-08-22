@@ -60,7 +60,7 @@ using namespace glm;
 
 typedef   u8 MatID_t;
 typedef  i16 BlockID_t;
-
+const BlockID_t SPECIAL_BLOCK = 32767;
 typedef struct Material {
     // glm::vec4<u8> casd;
     vec4 color; //colo   r AND transparancy
@@ -714,7 +714,8 @@ public:
     
     vector<Buffer>   light_uniform;
     vector<Buffer>         uniform;
-    vector<ivec4>         radianceUpdates;
+    vector<i8vec4>         radianceUpdates;
+    vector<i8vec4>  specialRadianceUpdates;
     Buffer             gpuRadianceUpdates;
     vector<void*>  stagingRadianceUpdatesMapped;
     vector<Buffer> stagingRadianceUpdates;

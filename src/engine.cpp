@@ -389,10 +389,13 @@ void Engine::cull_meshes(){
     // }
 
     grass_que.clear();
-    for(int xx=0; xx<16; xx++){
-    for(int yy=0; yy<16; yy++){
+    for(int xx=4; xx<20; xx++){
+    for(int yy=4; yy<20; yy++){
+        // for(int xx=5; xx<12; xx++){
+        // for(int yy=6; yy<16; yy++){
+        if((xx>=5) and (xx<12) and (yy>=6) and (yy<16)) continue;
         struct grass_render_request grr = {};
-        grr.pos = ivec3(64+xx*16, 64+yy*16, 16);
+        grr.pos = ivec3(xx*16, yy*16, 16);
 
         dvec3 clip_coords = (render.cameraTransform * dvec4(grr.pos,1));
             clip_coords.z = -clip_coords.z;
@@ -400,21 +403,31 @@ void Engine::cull_meshes(){
 
         // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
         grass_que.push_back(grr);
+        // render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
+        // render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,0),0));
     }}
     std::sort(grass_que.begin(), grass_que.end(), &sort_grass);
 
+    // for(int xx=0; xx<10; xx++){
+    // for(int yy=0; yy<4; yy++){
+    //     render.origin_world(xx,yy,00)=2;
+    // }}
     water_que.clear();
-    for(int xx=0; xx<10; xx++){
-    for(int yy=0; yy<4; yy++){
-        struct grass_render_request grr = {};
-        grr.pos = ivec3(xx*16, yy*16, 14);
+    for(int xx=5; xx<12; xx++){
+    for(int yy=6; yy<16; yy++){
+        // render.origin_world(xx,yy,00)=0;
+        struct grass_render_request wrr = {};
+        wrr.pos = ivec3(xx*16, yy*16, 14);
 
-        dvec3 clip_coords = (render.cameraTransform * dvec4(grr.pos,1));
+        dvec3 clip_coords = (render.cameraTransform * dvec4(wrr.pos,1));
             clip_coords.z = -clip_coords.z;
-        grr.cam_dist = clip_coords.z;
+        wrr.cam_dist = clip_coords.z;
 
         // if(is_block_visible(render.cameraTransform, dvec3(grr.pos))){
-        water_que.push_back(grr);
+        water_que.push_back(wrr);
+        render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
+        render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
+        // render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,0),0));
     }}
     std::sort(water_que.begin(), water_que.end(), &sort_grass);
 }

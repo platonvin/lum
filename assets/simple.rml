@@ -6,7 +6,7 @@
     <body>
         <div id="container", data-model="my_model">
             <h1>Parameter Controls</h1>
-            <div class="parameter">
+            <!-- <div class="parameter">
                 <p>Pre-Denoiser Steps</p>
                 <div class="controls">
                     <button data-event-click="pre_denoiser_decrease">-</button>
@@ -29,9 +29,9 @@
                     <span>{{final_counter}}</span>
                     <button data-event-click="final_denoiser_increase">+</button>
                 </div>
-            </div>
+            </div> -->
             <div class="parameter">
-                <p>Upscaling ratio</p>
+                <p>thats a button</p>
                 <div class="controls">
                     <button data-event-click="upscaling_ratio_decrease">-</button>
                     <span>{{upscaling_ratio}}</span>

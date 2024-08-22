@@ -2,7 +2,7 @@
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #include "render.hpp" 
 #include <stdfloat>
-#include <BS_thread_pool.hpp>
+// #include <BS_thread_pool.hpp> //TODO: howto depend
 
 using namespace std;
 using namespace glm;
@@ -227,7 +227,7 @@ void Renderer::createImages(){
 
     create_Buffer_Storages(&gpuRadianceUpdates,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        sizeof(ivec4)*world_size.x*world_size.y*world_size.z, false); //TODO test extra mem
+        sizeof(i8vec4)*world_size.x*world_size.y*world_size.z, false); //TODO test extra mem
     create_Buffer_Storages(&stagingRadianceUpdates,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         sizeof(ivec4)*world_size.x*world_size.y*world_size.z, true); //TODO test extra mem
@@ -1177,7 +1177,7 @@ void Renderer::update_light_transform(){
     const double voxel_in_pixels = 5.0; //we want voxel to be around 10 pixels in width / height
     const double  view_width_in_voxels = 3000.0 / voxel_in_pixels; //todo make dynamic and use spec constnats
     const double view_height_in_voxels = 3000.0 / voxel_in_pixels;
-    dmat4 projection = glm::ortho(-view_width_in_voxels/2.0, view_width_in_voxels/2.0, view_height_in_voxels/2.0, -view_height_in_voxels/2.0, -300.0, +300.0); // => *(2000.0/2) for decoding
+    dmat4 projection = glm::ortho(-view_width_in_voxels/2.0, view_width_in_voxels/2.0, view_height_in_voxels/2.0, -view_height_in_voxels/2.0, -350.0, +350.0); // => *(2000.0/2) for decoding
     dmat4 worldToScreen = projection * view;
     
     lightTransform = worldToScreen;
@@ -1366,10 +1366,12 @@ void Renderer::blockify_custom(void* ptr) {
     vmaFlushAllocation(VMAllocator, stagingWorld[currentFrame].alloc, 0, size_to_copy);
 }
 
+#include <glm/gtx/hash.hpp>
 void Renderer::update_radiance() {
     VkCommandBuffer &commandBuffer = computeCommandBuffers[currentFrame];
     
     // cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    robin_hood::unordered_set<i8vec3> set = {};
 
     radianceUpdates.clear();
 
@@ -1388,12 +1390,18 @@ void Renderer::update_radiance() {
         }}}
         // TODO: finish dynamic update system, integrate with RaVE
         if(sum_of_neighbours != 0) {
-            radianceUpdates.push_back(ivec4(xx,yy,zz,0));
+            radianceUpdates.push_back(i8vec4(xx,yy,zz,0));
+            set.insert(i8vec3(xx,yy,zz));
         }
     }}}
-    // printl(radianceUpdates.size())
+    
+    for(auto u : specialRadianceUpdates){
+        if (!set.contains(u)){
+            radianceUpdates.push_back(u);
+        }
+    } specialRadianceUpdates.clear();
 
-    VkDeviceSize bufferSize = sizeof(ivec4)*radianceUpdates.size();
+    VkDeviceSize bufferSize = sizeof(radianceUpdates[0])*radianceUpdates.size();
     memcpy(stagingRadianceUpdatesMapped[currentFrame], radianceUpdates.data(), bufferSize);
     
     // cmdPipelineBarrier(commandBuffer, 
@@ -2371,7 +2379,8 @@ void Renderer::smoke_raygen(){
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilSmokePipe.lineLayout, 0, 1, &fillStencilSmokePipe.sets[currentFrame], 0, 0);
 
-        struct rtpc {vec4 centerSize;} pushconstant = {vec4(vec3(11,11,1.5)*16.f, 32)};
+        struct rtpc {vec4 centerSize;} pushconstant = {vec4(vec3(11,11,1.5)*16.f, 32)}; 
+    specialRadianceUpdates.push_back(ivec4(11,11,1,0));
         vkCmdPushConstants(commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushconstant), &pushconstant);
 
         PLACE_TIMESTAMP();

@@ -437,7 +437,7 @@ void Ui::update(){
 	if(upscale_counter_diff != 0){
 		renderer->_ratio += upscale_counter_diff;
 		renderer->_ratio = glm::clamp(renderer->_ratio, 1.0f, 3.0f);
-		renderer->resized = true;
+		// renderer->resized = true;
 
 		my_model.DirtyVariable("upscaling_ratio");
 		upscale_counter_diff = 0;
