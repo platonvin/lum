@@ -14,8 +14,12 @@ release_specific_flags = -O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1
 -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
-special_otp_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul\
+#for "just libs"
+special_otp_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul\
 -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
+#for crazy builds
+crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DNDEBUG -fno-exceptions -funroll-loops -w -ftrivial-auto-var-init=zero -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul\
+-fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -fno-math-errno -Wl,--gc-sections
 
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 # SHADER_OPT_FLAGS = --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions --scalar-replacement --eliminate-local-single-block --eliminate-local-single-store --simplify-instructions --vector-dce --eliminate-dead-inserts --eliminate-dead-code-aggressive --eliminate-dead-branches --merge-blocks --eliminate-local-multi-store --simplify-instructions --vector-dce --eliminate-dead-inserts --redundancy-elimination --eliminate-dead-code-aggressive --strip-debug
@@ -51,6 +55,7 @@ srcs := \
 	src/main.cpp\
 	src/engine.cpp\
 	src/renderer/render.cpp\
+	src/renderer/ao_lut.cpp\
 	src/renderer/setup.cpp\
 	src/renderer/load_stuff.cpp\
 	src/renderer/render_ui_interface.cpp\
@@ -160,6 +165,11 @@ debug: shaders build_deb
 release: Flags=$(release_flags)
 release: shaders build_rel
 	client.exe
+#crazy fast
+crazy: shaders
+	g++ $(srcs) -o crazy_client.exe $(crazy_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
+crazy_native: shaders
+	g++ $(srcs) -o crazy_client.exe $(crazy_flags) -march=native $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
 
 fun:
 	@echo fun was never an option

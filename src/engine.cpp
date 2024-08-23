@@ -2,19 +2,32 @@
 
 #include <chrono>
 void printFPS() {
-    static int frameCount = 0;
-    static auto lastTime = std::chrono::high_resolution_clock::now();
+    static int frame_count = 0;
+    static auto last_print = std::chrono::high_resolution_clock::now();
+    static auto last_frame = std::chrono::high_resolution_clock::now();
+    static double  best_mspf = 1;
+    static double worst_mspf = 0;
     
-    frameCount++;
+    frame_count++;
     
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = currentTime - lastTime;
+    auto current_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> last_print_elapsed = current_time - last_print;
+    std::chrono::duration<double> last_frame_elapsed = current_time - last_frame;
     
-    if (elapsed.count() >= 1.0) {
-        std::cout << "FPS: " << frameCount << std::endl;
-        frameCount = 0;
-        lastTime = currentTime;
+    best_mspf = std::min(best_mspf, last_frame_elapsed.count());
+    worst_mspf = std::max(best_mspf, last_frame_elapsed.count());
+
+    if (last_print_elapsed.count() >= 1.0) {
+        std::cout << ", " << frame_count;
+        std::cout << ", " << 1000.0*best_mspf;
+        std::cout << ", " << 1000.0*worst_mspf;
+        frame_count = 0;
+        last_print = current_time;
+
+        best_mspf = 1;
+        worst_mspf = 0;
     }
+    last_frame = current_time;
 }
 
 vec3 rnVec3(float minValue, float maxValue) {
