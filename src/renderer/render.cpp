@@ -290,7 +290,7 @@ void Renderer::setupDescriptors(){
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencil},   NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER         , RD_FIRST, {/*empty*/}, {materialPalette},    nearestSampler,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache},      unnormLinear,   VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 // println
@@ -2190,14 +2190,14 @@ void Renderer::raygen_start_water(){
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
 
-void Renderer::raygen_map_water(vec4 shift, int size){
+void Renderer::raygen_map_water(vec4 shift, int qualitySize){
     VkCommandBuffer &commandBuffer = graphicsCommandBuffers[currentFrame];
 
-    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, size, iFrame};
+    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, qualitySize, iFrame};
     vkCmdPushConstants(commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(raygen_pushconstant), &raygen_pushconstant);
 
-    const int verts_per_water_tape = 128;
-    const int tapes_per_block = 64;
+    const int verts_per_water_tape = qualitySize*2+2;
+    const int tapes_per_block = qualitySize;
     vkCmdDraw(commandBuffer, 
         verts_per_water_tape, 
         tapes_per_block, 
@@ -3265,6 +3265,18 @@ void Renderer::createSamplers() {
     samplerInfo.magFilter = VK_FILTER_NEAREST;
     samplerInfo.minFilter = VK_FILTER_NEAREST;
     VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &unnormNearest));
+
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.magFilter = VK_FILTER_NEAREST;
+    samplerInfo.minFilter = VK_FILTER_NEAREST;
+    samplerInfo.compareEnable = VK_TRUE;
+    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    samplerInfo.compareOp = VK_COMPARE_OP_LESS;
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, NULL, &shadowSampler));
+    
 }
 
 void Renderer::copy_Buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {

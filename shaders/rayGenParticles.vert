@@ -62,7 +62,7 @@ void main() {
     vs_out.size = size;
 
     bool should_map = false;
-    if(size > .1){
+    if(size > .15){
         ivec3 target_voxel_in_world = ivec3(posIn);
         ivec3 target_block_in_world = target_voxel_in_world / 16;
 

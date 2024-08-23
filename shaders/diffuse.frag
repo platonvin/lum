@@ -28,7 +28,7 @@ layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput m
 layout(input_attachment_index = 1, set = 0, binding = 2) uniform  subpassInput depthBuffer;
 layout(set = 0, binding = 3 ) uniform sampler2D voxelPalette;
 layout(set = 0, binding = 4 ) uniform sampler3D radianceCache;
-layout(set = 0, binding = 5 ) uniform sampler2D lightmap;
+layout(set = 0, binding = 5 ) uniform sampler2DShadow lightmap;
 
 // layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
@@ -275,21 +275,26 @@ float sample_lightmap(vec3 world_pos, vec3 normal){
     //     angle += (6.9*PI)/float(sample_count); //to cover evenly
     //     normalized_radius += norm_radius_step;
     // }
+    vec2 pcfshift = vec2(1.0/1024.0);
     [[unroll]]
     for(int xx=-1; xx<=+1; xx++){
     for(int yy=-1; yy<=+1; yy++){
         // if((xx==00) || (yy==00)) continue;
-        // if((xx!=00) && (yy!=00)) continue;
-        vec2 lighmap_shift = vec2 (xx * 1.0/1024.0, yy * 1.0/1024.0);
-        float light_depth = texture(lightmap, light_uv + lighmap_shift).x;
+        if(!((xx!=00) && (yy!=00))){
+            vec2 lighmap_shift = vec2(xx, yy) * pcfshift;
+            // float light_depth = texture(lightmap, vec3(light_uv + lighmap_shift, 0.0)).x; //TODO PCF
 
-        float diff = abs(world_depth - light_depth);
-        float weight = 1;
-        total_light += float(((world_depth - bias) <= (light_depth))) * weight;
-        total_weight += weight;
+            float test = texture(lightmap, vec3(light_uv + lighmap_shift, world_depth)).r; //TODO PCF
+            // float diff = abs(world_depth - light_depth);
+            float weight = 1;
+            total_light += test;
+            total_weight += weight;
+        }
     }}
     
+    // return 1 * 0.15;
     return ((total_light / total_weight)) * 0.15;
+    // return ((total_light)) * 0.15;
     
     // if(((world_depth-bias) <= (light_depth)) && (dot(normal, ubo.globalLightDir.xyz) < 0)) {
     // float sub = float(dot(normal, ubo.globalLightDir.xyz) > 0);

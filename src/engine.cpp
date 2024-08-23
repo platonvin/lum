@@ -540,7 +540,7 @@ void Engine::draw()
 
                 render.raygen_start_water();
                     for(auto w : water_que){
-                        render.raygen_map_water(vec4(w.pos,0), 16);
+                        render.raygen_map_water(vec4(w.pos,0), 32);
                     }
                 render.end_raygen();
 // println

@@ -934,7 +934,7 @@ void Renderer::createRenderPassAlt(){
         wait.srcSubpass = VK_SUBPASS_EXTERNAL;
         wait.dstSubpass = 0;
 		wait.srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-		wait.dstStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		wait.dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
 		wait.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 		wait.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 		wait.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
@@ -1533,6 +1533,7 @@ void Renderer::createLogicalDevice(){
         deviceFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         deviceFeatures12.storagePushConstant8 = VK_TRUE;
         deviceFeatures12.shaderInt8 = VK_TRUE;
+        deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 physical_features2 = {};
         physical_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;

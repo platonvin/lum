@@ -17,7 +17,6 @@ temp.cpp
 r.cpp
 .vscode
 assets/*.zip
-run.py
 #memory dump from VMA
 dump.json
 imgui.ini
@@ -28,3 +27,4 @@ temp.*
 package
 package.zip
 diag.mmd
+*.py

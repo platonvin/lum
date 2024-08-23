@@ -11,8 +11,8 @@ precision varp float;
 
 layout(location = 0) in lowp uvec3 posIn;
 layout(location = 0) out vec3 sample_point;
-layout(location = 1) out flat uint normal_encoded;
-layout(location = 2) out vec3 n;
+layout(location = 1) out flat uint normal_encoded_packed;
+// layout(location = 2) out vec3 n;
 
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
@@ -57,7 +57,12 @@ void main() {
     // uint mat = uint(MatIDIn);
     // float fmat = (float(mat)-127.0)/127.0;
     // vec4 fmat_norm = vec4(fmat, norm);
-    n = _fnorm;
-    normal_encoded = packUnorm4x8(vec4((_fnorm+1.0)/2.0, 0));
+    // n = _fnorm;
+    // uvec4 norm_encoded = uvec4(((_fnorm+1.0)/2.0)*255.0, 0);
+    // normal_encoded_packed = 
+    //     (norm_encoded.x<<0) |
+    //     (norm_encoded.y<<8) |
+    //     (norm_encoded.z<<16) ;
+    normal_encoded_packed = packUnorm4x8(vec4((_fnorm+1.0)/2.0, 0));
     sample_point = fpos - fnorm * 0.5; //for better rounding lol
 }

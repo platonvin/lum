@@ -162,8 +162,8 @@ vec3 get_water_vert(int vert_index, int instance_index, vec2 shift, out vec3 nor
     int instance_y_shift = instance_index;
     int y_shift = (vert_index % 2);
     int x_shift = ((vert_index+1) / 2);
-    vertex.x = (float(x_shift                   ) / float(pco.size))*8.0;//*4;
-    vertex.y = (float(y_shift + instance_y_shift) / float(pco.size))*8.0;//*4;
+    vertex.x = (float(x_shift                   ) / float(pco.size))*16.0;//*4;
+    vertex.y = (float(y_shift + instance_y_shift) / float(pco.size))*16.0;//*4;
     
     // vertex.z = 10.0;
     
