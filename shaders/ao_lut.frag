@@ -103,18 +103,18 @@ void main() {
     vec2 initial_pix = gl_FragCoord.xy / ubo.frame_size;
     float initial_depth = load_depth(initial_pix);
     const int sample_count = 8; //in theory i should do smth with temporal accumulation 
-    const float max_radius = 16.0 / 1000.0;
-    float angle = 00;
-    float angle_bias = sin(radians(0));
-    float radius = 00;
-    float normalized_radius = 00;
-    float radius_step = max_radius / float(sample_count);
-    float norm_radius_step = 1.0 / float(sample_count);
+    // const float max_radius = 16.0 / 1000.0;
+    // float angle = 00;
+    // float angle_bias = sin(radians(0));
+    // float radius = 00;
+    // float normalized_radius = 00;
+    // float radius_step = max_radius / float(sample_count);
+    // float norm_radius_step = 1.0 / float(sample_count);
 
     // vec2 ratio = ubo.frame_size / ubo.frame_size.x;
 
     float total_ao = 00;
-    float total_weight = 00;
+    // float total_weight = 00;
 
     // mat2 rotate = rotate2d(0.69420);
     // vec2 screen_rot = vec2(1,0);
@@ -161,6 +161,6 @@ void main() {
     // obfuscation = clamp((obfuscation), 0.0, 0.7);
     // obfuscation *= 0.7;
     frame_color = (vec4(encode_color(vec3(0.0)), obfuscation));
-    frame_color = (vec4(encode_color(vec3(obfuscation)), 1));
+    // frame_color = (vec4(encode_color(vec3(obfuscation)), 1));
     // frame_color = (vec4(encode_color(vec3(0.0)), 0));
 } 

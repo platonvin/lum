@@ -286,21 +286,21 @@ float sample_lightmap(vec3 world_pos, vec3 normal){
     // }
 
     vec2 pcfshift = vec2(1.0/1024.0);
-    [[unroll]]
-    for(int xx=-1; xx<=+1; xx++){
-    for(int yy=-1; yy<=+1; yy++){
-        // if((xx==00) || (yy==00)) continue;
-        if(!((xx!=00) && (yy!=00))){
-            vec2 lighmap_shift = vec2(xx, yy) * pcfshift;
-            // float light_depth = texture(lightmap, vec3(light_uv + lighmap_shift, 0.0)).x; //TODO PCF
+    // [[unroll]]
+    // for(int xx=-1; xx<=+1; xx++){
+    // for(int yy=-1; yy<=+1; yy++){
+    //     // if((xx==00) || (yy==00)) continue;
+    //     if(!((xx!=00) && (yy!=00))){
+    //         vec2 lighmap_shift = vec2(xx, yy) * pcfshift;
+    //         // float light_depth = texture(lightmap, vec3(light_uv + lighmap_shift, 0.0)).x; //TODO PCF
 
-            float test = texture(lightmap, vec3(light_uv + lighmap_shift, world_depth)).r; //TODO PCF
-            // float diff = abs(world_depth - light_depth);
-            float weight = 1;
-            total_light += test;
-            total_weight += weight;
-        }
-    }}
+    //         float test = texture(lightmap, vec3(light_uv + lighmap_shift, world_depth)).r; //TODO PCF
+    //         // float diff = abs(world_depth - light_depth);
+    //         float weight = 1;
+    //         total_light += test;
+    //         total_weight += weight;
+    //     }
+    // }}
 
     total_light += sample_lightmap_with_shift(-1,0,light_uv,world_depth);
     total_light += sample_lightmap_with_shift(0,0,light_uv,world_depth);
