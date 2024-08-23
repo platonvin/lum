@@ -249,7 +249,7 @@ void Renderer::free_block(Block** block){
         free_helper(zNz);
         free_helper(zzP);
         free_helper(zzN);
-        // if(not (*block)->mesh.triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);
+        if(not (*block)->mesh.triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);
     }
 
     if(not((*block)==NULL)) delete (*block);
@@ -288,7 +288,7 @@ void Renderer::free_mesh(Mesh* mesh){
         free_helper(zNz);
         free_helper(zzP);
         free_helper(zzN);
-        // if(not mesh->triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
+        if(not mesh->triangles.vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
         if(not mesh->voxels.empty()) vmaDestroyImage(VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
         if(not mesh->voxels.empty()) vkDestroyImageView(device, mesh->voxels[i].view, NULL);
     }

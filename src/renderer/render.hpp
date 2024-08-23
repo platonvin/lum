@@ -670,7 +670,7 @@ public:
     vector<Image> swapchainImages;
            Image highresFrames;
            Image highresDepthStencil;
-           Image highresStencils;
+        //    Image highresStencils;
            Image highresMatNorms; 
            //downscaled version for memory coherence. TODO:TEST perfomance on tiled 
            Image lowresMatNorm;
@@ -681,14 +681,14 @@ public:
            Image maskFrame; //where lowres renders to. Blends with highres afterwards
     
 
-    VkSampler  nearestSampler;
-    VkSampler   linearSampler;
-    VkSampler   linearSampler_tiled;
-    VkSampler   linearSampler_tiled_mirrored;
-    VkSampler  overlaySampler;
-    VkSampler   shadowSampler;
-    VkSampler  unnormLinear;
-    VkSampler  unnormNearest;
+    VkSampler nearestSampler;
+    VkSampler  linearSampler;
+    VkSampler  linearSampler_tiled;
+    VkSampler  linearSampler_tiled_mirrored;
+    VkSampler overlaySampler;
+    VkSampler  shadowSampler;
+    VkSampler unnormLinear;
+    VkSampler unnormNearest;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
     vector<Buffer>      stagingWorld;

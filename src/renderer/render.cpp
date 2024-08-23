@@ -704,14 +704,14 @@ void Renderer::createSwapchainDependent() {
         VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &stencilViewForDS));
 
     //required anyways
-    create_Image_Storages(&maskFrame, //stencil for glossy&smoke
-        VK_IMAGE_TYPE_2D,
-        FRAME_FORMAT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        {raytraceExtent.width, raytraceExtent.height, 1});
+    // create_Image_Storages(&maskFrame, //stencil for glossy&smoke
+    //     VK_IMAGE_TYPE_2D,
+    //     FRAME_FORMAT,
+    //     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    //     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    //     VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+    //     VK_IMAGE_ASPECT_COLOR_BIT,
+    //     {raytraceExtent.width, raytraceExtent.height, 1});
     create_Image_Storages(&farDepth, //smoke depth
         VK_IMAGE_TYPE_2D,
         SECONDARY_DEPTH_FORMAT,
@@ -853,14 +853,19 @@ void Renderer::cleanup() {
     // deleteImages(&bitPalette);
     deleteImages(&materialPalette);
     deleteImages(&perlinNoise2d);
+    deleteImages(&perlinNoise3d);
     deleteImages(&grassState);
     deleteImages(&waterState);
     deleteImages(&lightmap);
 
     vkDestroySampler(device, nearestSampler, NULL);
-    vkDestroySampler(device,  linearSampler, NULL);
-    vkDestroySampler(device, overlaySampler, NULL);
+    vkDestroySampler(device, linearSampler, NULL);
     vkDestroySampler(device, linearSampler_tiled, NULL);
+    vkDestroySampler(device, linearSampler_tiled_mirrored, NULL);
+    vkDestroySampler(device, overlaySampler, NULL);
+    vkDestroySampler(device, shadowSampler, NULL);
+    vkDestroySampler(device, unnormLinear, NULL);
+    vkDestroySampler(device, unnormNearest, NULL);
 
     for (int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
             vmaUnmapMemory(VMAllocator,                           stagingWorld[i].alloc);
@@ -869,6 +874,8 @@ void Renderer::cleanup() {
         vmaDestroyBuffer(VMAllocator,  stagingWorld[i].buffer, stagingWorld[i].alloc);
         vmaDestroyBuffer(VMAllocator,  gpuParticles[i].buffer, gpuParticles[i].alloc);
         vmaDestroyBuffer(VMAllocator,  uniform[i].buffer, uniform[i].alloc);
+        vmaDestroyBuffer(VMAllocator,  lightUniform[i].buffer, lightUniform[i].alloc);
+        vmaDestroyBuffer(VMAllocator,  aoLutUniform[i].buffer, aoLutUniform[i].alloc);
         vmaDestroyBuffer(VMAllocator,  stagingRadianceUpdates[i].buffer, stagingRadianceUpdates[i].alloc);
     }
     vmaDestroyBuffer(VMAllocator,  gpuRadianceUpdates.buffer, gpuRadianceUpdates.alloc);
@@ -884,30 +891,40 @@ void Renderer::cleanup() {
     }
     vkDestroyCommandPool(device, commandPool, NULL);
 // println
+    vkDestroyRenderPass(device, lightmapRpass, NULL);
     vkDestroyRenderPass(device, raygen2diffuseRpass, NULL);
     vkDestroyRenderPass(device, blur2presentRpass, NULL);
 // println
     destroy_Compute_Pipeline(       &mapPipe);
-    vkDestroyDescriptorSetLayout(device, mapPushLayout, NULL);
+        vkDestroyDescriptorSetLayout(device, mapPushLayout, NULL);
     destroy_Compute_Pipeline(  &raytracePipe);
     destroy_Compute_Pipeline(  &radiancePipe);
     destroy_Compute_Pipeline(   &updateGrassPipe);
     destroy_Compute_Pipeline(   &updateWaterPipe);
     destroy_Compute_Pipeline(   &genPerlin2dPipe);
     destroy_Compute_Pipeline(   &genPerlin3dPipe);
-    destroy_Compute_Pipeline(   &dfxPipe);
-    destroy_Compute_Pipeline(   &dfyPipe);
-    destroy_Compute_Pipeline(   &dfzPipe);
-    destroy_Compute_Pipeline(   &bitmaskPipe);
+    // destroy_Compute_Pipeline(   &dfxPipe);
+    // destroy_Compute_Pipeline(   &dfyPipe);
+    // destroy_Compute_Pipeline(   &dfzPipe);
+    // destroy_Compute_Pipeline(   &bitmaskPipe);
 
+    destroy_Raster_Pipeline(&lightmapBlocksPipe);
+    destroy_Raster_Pipeline(&lightmapModelsPipe);
+        vkDestroyDescriptorSetLayout(device, raygenModelsPushLayout, NULL);
     destroy_Raster_Pipeline(&raygenBlocksPipe);
+    destroy_Raster_Pipeline(&raygenModelsPipe);
     destroy_Raster_Pipeline(&raygenParticlesPipe);
     destroy_Raster_Pipeline(&raygenGrassPipe);
     destroy_Raster_Pipeline(&raygenWaterPipe);
     destroy_Raster_Pipeline(&diffusePipe);
-    destroy_Raster_Pipeline(&glossyPipe);
     destroy_Raster_Pipeline(&aoPipe);
+    destroy_Raster_Pipeline(&fillStencilSmokePipe);
+    destroy_Raster_Pipeline(&fillStencilGlossyPipe);
+    destroy_Raster_Pipeline(&glossyPipe);
+    destroy_Raster_Pipeline(&smokePipe);
+    destroy_Raster_Pipeline(&tonemapPipe);
     destroy_Raster_Pipeline(&overlayPipe);
+
 
     cleanupSwapchainDependent();
 
@@ -993,20 +1010,19 @@ void Renderer::createSwapchain() {
 }
 
 void Renderer::cleanupSwapchainDependent() {
-    deleteImages(&highresDepthStencil);
     deleteImages(&highresFrames);    
+    deleteImages(&highresDepthStencil);
+        vkDestroyImageView(device, stencilViewForDS, NULL);
     deleteImages(&highresMatNorms);
-
+    deleteImages(&farDepth);
+    deleteImages(&nearDepth);
     
     for (auto framebuffer : rayGenFramebuffers) {
         vkDestroyFramebuffer(device, framebuffer, NULL);
     }
-    // for (auto framebuffer : glossyFramebuffers) {
-    //     vkDestroyFramebuffer(device, framebuffer, NULL);
-    // }
-    // for (auto framebuffer : overlayFramebuffers) {
-    //     vkDestroyFramebuffer(device, framebuffer, NULL);
-    // }
+    for (auto framebuffer : lightmapFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, NULL);
+    }
     for (auto framebuffer : altFramebuffers) {
         vkDestroyFramebuffer(device, framebuffer, NULL);
     }
