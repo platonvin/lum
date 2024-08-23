@@ -1,34 +1,34 @@
 # Lum
-**Lum** is a voxel engine I'm developing because none of existing ones suit my needs
+**Lum** is a voxel engine I'm developing because none of the existing ones meet my needs. Currently, it's not available as a standalone project but is bundled with a demo instead
 
 ##### Screenshot
 ![alt text](screenshot_v0.4.png)
 
 ## Installation 
 - ### Prerequisites
-  - **MinGW64 C++ Compiler**: if on windows, follow instructions at https://www.msys2.org/
+  - **MinGW64 C++ Compiler**: If you're on Windows, follow instructions at [MSYS2](https://www.msys2.org/)
     - other compilers support not tested
-  - **Vcpkg**: follow instructions at https://vcpkg.io/en/getting-started
-  - **Vulkan SDK**: follow instructions at https://vulkan.lunarg.com/sdk/home
-    - obviously, vulkan support required. But you might be able to use CPU implementation 
+  - **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started)
+  - **Vulkan SDK**: follow instructions at [LunarG](https://vulkan.lunarg.com/sdk/home)
+    - Vulkan support is required. However, you might be able to use MoltenVK or other implementations
   - **GNU Make**: installed with MinGW64 as mingw32-make.exe (mingw32-make.exe is refered as make)
 - ### Required Libraries
-  - **GLM**: Install via MSYS2
-  - **GLFW**: Install via MSYS2
-  - **Volk**: Part of the Vulkan SDK
-  - **RmlUi**: Install via Vcpkg (for MinGW64 static triplet)
+  - **[GLM](https://github.com/g-truc/glm)**: Install via MSYS2
+  - **[GLFW](https://www.glfw.org/)**: Install via MSYS2
+  - **[Volk](https://github.com/zeux/volk)**: Part of the Vulkan SDK
+  - **[RmlUi](https://mikke89.github.io/RmlUiDoc/)**: Install via Vcpkg (for MinGW64 static triplet)
 - ### Steps  
   - Install Prerequisites, make sure VULKAN_SDK and VCPKG_ROOT are set and Mingw is in the Path
   - Install RmlUi using Vcpkg:\
 `$vcpkg install rmlui --triplet=x64-mingw-static --host-triplet=x64-mingw-static`
-    - you may be able to use other host triplets, but i didnt test it
+    - you may be able to use other triplets, but i didnt test it
 
   - Install GLM and GLFW using MSYS2: \
 `$ pacman -S mingw-w64-x86_64-glm mingw-w64-x86_64-glfw`
     - if not using MSYS2, just make sure necessary libraries and headers are installed in any other way and visible to your compiler
 
   - Get the repository: \
-`$ git clone https://github.com/platonvin/lum.git` for *unstable* version or download code from releases    
+`$ git clone https://github.com/platonvin/lum.git` for *unstable* version or [download code from releases](https://github.com/platonvin/lum/releases)     
 
   - Navigate to the project directory:\
 `$ cd lum` 
@@ -36,7 +36,7 @@
 `$ make init`   
   - Build and run:\
 `$ make release -j10`
-    - `$make clean` if something (-pipe) broke
+    - during development, `$make clean` if something (-pipe) broke
 
 Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for windows
 
@@ -63,7 +63,7 @@ flowchart TD
             3glossy("glossy ray generation")
             3smoke("smoke ray generation")
             3glossy("glossy")
-            3smoke("smoke")
+            3smoke("volumetrics")
             3tonemapping("tonemapping & color correction")
             3ui("ui")
     Graphics[["Graphics"]]
