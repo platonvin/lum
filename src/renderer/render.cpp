@@ -3,6 +3,7 @@
 #include "render.hpp" 
 #include <stdfloat>
 // #include <BS_thread_pool.hpp> //TODO: howto depend
+#include "ao_lut.hpp"
 
 using namespace std;
 using namespace glm;
@@ -221,9 +222,12 @@ void Renderer::createImages(){
     create_Buffer_Storages(&uniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         220, false); //no way i write it with sizeof's
-    create_Buffer_Storages(&light_uniform,
+    create_Buffer_Storages(&lightUniform,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         sizeof(mat4), false);
+    create_Buffer_Storages(&aoLutUniform,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        sizeof(AoLut)*8, false); //TODO DYNAMIC AO SAMPLE COUNT
 
     create_Buffer_Storages(&gpuRadianceUpdates,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -269,10 +273,10 @@ void Renderer::setupDescriptors(){
         VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
 
     deferDescriptorsetup(&lightmapBlocksPipe.setLayout, &lightmapBlocksPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (light_uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
     deferDescriptorsetup(&lightmapModelsPipe.setLayout, &lightmapModelsPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (light_uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
 // println
     deferDescriptorsetup(&radiancePipe.setLayout, &radiancePipe.sets, {
@@ -296,6 +300,7 @@ void Renderer::setupDescriptors(){
 // println
     deferDescriptorsetup(&aoPipe.setLayout, &aoPipe.sets, { 
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorms}, NO_SAMPLER,     VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -521,7 +526,7 @@ void Renderer::createPipilines(){
     aoPipe.subpassId = 1;
     create_Raster_Pipeline(&aoPipe, 0, {
             {"shaders/compiled/aoVert.spv", VK_SHADER_STAGE_VERTEX_BIT}, 
-            {"shaders/compiled/aoFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+            {"shaders/compiled/ao_lutFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
         },{/*fullscreen pass*/}, 
         0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         swapChainExtent, {BLEND_MIX}, 0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
@@ -1682,11 +1687,11 @@ void Renderer::start_lightmap(){
         PLACE_TIMESTAMP();
     
     struct unicopy {mat4 trans;} unicopy = {lightTransform};
-    vkCmdUpdateBuffer(commandBuffer, light_uniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
+    vkCmdUpdateBuffer(commandBuffer, lightUniform[currentFrame].buffer, 0, sizeof(unicopy), &unicopy);
     cmdPipelineBarrier(commandBuffer, 
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT,
-                light_uniform[currentFrame]);
+                lightUniform[currentFrame]);
 
     VkClearValue clear_depth = {};
     clear_depth.depthStencil.depth = 1;
@@ -2236,6 +2241,31 @@ void Renderer::start_2nd_spass(){
         //     &lowresMatNorm);
         // cmdTransLayoutBarrier(commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT|VK_ACCESS_MEMORY_READ_BIT,
         //     &lowresDepthStencil);
+    // struct unicopy {
+    //     mat4 trans_w2s; vec4 campos; vec4 camdir;
+    //     vec4 horizline_scaled; vec4 vertiline_scaled;
+    //     vec4 globalLightDir; mat4 lightmap_proj;
+    //     vec2 size;
+    //     int timeseed;
+    // } unicopy = {
+    //     mat4(cameraTransform), vec4(cameraPos,0), vec4(cameraDir,0),
+    //     vec4(horizline*viewSize.x/2.0, 0), vec4(vertiline*viewSize.y/2.0, 0),
+    //     vec4(lightDir,0), mat4(lightTransform),
+    //     vec2(swapChainExtent.width, swapChainExtent.height),
+    //     iFrame
+    // };
+    dvec3 cameraRayDirPlane = normalize(dvec3(cameraDir.x, cameraDir.y, 0));
+    dvec3 horizline = normalize(cross(cameraRayDirPlane, dvec3(0,0,1)));
+    dvec3 vertiline = normalize(cross(cameraDir, horizline));
+    vector<AoLut> ao_lut = generateLUT(8, 16.0 / 1000.0, 
+        dvec2(swapChainExtent.width, swapChainExtent.height), 
+        dvec3(horizline*viewSize.x/2.0), dvec3(vertiline*viewSize.y/2.0));
+
+    vkCmdUpdateBuffer(commandBuffer, aoLutUniform[currentFrame].buffer, 0, sizeof(AoLut)*ao_lut.size(), ao_lut.data());
+    cmdPipelineBarrier(commandBuffer, 
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                aoLutUniform[currentFrame]);
 
     VkClearValue 
         far = {};

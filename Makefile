@@ -14,6 +14,8 @@ release_specific_flags = -O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1
 -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
+special_otp_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul\
+-fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 # SHADER_OPT_FLAGS = --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions --scalar-replacement --eliminate-local-single-block --eliminate-local-single-store --simplify-instructions --vector-dce --eliminate-dead-inserts --eliminate-dead-code-aggressive --eliminate-dead-branches --merge-blocks --eliminate-local-multi-store --simplify-instructions --vector-dce --eliminate-dead-inserts --redundancy-elimination --eliminate-dead-code-aggressive --strip-debug
@@ -30,6 +32,7 @@ deb_objs := \
 	obj/ogt_vox.o\
 	obj/ogt_voxel_meshify.o\
 	obj/meshopt.o\
+	obj/ao_lut.o\
 
 rel_objs := \
 	obj/rel/main.o\
@@ -42,6 +45,7 @@ rel_objs := \
 	obj/ogt_vox.o\
 	obj/ogt_voxel_meshify.o\
 	obj/meshopt.o\
+	obj/ao_lut.o\
 
 srcs := \
 	src/main.cpp\
@@ -62,15 +66,17 @@ all: clean build
 measure: build
 
 obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
-	g++ common/ogt_vox.cpp -Ofast -c -o obj/ogt_vox.o -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero $(I) $(args)
+	g++ common/ogt_vox.cpp -c -o obj/ogt_vox.o $(special_otp_flags) $(I) $(args)
 obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp common/meshopt.hpp
-	g++ common/ogt_voxel_meshify.cpp -Ofast -c -o obj/ogt_voxel_meshify.o -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero $(I) $(args)
+	g++ common/ogt_voxel_meshify.cpp -c -o obj/ogt_voxel_meshify.o $(special_otp_flags) $(I) $(args)
 obj/meshopt.o: common/meshopt.cpp common/meshopt.hpp
-	g++ common/meshopt.cpp -Ofast -c -o obj/meshopt.o -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero $(I) $(args)
+	g++ common/meshopt.cpp -c -o obj/meshopt.o $(special_otp_flags) $(I) $(args)
+obj/ao_lut.o: src/renderer/ao_lut.cpp src/renderer/ao_lut.hpp
+	g++ src/renderer/ao_lut.cpp -c -o obj/ao_lut.o $(special_otp_flags) $(I) $(args)
 
 obj/deb/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
 	g++ src/engine.cpp $(Flags) obj/deb/engine.o
-obj/deb/render.o: src/renderer/render.cpp src/renderer/render.hpp common/defines.hpp
+obj/deb/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/ao_lut.hpp common/defines.hpp
 	g++ src/renderer/render.cpp $(Flags) obj/deb/render.o 
 obj/deb/setup.o: src/renderer/setup.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/setup.cpp $(Flags) obj/deb/setup.o
@@ -86,7 +92,7 @@ obj/deb/main.o:
 
 obj/rel/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
 	g++ src/engine.cpp $(Flags) obj/rel/engine.o
-obj/rel/render.o: src/renderer/render.cpp src/renderer/render.hpp common/defines.hpp
+obj/rel/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/ao_lut.hpp common/defines.hpp
 	g++ src/renderer/render.cpp $(Flags) obj/rel/render.o
 obj/rel/setup.o: src/renderer/setup.cpp src/renderer/render.hpp common/defines.hpp
 	g++ src/renderer/setup.cpp $(Flags) obj/rel/setup.o

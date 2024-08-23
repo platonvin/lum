@@ -228,6 +228,15 @@ float prev_befor (float x, int s){
     return fxp1;}
 float prev_befor (float x){ return prev_befor(x, 1);}
 
+float sample_lightmap_with_shift(int xx, int yy, vec2 base_uv, float test_depth){
+    vec2 pcfshift = vec2(1.0/1024.0);
+    vec2 lighmap_shift = vec2(xx, yy) * pcfshift;
+    // float light_depth = texture(lightmap, vec3(light_uv + lighmap_shift, 0.0)).x; //TODO PCF
+
+    float shadow = texture(lightmap, vec3(base_uv + lighmap_shift, test_depth)).r; //TODO PCF
+    // float diff = abs(world_depth - light_depth);
+    return shadow;
+}
 float sample_lightmap(vec3 world_pos, vec3 normal){
     // float b = (float((dot(normal, ubo.globalLightDir.xyz) < 0.0))*2.0 - 1.0);
     vec3 biased_pos = world_pos;
@@ -275,6 +284,7 @@ float sample_lightmap(vec3 world_pos, vec3 normal){
     //     angle += (6.9*PI)/float(sample_count); //to cover evenly
     //     normalized_radius += norm_radius_step;
     // }
+
     vec2 pcfshift = vec2(1.0/1024.0);
     [[unroll]]
     for(int xx=-1; xx<=+1; xx++){
@@ -291,9 +301,16 @@ float sample_lightmap(vec3 world_pos, vec3 normal){
             total_weight += weight;
         }
     }}
-    
+
+    total_light += sample_lightmap_with_shift(-1,0,light_uv,world_depth);
+    total_light += sample_lightmap_with_shift(0,0,light_uv,world_depth);
+    total_light += sample_lightmap_with_shift(1,0,light_uv,world_depth);
+    total_light += sample_lightmap_with_shift(0,-1,light_uv,world_depth);
+    total_light += sample_lightmap_with_shift(0,1,light_uv,world_depth);
+
     // return 1 * 0.15;
-    return ((total_light / total_weight)) * 0.15;
+    return ((total_light / 5.0)) * 0.15;
+    // return ((total_light / total_weight)) * 0.15;
     // return ((total_light)) * 0.15;
     
     // if(((world_depth-bias) <= (light_depth)) && (dot(normal, ubo.globalLightDir.xyz) < 0)) {

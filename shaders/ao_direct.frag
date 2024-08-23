@@ -56,7 +56,8 @@ float load_depth(vec2 uv){
     float depth_encoded = (textureLod(depthBuffer, (uv), 0).x);
     return (depth_encoded)*1000.0;
 }
-
+vec3 horizline_doublescaled; 
+vec3 vertiline_doublescaled;
 vec3 get_shift_from_depth(float depth_diff, vec2 clip_shift){
     vec3 shift = 
         (ubo.horizline_scaled.xyz*clip_shift.x) + 
@@ -64,7 +65,13 @@ vec3 get_shift_from_depth(float depth_diff, vec2 clip_shift){
         (ubo.camdir.xyz*depth_diff);
     return shift;
 }
-
+vec3 get_shift_from_depth_uv(float depth_diff, vec2 uv){
+    vec3 shift = 
+        (horizline_doublescaled*uv.x) + 
+        (vertiline_doublescaled*uv.y) +
+        (ubo.camdir.xyz*depth_diff);
+    return shift;
+}
 const float COLOR_ENCODE_VALUE = 8.0;
 vec3 decode_color(vec3 encoded_color){
     return encoded_color*COLOR_ENCODE_VALUE;
@@ -81,6 +88,9 @@ mat2 rotate2d(float a) {
 }
 float square(float x) {return x*x;}
 void main() {
+    horizline_doublescaled = ubo.horizline_scaled.xyz*2.0;
+    vertiline_doublescaled = ubo.vertiline_scaled.xyz*2.0;
+    
     vec3 norm = load_norm();
     vec2 initial_pix = gl_FragCoord.xy / ubo.frame_size;
     float initial_depth = load_depth(initial_pix);
@@ -102,12 +112,7 @@ void main() {
     vec2 screen_rot = vec2(1,0);
     
     //TODO: i think its possible to compute in screen space to avoid translating into worldspace every iteration
-    vec3 ssn;
-        ssn.x = dot(norm, normalize(ubo.horizline_scaled.xyz));
-        ssn.y = dot(norm, normalize(ubo.vertiline_scaled.xyz));
-        ssn.z = dot(norm, ubo.camdir.xyz);
-    ssn = (ssn);
-
+    
     // [[unroll]]
     for(int i=00; i<sample_count; i++){
         // angle += 0.69420; //best possible step size
@@ -116,16 +121,18 @@ void main() {
         float radius = sqrt(normalized_radius) * max_radius;
 
         // screen_rot *= rotate;
-        vec2 screen_shift = radius*ratio*vec2(sin(angle), cos(angle));
+        vec2 screen_shift = radius*vec2(ubo.frame_size / ubo.frame_size.x)*vec2(sin(angle), cos(angle));
         // vec2 screen_shift = radius*ratio*screen_rot;
         // vec2 screenspace_shift = 
         
         float current_depth = load_depth(initial_pix + screen_shift);
 
         float depth_shift = current_depth - initial_depth;
-        vec2 clip_shift = (screen_shift)*2.0;
 
+        vec2 clip_shift = (screen_shift)*2.0;
         vec3 relative_pos = get_shift_from_depth(depth_shift, clip_shift);        
+        // vec3 relative_pos = get_shift_from_depth_uv(depth_shift, screen_shift);        
+
         vec3 direction = normalize(relative_pos);
         // vec3 ssrp = vec3(clip_shift, depth_shift);        
         // vec3 ssd = (ssrp);

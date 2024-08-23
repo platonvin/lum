@@ -39,20 +39,10 @@ using namespace std;
 const int BLOCK_SIZE = 16; // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
 const int MATERIAL_PALETTE_SIZE = 256; //0 always empty
 const int RCACHE_RAYS_PER_PROBE = 32;
-// on nvidia required 2d isntead of 1d cause VK_DEVICE_LOST on vkCmdCopy. FML
 const int BLOCK_PALETTE_SIZE_X = 64;
 const int BLOCK_PALETTE_SIZE_Y = 64;
 const int BLOCK_PALETTE_SIZE =  (BLOCK_PALETTE_SIZE_X*BLOCK_PALETTE_SIZE_Y);
 
-// #define FRAME_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
-// #define DEPTH_FORMAT VK_FORMAT_D32_SFLOAT_S8_UINT //somehow faster than VK_FORMAT_D24_UNORM_S8_UINT even on low-end 
-// #define MATNORM_FORMAT VK_FORMAT_R8G8B8A8_SNORM
-// #define RADIANCE_FORMAT VK_FORMAT_A2B10G10R10_UNORM_PACK32
-
-#define DEPTH_LAYOUT VK_IMAGE_LAYOUT_GENERAL
-
-// #define ACCUMULATE_HIGHRES
-//should be (at least) 2 for temporal accumulation, but can be changed if rebind images
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 using namespace std;
@@ -712,8 +702,9 @@ public:
            Image          bitPalette; //bitmask of originBlockPalette
     vector<Image> materialPalette;
     
-    vector<Buffer>   light_uniform;
-    vector<Buffer>         uniform;
+    vector<Buffer> lightUniform;
+    vector<Buffer>      uniform;
+    vector<Buffer> aoLutUniform;
     vector<i8vec4>         radianceUpdates;
     vector<i8vec4>  specialRadianceUpdates;
     Buffer             gpuRadianceUpdates;
@@ -854,11 +845,6 @@ public:
     // bool has_scissors = true;
     VkRect2D last_scissors = {{0,0}, {1,1}};
 };
-
-//TODO: need to find memory, verify flags
-template<class Elem_T> vector<Buffer> Renderer::create_elemBuffers(vector<Elem_T> elements, u32 buffer_usage){
-    return create_elemBuffers<Elem_T>(elements.data(), elements.size(), buffer_usage);
-}
 
 template<class Elem_T> vector<Buffer> Renderer::create_elemBuffers(Elem_T* elements, u32 count, u32 buffer_usage){
     VkDeviceSize bufferSize = sizeof(Elem_T)*count;
