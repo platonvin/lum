@@ -166,6 +166,7 @@ int RmlGLFW::ConvertKeyModifiers (int glfw_mods) {
     return key_modifier_state;
 }
 
+//just let compiler create jump table
 Rml::Input::KeyIdentifier RmlGLFW::ConvertKey (int glfw_key) {
     switch (glfw_key) {
         case GLFW_KEY_A: return Rml::Input::KI_A;
@@ -334,7 +335,7 @@ bool Ui::SetupDataBinding (Rml::Context* context, Rml::DataModelHandle& my_model
     // constructor.Bind ("pre_counter", &_renderer->pre_denoiser_count);
     // constructor.Bind ("post_counter", &_renderer->post_denoiser_count);
     // constructor.Bind ("final_counter", &_renderer->final_denoiser_count);
-    constructor.Bind ("upscaling_ratio", &_renderer->_ratio);
+    constructor.Bind ("upscaling_ratio", &_renderer->settings.ratio.x);
     my_model = constructor.GetModelHandle();
     return true;
 }
@@ -402,8 +403,8 @@ void Ui::update() {
         mouse_up_state = -1;
     }
     if (upscale_counter_diff != 0) {
-        renderer->_ratio += upscale_counter_diff;
-        renderer->_ratio = glm::clamp (renderer->_ratio, 1.0f, 3.0f);
+        renderer->settings.ratio += upscale_counter_diff;
+        renderer->settings.ratio = glm::clamp (renderer->settings.ratio, 1.0f, 3.0f);
         // renderer->resized = true;
         my_model.DirtyVariable ("upscaling_ratio");
         upscale_counter_diff = 0;

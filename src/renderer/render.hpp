@@ -85,6 +85,7 @@ typedef struct Particle {
 typedef struct Buffer {
     VkBuffer buffer;
     VmaAllocation alloc;
+    bool is_mapped = false;
 } Buffer;
 
 typedef struct Image {
@@ -213,18 +214,6 @@ typedef struct SubpassAttachmentRefs {
 
 
 //problem with such abstractions in vulkan is that they almost always have to be extended to a point where they make no sense
-
-/*
-    we specify input images, output images
-    then mathing renderpass + pipelines is created
-
-    create subpass raster pipe
-    create render pass (subpipe1 subpipe2)
-
-    bind renderpass
-    bind subpass raster pipe
-*/
-
 //pipeline with extra info for subpass creation
 typedef struct subPass {
     VkPipeline pipe;
@@ -298,7 +287,7 @@ typedef struct Camera {
     dvec3 vertiline = normalize (cross (cameraDir, horizline));
 
     void updateCamera();
-} CameraData;
+} Camera;
 
 typedef struct QueueFamilyIndices {
     optional<u32> graphicalAndCompute;
@@ -353,12 +342,23 @@ typedef struct DelayedDescriptorSetup {
     VkDescriptorSetLayoutCreateFlags createFlags;
 } DelayedDescriptorSetup;
 
+typedef struct Settings {
+    ivec3 world_size;
+    int maxParticleCount;
+    vec2 ratio;
+    ivec2 lightmapExtent = {1024, 1024};
+    int static_block_palette_size;
+    bool scaled;
+    bool vsync;
+    bool fullscreen;
+} Settings;
+
 //forward declaration for pointer
 class MyRenderInterface;
 
 struct Renderer {
   public:
-    void init (int xSize = 8, int ySize = 8, int zSize = 8, int staticBlockPaletteSize = 128, int maxParticleCount = 1024, float ratio = 1.5f, bool vsync = true, bool fullscreen = false);
+    void init (Settings settings);
     void setupDescriptors();
     void createImages();
     void createPipilines();
@@ -382,29 +382,22 @@ struct Renderer {
     table3d<BlockID_t> origin_world = {};
     table3d<BlockID_t> current_world = {};
     MyRenderInterface* ui_render_interface;
-    int static_block_palette_size;
-    ivec3 world_size;
-
-    float _ratio;
     // float fratio;
   private:
     bool hasPalette = false;
-    int maxParticleCount;
     vector<VkImageCopy> blockCopyQueue = {};
     vector<VkImageSubresourceRange> blockclearQueue = {};
   public:
     double deltaTime = 0;
 
-    bool scaled = false;
-    bool vsync = false;
-    bool fullscreen = false;
     bool resized = false;
+    Settings settings = {};
 
     dvec3 lightDir = normalize (vec3 (0.5, 0.5, -0.9));
     dmat4 lightTransform = identity<mat4>();
+    void update_light_transform();
 
     Camera camera = {};
-    void update_light_transform();
 
     void gen_perlin_2d();
     void gen_perlin_3d();
@@ -461,13 +454,6 @@ struct Renderer {
         void present();
     void end_frame();
 
-    template<class Vertex_T> vector<Buffer> createElemBuffers (Vertex_T* vertices, u32 count, u32 buffer_usage = 0);
-    template<class Vertex_T> vector<Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
-
-    vector<Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
-    void updateBlockPalette (Block** blockPalette);
-    void updateMaterialPalette (Material* materialPalette);
-
     void cmdPipelineBarrier (VkCommandBuffer commandBuffer,
                              VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
                              VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
@@ -484,6 +470,16 @@ struct Renderer {
     void cmdTransLayoutBarrier (VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout targetLayout,
                                 VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
                                 Image* image);
+    void cmdSetViewport(VkCommandBuffer commandBuffer, int width, int height);
+    void cmdSetViewport(VkCommandBuffer commandBuffer, VkExtent2D extent);
+
+    template<class Vertex_T> vector<Buffer> createElemBuffers (Vertex_T* vertices, u32 count, u32 buffer_usage = 0);
+    template<class Vertex_T> vector<Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
+
+    vector<Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
+    void updateBlockPalette (Block** blockPalette);
+    void updateMaterialPalette (Material* materialPalette);
+
   private:
     void cleanupSwapchainDependent();
     void createSwapchainDependentImages();
@@ -516,13 +512,13 @@ struct Renderer {
 
     VkFormat findSupportedFormat (vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
 
-    void create_Raster_Pipeline (RasterPipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc,
+    void createRasterPipeline (RasterPipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc,
                                  u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
                                  VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling, Discard discard, VkStencilOpState stencil);
-    void destroy_Raster_Pipeline (RasterPipe* pipe);
+    void destroyRasterPipeline (RasterPipe* pipe);
 
-    void create_Compute_Pipeline (ComputePipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
-    void destroy_Compute_Pipeline (ComputePipe* pipe);
+    void createComputePipeline (ComputePipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
+    void destroyComputePipeline (ComputePipe* pipe);
 
     void createDescriptorPool();
     void deferDescriptorsetup (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages, VkDescriptorSetLayoutCreateFlags createFlags = 0);
@@ -534,6 +530,8 @@ struct Renderer {
 
     void deleteImages (vector<Image>* images);
     void deleteImages (Image* images);
+    void deleteBuffers (vector<Buffer>* buffers);
+    void deleteBuffers (Buffer* buffers);
     void createImageStorages (vector<Image>* images,
                                 VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect,
                                 uvec3 size, int mipmaps = 1, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
@@ -555,7 +553,7 @@ struct Renderer {
   public:
     void createBuffer (VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
     void copyBufferSingleTime (VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-    void copyBuffer (VkBuffer srcBuffer, Image* image, uvec3 size);
+    void copyBufferSingleTime (VkBuffer srcBuffer, Image* image, uvec3 size);
     VkCommandBuffer beginSingleTimeCommands();
     void endSingleTimeCommands (VkCommandBuffer commandBuffer);
     void transitionImageLayoutSingletime (Image* image, VkImageLayout newLayout, int mipmaps = 1);
@@ -797,16 +795,16 @@ class MyRenderInterface : public Rml::RenderInterface {
 
 template<class Elem_T> vector<Buffer> Renderer::createElemBuffers (Elem_T* elements, u32 count, u32 buffer_usage) {
     VkDeviceSize bufferSize = sizeof (Elem_T) * count;
-    // VkDeviceSize bufferSizeI = sizeof(u32   )*icount;
     vector<Buffer> elems (MAX_FRAMES_IN_FLIGHT);
-    // vector<Buffer>  indexes (MAX_FRAMES_IN_FLIGHT);
-    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    stagingBufferInfo.size = bufferSize;
-    stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VmaAllocationCreateInfo stagingAllocInfo = {};
-    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBufferCreateInfo 
+        stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingBufferInfo.size = bufferSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo 
+        stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     vmaCreateBuffer (VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
@@ -818,11 +816,13 @@ template<class Elem_T> vector<Buffer> Renderer::createElemBuffers (Elem_T* eleme
     memcpy (data, elements, bufferSize);
     vmaUnmapMemory (VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        bufferInfo.size = bufferSize;
-        bufferInfo.usage = buffer_usage;
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        VkBufferCreateInfo 
+            bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+            bufferInfo.size = bufferSize;
+            bufferInfo.usage = buffer_usage;
+        VmaAllocationCreateInfo 
+            allocInfo = {};
+            allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         vmaCreateBuffer (VMAllocator, &bufferInfo, &allocInfo, &elems[i].buffer, &elems[i].alloc, NULL);
         copyBufferSingleTime (stagingBuffer, elems[i].buffer, bufferSize);
     }

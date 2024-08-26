@@ -19,22 +19,17 @@ void Renderer::updateBlockPalette (Block** blockPalette) {
     VkDeviceSize bufferSize = (sizeof (bp_tex)) * 16 * BLOCK_PALETTE_SIZE_X * 16 * BLOCK_PALETTE_SIZE_Y * 16;
     table3d<bp_tex> blockPaletteLinear = {};
     blockPaletteLinear.allocate (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16);
-#ifdef DISTANCE_FIELD
-    blockPaletteLinear.set ({0, 0});
-#else
     blockPaletteLinear.set ({0});
-#endif
     // printl(static_block_palette_size)
-    for (i32 N = 0; N < static_block_palette_size; N++) {
+    for (i32 N = 0; N < settings.static_block_palette_size; N++) {
         for (i32 x = 0; x < BLOCK_SIZE; x++) {
             for (i32 y = 0; y < BLOCK_SIZE; y++) {
                 for (i32 z = 0; z < BLOCK_SIZE; z++) {
                     auto [block_x, block_y] = get_block_xy (N);
-                    // blockPaletteLinear(x+16*block_x, y+16*block_y, z) = blockPalette[N].voxels[x][y][z];
                     if (blockPalette[N] == NULL) {
                         blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
                     } else {
-                        if (N < static_block_palette_size) {
+                        if (N < settings.static_block_palette_size) {
                             blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = (u16) blockPalette[N]->voxels[x][y][z];
                         } else {
                             blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
@@ -45,13 +40,15 @@ void Renderer::updateBlockPalette (Block** blockPalette) {
         }
     }
 // println
-    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    stagingBufferInfo.size = bufferSize;
-    stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VmaAllocationCreateInfo stagingAllocInfo = {};
-    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBufferCreateInfo 
+        stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingBufferInfo.size = bufferSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo 
+        stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     void* data = NULL;
@@ -63,7 +60,7 @@ void Renderer::updateBlockPalette (Block** blockPalette) {
     memcpy (data, blockPaletteLinear.data(), bufferSize);
     vmaUnmapMemory (VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        copyBuffer (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
+        copyBufferSingleTime (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
     }
     vmaDestroyBuffer (VMAllocator, stagingBuffer, stagingAllocation);
 }
@@ -71,13 +68,15 @@ void Renderer::updateBlockPalette (Block** blockPalette) {
 //TODO: do smth with frames in flight
 void Renderer::updateMaterialPalette (Material* materialPalette) {
     VkDeviceSize bufferSize = sizeof (Material) * 256;
-    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    stagingBufferInfo.size = bufferSize;
-    stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VmaAllocationCreateInfo stagingAllocInfo = {};
-    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBufferCreateInfo 
+        stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingBufferInfo.size = bufferSize;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo 
+        stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     vmaCreateBuffer (VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
@@ -86,7 +85,7 @@ void Renderer::updateMaterialPalette (Material* materialPalette) {
     memcpy (data, materialPalette, bufferSize);
     vmaUnmapMemory (VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        copyBuffer (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
+        copyBufferSingleTime (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
     }
     vmaDestroyBuffer (VMAllocator, stagingBuffer, stagingAllocation);
 }
@@ -121,13 +120,17 @@ void Renderer::load_scene (const char* vox_file) {
     ivec3* header = (ivec3*)buffer;
     ivec3 stored_world_size = *header;
     BlockID_t* stored_world = (BlockID_t*) (buffer + sizeof (ivec3));
-    ivec3 size2read = glm::clamp (stored_world_size, ivec3 (0), world_size);
+    printl(settings.world_size.x);
+    printl(settings.world_size.y);
+    printl(settings.world_size.z);
+    printl(settings.static_block_palette_size);
+    ivec3 size2read = glm::clamp (stored_world_size, ivec3 (0), settings.world_size);
     // buffer
     for (int xx = 0; xx < size2read.x; xx++) {
         for (int yy = 0; yy < size2read.y; yy++) {
             for (int zz = 0; zz < size2read.z; zz++) {
                 BlockID_t loaded_block = stored_world[xx + stored_world_size.x * yy + (stored_world_size.x* stored_world_size.y) * zz];
-                origin_world (xx, yy, zz) = glm::clamp (loaded_block, BlockID_t (0), BlockID_t (static_block_palette_size));
+                origin_world (xx, yy, zz) = glm::clamp (loaded_block, BlockID_t(0), BlockID_t(settings.static_block_palette_size));
             }
         }
     }
@@ -137,8 +140,8 @@ void Renderer::load_scene (const char* vox_file) {
 void Renderer::save_scene (const char* vox_file) {
     FILE* fp = fopen (vox_file, "wb");
     assert (fp != NULL);
-    fwrite (&world_size, sizeof (ivec3), 1, fp);
-    fwrite (origin_world.data(), sizeof (BlockID_t), world_size.x* world_size.y* world_size.z, fp);
+    fwrite (&settings.world_size, sizeof (ivec3), 1, fp);
+    fwrite (origin_world.data(), sizeof (BlockID_t), settings.world_size.x* settings.world_size.y* settings.world_size.z, fp);
     fclose (fp);
 }
 

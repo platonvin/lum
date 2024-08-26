@@ -1,6 +1,6 @@
 #pragma once
 
-//compute lut for ambient occlusion shader
+//compute lookup table for ambient occlusion shader
 #include <glm/glm.hpp>
 #include <vector>
 #include <cmath>
