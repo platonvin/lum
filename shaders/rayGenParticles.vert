@@ -72,5 +72,4 @@ void main() {
             imageStore(blockPalette, target_voxel_in_palette, uvec4(matIDIn));
         }
     }
-    //LOL dont even need map_particles shader - can be done here. Price is compatibility
 }

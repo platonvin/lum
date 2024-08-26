@@ -30,17 +30,13 @@ ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
 
 //TODO: balance, X>Y>Z for coherence
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
-//TODO: temp
 void main(void){
     const ivec3 model_size = imageSize(modelVoxels);
     const ivec3 shift = pco.shift.xyz;
 
-    //sqrt(1.5) is for more precise mapping so holes do not appear 
     ivec3 iabsolute_but_relative_to_shift_voxel = ivec3(gl_GlobalInvocationID.xyz);
      vec3  absolute_but_relative_to_shift_voxel = vec3(iabsolute_but_relative_to_shift_voxel) / 1.0;
     
-    // ivec3 iworld_voxel = iabsolute_but_relative_to_shift_voxel + shift;
-    // ivec3 iworld_voxel = iabsolute_but_relative_to_shift_voxel + shift;
      vec3  world_voxel = absolute_but_relative_to_shift_voxel + vec3(0.5) + vec3(shift);
     ivec3 iworld_voxel = ivec3(world_voxel);
 
@@ -51,27 +47,15 @@ void main(void){
       vec3 model_voxel = (pco.inverse_trans * vec4(world_voxel,1)).xyz;
     ivec3 imodel_voxel = ivec3(model_voxel);
 
-
-    // if (any(greaterThanEqual(irelative_vox, model_size))) return;
-    // if (any(   lessThan     (irelative_vox, ivec3(0  )))) return;
-
-    // ivec3                    itarget_block = iworld_voxel/16;
-    ivec3                    itarget_block = iworld_voxel/16;
-    // if (any(greaterThanEqual(itarget_block, ivec3(48,48,16)))) return;
-    // if (any(   lessThan     (itarget_block, ivec3(0       )))) return;
+    ivec3 itarget_block = iworld_voxel/16;
 
     int target_block_in_palette = int(imageLoad(blocks, itarget_block).r);
 
     ivec3 target_palette_voxel = voxel_in_palette(iworld_voxel.xyz % 16, target_block_in_palette);
 
-    // uvec4 voxel = imageLoad(modelVoxels, irelative_vox);
     uvec4 voxel = imageLoad(modelVoxels, imodel_voxel);
 
-    // voxel = uvec4(56);
     if ((voxel.r != 0) && (target_block_in_palette>=STATIC_BLOCK_COUNT)){
-    // if ((target_block_in_palette>5)){
-    // if ((voxel.r > 0)){
-        // voxel.r = 100;
         imageStore(blockPalette, target_palette_voxel, voxel); // maybe atomic?.. Could use temporal shared block for this
     }
 }

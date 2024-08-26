@@ -1,8 +1,6 @@
 #version 450
 layout(early_fragment_tests) in;
 
-//version with interpolation
-
 precision highp int;
 precision highp float;
 
@@ -15,5 +13,4 @@ void main() {
     // outMatNorm.gba = normalize(norm.xyz);
     
     outMatNorm = uvec4(mat_norm);
-
 }

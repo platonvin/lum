@@ -6,7 +6,7 @@ layout (location = 0) in float end_depth_in;
 layout(location = 0) out float  far_depth_out;
 layout(location = 1) out float near_depth_out;
 
-//desired effect of separation achivet through min max blend
+//desired effect of separation achieved through min max blend
 
 void main() {
     if(!gl_FrontFacing){
@@ -14,13 +14,7 @@ void main() {
     } else {
         gl_FragDepth = end_depth_in;
     }
-    //     near_depth_out = end_depth_in;
-    
-    //     far_depth_out = 0;
-    // else {
-    //     near_depth_out = 0;
-    //     far_depth_out = end_depth_in;
-    // }
+
     far_depth_out = end_depth_in;
     near_depth_out = end_depth_in;
 }

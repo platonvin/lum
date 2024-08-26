@@ -13,7 +13,6 @@ but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 *1) Measurements showed that i clearly was wrong. But strip still faster
 */
 
-
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
     vec4 campos;
@@ -73,23 +72,18 @@ float square(float a){return a*a;}
 float get_blade_width(float height){
     float max_height = float(MAX_HEIGHT-1);
 
-    // return (max_height+height) / max_height;
-    // return 1.0;
     return ((max_height-height) / max_height);
 }
 
 //ONLY WORKS WITH BLADE NON TRANSFORMED VERTS
 void rotate_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal){
-    // {//obvious version. Is left to explaing 
+    // {//obvious version
         float angle = rnd01 * PI * 2.0 * 42.0; //increasing randomness
         float cos_rot = cos(angle);
         float sin_rot = sin(angle);
     // }
 
     // vertex.xy -= 0.5;
-    
-    // float cos_rot = rnd01*0.0; //
-    // float sin_rot = sqrt(1 - cos_rot*cos_rot);
 
     float vxNew =  vertex.x * cos_rot + vertex.y * sin_rot;
     float vyNew = -vertex.x * sin_rot + vertex.y * cos_rot;
@@ -141,7 +135,7 @@ vec2 load_offset(vec2 local_pos){
 }
 
 void wiggle_blade_vert(float rnd01, inout vec3 vertex, inout vec3 normal, in vec2 pos){
-    //own ~random wiggling
+    //own random wiggling
     // vertex.y += 0.1*sin(float(pco.time)/200.0 + (rnd01*2.0*PI));
     // vertex.x += 0.1*sin(float(pco.time)/200.0 + (rnd01*2.0*PI));
 
@@ -244,15 +238,13 @@ void main() {
     // // uv_shift = (clip_coords_old.xy - clip_coords.xy)/2.0; //0..1
     gl_Position  = vec4(clip_coords, 1);    
 
-    //TODO probably can just flip x/y
+    //TODO i can probably just flip x/y
     if(dot(ubo.camdir.xyz,normal) > 0) normal = -normal;
 
     vec3 norm = normal;
-    // norm = normalize(vec3(1));
 
     //little coloring
     uint mat = (rand01 > (rand(pco.shift.yx) - length(relative_pos - 8.0)/32.0))? uint(9) : uint(10);
-    // uint mat = (rand01 > (rand(pco.shift.yx)))? uint(9) : uint(10);
     float fmat = (float(mat)-127.0)/127.0;
     vec4 fmat_norm = vec4(fmat, norm);
     mat_norm = uvec4(((fmat_norm+1.0)/2.0)*255.0);

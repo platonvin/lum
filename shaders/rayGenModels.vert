@@ -26,7 +26,6 @@ layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     int timeseed;
 } ubo;
 
-//quatornions!
 layout(scalar, push_constant) uniform restrict readonly constants{
     vec4 rot;
     vec4 shift;
@@ -40,7 +39,7 @@ vec3 qtransform( vec4 q, vec3 v ){
 
 void main() {
     vec3 fpos = vec3(posIn);
-    vec3 fnorm = normalize(vec3(pco.fnormal.xyz));
+    vec3 fnorm_ms = normalize(vec3(pco.fnormal.xyz));
 
     vec3 local_pos = qtransform(pco.rot, fpos);
     // vec3 local_pos = fpos;
@@ -52,17 +51,11 @@ void main() {
 
     gl_Position  = vec4(clip_coords, 1);    
     
-    vec3 _fnorm = (qtransform(pco.rot,fnorm)); //move up
-    // vec3 _fnorm = fnorm; //move up
-    // uint mat = uint(MatIDIn);
-    // float fmat = (float(mat)-127.0)/127.0;
-    // vec4 fmat_norm = vec4(fmat, norm);
-    // n = _fnorm;
-    // uvec4 norm_encoded = uvec4(((_fnorm+1.0)/2.0)*255.0, 0);
+    vec3 fnorm_ws = (qtransform(pco.rot,fnorm_ms)); //move up
     // normal_encoded_packed = 
     //     (norm_encoded.x<<0) |
     //     (norm_encoded.y<<8) |
     //     (norm_encoded.z<<16) ;
-    normal_encoded_packed = packUnorm4x8(vec4((_fnorm+1.0)/2.0, 0));
-    sample_point = fpos - fnorm * 0.5; //for better rounding lol
+    normal_encoded_packed = packUnorm4x8(vec4((fnorm_ws+1.0)/2.0, 0));
+    sample_point = fpos - fnorm_ms * 0.5; //for better rounding lol
 }

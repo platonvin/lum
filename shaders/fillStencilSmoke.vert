@@ -19,6 +19,7 @@ layout(push_constant) uniform restrict readonly constants{
     vec4 originSize;
 } pco;
 
+//slow but does not matter in here
 const vec3 vertices[] = {
     vec3(0,1,1),
     vec3(0,1,0),

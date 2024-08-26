@@ -1,7 +1,6 @@
 #version 450 core
 
 //sadly there is no easy way to use specialization constants for this
-// #define highp
 precision highp int;
 precision highp float;
 
@@ -53,21 +52,6 @@ struct Material{
     float roughness;
     float transparancy;
 };
-
-// int random_storage;
-// float Random1D() {
-//     float dot_product = dot(random_storage, vec2(12.9898, 78.233));
-//     float sin_result = sin(dot_product * 43758.5453123);
-//     float fractional_part = fract(sin_result);
-
-//     // for the next call
-//     random_storage.x = random_storage.y;
-//     random_storage.y += fractional_part*1241.1241;
-
-//     return fractional_part;
-// }
-// vec2 Random2D() {return vec2(Random1D(), Random1D());}
-// vec3 Random3D() {return vec3(Random1D(), Random1D(), Random1D());}
 
 const uint k = 1103515245U;  // GLIB C
 vec3 hash33( uvec3 x )
@@ -149,16 +133,6 @@ ivec2 GetVoxel(in vec3 pos){
     return ivec2(voxel, block_id);
 }
 
-// void SetVoxel(in ivec3 pos, in uint voxel){
-//     ivec3 block_pos = pos / 16;
-//     ivec3 relative_voxel_pos = pos % 16;
-
-//     int block_id = GetBlock(block_pos);
-//     ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
-    
-//     imageStore(blockPalette, voxel_pos, uvec4(voxel));
-// }
-
 Material GetMat(in int voxel){
     Material mat;
 
@@ -170,16 +144,7 @@ Material GetMat(in int voxel){
     mat.roughness    =       texelFetch(voxelPalette, ivec2(5,voxel), 0).r;
     return mat;
 }
-// vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
-//     // int closest_id = clamp(int(inverseFibonacciPoint(direction).x), 0,RAYS_PER_PROBE-1);
-//     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
-//     ivec3 subprobe_pos;
-//           subprobe_pos.x  = probe_ipos_clamped.x; //same as local_pos actually but its optimized away and worth it for modularity
-//           subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
-//     // vec3 light = imageLoad(radianceCache, clamp(subprobe_pos, ivec3(0), world_size)).xyz;
-//     vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
-//     return clamp(light, 0, 2);
-// }
+
 float square(float a){return a*a;}
 
 vec3 sample_radiance(vec3 position, vec3 normal){
@@ -312,98 +277,6 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
     return (current_voxel !=0);
 }
 
-//is actually precise
-// bool CastRay_precise(in vec3 rayOrigin, in vec3 rayDirection, 
-//         out float fraction, out vec3 normal, out Material material){
-//     bool block_hit = false;
-
-//     ivec3 steps;
-//     steps = ivec3(greaterThan(rayDirection, vec3(0)));
-//     steps = 2 * steps + (-1);
-
-//     vec3 fsteps = vec3(steps);
-
-//     vec3 tMax = vec3(0);
-//     vec3 tDelta = vec3(0);
-//     ivec3 voxel_pos = ivec3(0);
-//     float block_fraction = 0.0;
-
-//     ivec3 fcurrentStepDiretion = ivec3(0);
-
-//     initTvals(tMax, tDelta, voxel_pos, rayOrigin, rayDirection); //does not intersect with scene
-    
-//     int current_voxel = GetVoxel(voxel_pos);
-
-//     int max_steps = 512;
-    
-//     int iterations = 0;
-//     while (true) {
-
-//         bool xLy = tMax.x <= tMax.y;
-//         bool xLz = tMax.x <= tMax.z;
-//         bool yLz = tMax.y <= tMax.z;
-
-//         //LOL no perfomance benefit currently but it was there last time i tested it TODO
-//         fcurrentStepDiretion.x = int(int(( xLy) && ( xLz)));
-//         fcurrentStepDiretion.y = int(int((!xLy) && ( yLz)));
-//         fcurrentStepDiretion.z = int(int((!xLz) && (!yLz)));
-
-//         voxel_pos += steps * ivec3(fcurrentStepDiretion);
-//         tMax += tDelta * fcurrentStepDiretion;
-
-        
-//         current_voxel = GetVoxel(voxel_pos);
-        
-//         if (current_voxel != 0){
-//             block_hit = true;
-//             break;
-//         }
-//         // if (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16)))) {
-//         //     block_hit = false;
-//         //     break;
-//         // }
-//         if ((iterations++ >= max_steps) || (any(lessThan(voxel_pos,ivec3(0))) || any(greaterThanEqual(voxel_pos, world_size*ivec3(16))))) {
-//             block_hit = false;
-//             break;
-//         }
-//     }
-
-
-//     normal = -(fsteps * fcurrentStepDiretion);
-//     vec3 tFinal = tMax - tDelta;
-//     // block_fraction += dot(tFinal, fcurrentStepDiretion);
-//     block_fraction = dot(tFinal, fcurrentStepDiretion);
-
-//     material = GetMat(current_voxel);
-//     fraction = block_fraction;
-
-//     return (block_hit);
-// }
-
-// void ProcessHit(inout vec3 origin, inout vec3 direction, 
-//                 in float fraction, in vec3 normal, in Material material, 
-//                 inout vec3 accumulated_light, inout vec3 accumulated_reflection){
-
-//             vec3 new_origin = origin + (fraction * direction);
-
-//             // vec3 hemisphereDistributedDirection = NormalOrientedHemispherePoint(Random3D(), normal);
-
-//             // vec3 new_direction = hemisphereDistributedDirection;
-
-//                 // new_direction = normalize(mix(idealReflection, new_direction, material.roughness));
-
-//                 vec3 new_direction = reflect(direction, normal);
-//                 new_origin += normal * 0.001;
-//                 accumulated_reflection *= material.color;
-//                 accumulated_light += accumulated_reflection * material.emmitance;
-//                 // accumulated_light += vec3(0.8) * 0.1 * accumulated_reflection;
-
-//             // direction = reflect(direction,normal);
-//             direction = new_direction;
-//             origin = new_origin;
-
-// }
-
 vec3 sphericalFibonacci(float i, float n) {
     const float PHI = sqrt(5.0) * 0.5 + 0.5;
 #   define madfrac(A, B) ((A)*(B)-floor((A)*(B)))
@@ -461,80 +334,39 @@ vec3 trace_ray(vec3 ray_pos, vec3 ray_dir){
 }
 
 void store_probe(ivec3 probe_pos, vec3 accumulated_light){
-    //probes are stored as 32-wide lines for x in world_size 3d images
-    // ivec3 subprobe_pos;
-    //       subprobe_pos.x  = probe_pos.x; //same as local_pos actually but its optimized away and worth it for modularity
-    //       subprobe_pos.yz = probe_pos.yz; //reuses but its optimized away
-
-    // vec3 old_light = clamp(texelFetch(radianceCache2read, probe_pos, 0).xyz, 0, 1);
     vec3 old_light = (texelFetch(radianceCache2read, probe_pos, 0).xyz);
-    // vec3 old_light = clamp(imageLoad(radianceCache2write, probe_pos).xyz, 0, 1);
-
     vec3 new_light = mix(old_light, accumulated_light, REACTIVNESS);
-
-    // new_light = vec3(probe_pos) / vec3(world_size);
-    // imageAtomicDiv
     imageStore(radianceCache2write, probe_pos, vec4(new_light,1));
 }
 
 //im tired of naming things, no one is gonna read this anyways
 shared vec3 _light[SUBGROUPS_PER_WORKGROUP];
 
-// layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;
 layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;
 void main(){
     ivec3 local_pos = ivec3(gl_GlobalInvocationID.xyz);
 
-    // float seed = float(pco.timeSeed);
-    // random_storage = vec2((local_pos.x*seed*5123.12315), (local_pos.y*seed*7152.7343));
-    
     int probe_id = local_pos.x % RAYS_PER_PROBE;
-    // int probe_id = local_pos.x % (RAYS_PER_PROBE/2) + local_pos.y * (RAYS_PER_PROBE/2);
 
-    int _r = local_pos.x / (RAYS_PER_PROBE);
+    int scaled_relative_req_num = local_pos.x / (RAYS_PER_PROBE);
 
-    int req_num = _r*pco.size + pco.sihft;
-    ivec4 _t = reqBuffer.updateReqests[req_num];
-    // _t = ivec4(1);
-    ivec3 probe_pos = _t.xyz;
-    // if(probe_pos == ivec3(0)) {
+    int req_num = scaled_relative_req_num*pco.size + pco.sihft;
+    ivec3 probe_pos = reqBuffer.updateReqests[req_num].xyz;
     random_storage = uvec3(local_pos.xy+pco.timeSeed, pco.timeSeed);
-    // if(any(notEqual(probe_pos,ivec3(0)))) {
-    //     store_probe(probe_id, ivec3(local_pos.x, local_pos.y, 1), vec3(1));
-    //     store_probe(probe_id, ivec3(probe_pos.x,probe_pos.y, local_pos.y), vec3(1));
-    //     return;
-    // }
-
-    // ivec3 probe_pos = ivec3(local_pos);
-    //       probe_pos.x /= RAYS_PER_PROBE;
 
     vec3 block_corner = vec3(probe_pos) * 16.0;
     vec3 block_center = block_corner + 8.0;
     vec3 ray_pos = block_center;
-        //  ray_pos += 15.99*(Random3D() - 0.5);
     vec3 ray_dir = probeId_to_rayDir(probe_id);
-    // vec3 ray_dir;
         //  ray_dir = normalize(mix(ray_dir, NormalOrientedHemispherePoint(Random3D(), ray_dir), 0.8));
-        //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));
-        
+        //  ray_dir = normalize(ray_dir + 1.0 * (Random3D() - 0.5));        
          ray_dir = normalize(ray_dir + .1 * ((Random3D() - 0.5)*2.0));
          ray_pos += ray_dir*6.0;
          ray_pos += (Random3D()-0.5)*2.0;
          ray_dir = ((probe_id%2)==0)? ray_dir : -ray_dir; //to sample light blocks themselves
         //  ray_dir = normalize(((Random3D() - 0.5)));
 
-        //  ray_dir = normalize(((Random3D() - 0.5)));
-        //  ray_pos = block_corner + Random3D()*16.0;
-         
-        // ray_dir = randomCosineWeightedHemispherePoint(Random3D(), ray_dir);
-        // ray_dir = 2.0 * (Random3D() - 0.5);
-        // ray_dir = normalize(ray_pos - block_center);
-
-    // randomVec = vec3(local_pos.x, local_pos.y, local_pos.z);
-    
     vec3 ray_light = trace_ray(ray_pos, ray_dir);
-    // vec3 ray_light;;
-    // ray_light = subgroupAdd(ray_light) / gl_SubgroupSize;
     // subgroupBarrier();
     ray_light = subgroupAdd(ray_light) / float(clamp(RAYS_PER_PROBE, 0, gl_SubgroupSize));
     // subgroupBarrier();
@@ -546,7 +378,7 @@ void main(){
     // }
 
     //version that syncs locally via shared memory
-    //somehow it is ~2x faster
+    //~2x faster
     if(subgroupElect()){
         _light[gl_SubgroupID] = ray_light;
         barrier();
@@ -557,11 +389,8 @@ void main(){
         }
         final_light /= float(SUBGROUPS_PER_WORKGROUP);
         // final_light = ray_light;
-        // final_light = vec3(1);
-        // final_light = clamp(final_light, 0,1);
 
         if(gl_SubgroupID == 0){
-            // final_light = vec3(1);
             store_probe(probe_pos, final_light);
         }
     }

@@ -26,7 +26,6 @@ layout(binding = 0, set = 0) restrict readonly uniform UniformBufferObject {
 } ubo;
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 
-//quatornions!
 layout(scalar, push_constant) restrict readonly uniform constants{
     int16_t block;
     i16vec3 shift;
@@ -35,7 +34,6 @@ layout(scalar, push_constant) restrict readonly uniform constants{
 
 vec3 qtransform( vec4 q, vec3 v ){ 
 	return v + 2.0*cross(cross(v, -q.xyz ) + q.w*v, -q.xyz);
-    // return (q*vec4(v,0)).xyz;
 } 
 
 void main() {
@@ -52,7 +50,6 @@ void main() {
 
     ivec3 uworld_pos = ivec3(upos + (pco.shift));
      vec4 fworld_pos = vec4(uworld_pos, 1);
-    //  vec4 fworld_pos = vec4(vec3(upos)*10, 1);
 
     vec3 clip_coords = (ubo.trans_w2s*fworld_pos).xyz; //move up
          clip_coords.z = 1+clip_coords.z;
@@ -63,10 +60,6 @@ void main() {
 
     uint sample_block = uint(pco.block);
     // uvec3 normal_encoded = uvec3(((ivec3(pco.inorm) + 1)*255)/2);
-    // uint normal_encoded = uvec3(((ivec3(pco.inorm) + 1)*255)/2);
-
-    // bunorm.x = packUint2x16(u16vec2(sample_block, normal_encoded.x));
-    // bunorm.y = packUint2x16(u16vec2(normal_encoded.y, normal_encoded.z));
 
     bunorm = packUint2x16(u16vec2(sample_block, pco.unorm.x));
 }

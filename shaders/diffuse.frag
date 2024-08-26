@@ -2,15 +2,13 @@
 
 /*
 shader to diffuse-color lowres frame
-ambient + "radiant" diffuse
+ambient + "radiant" diffuse + lightmaps
 */
 
 precision highp int;
 precision highp float;
 // #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_EXT_control_flow_attributes : enable
-
-// #define highp
 
 layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
     mat4 trans_w2s;
@@ -30,112 +28,48 @@ layout(set = 0, binding = 3 ) uniform sampler2D voxelPalette;
 layout(set = 0, binding = 4 ) uniform sampler3D radianceCache;
 layout(set = 0, binding = 5 ) uniform sampler2DShadow lightmap;
 
-// layout(location = 0) in vec2 clip_pos;
 layout(location = 0) out vec4 frame_color;
 
 #define RAYS_PER_PROBE (32)
-// ivec2 size;
 const ivec3 world_size = ivec3(48,48,16);
 
-// vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
-//     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
-//     ivec3 subprobe_pos;
-//           subprobe_pos.x  = probe_ipos_clamped.x; //same as local_pos actually but its optimized away and worth it for modularity
-//           subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
-//     // vec3 light = imageLoad(radianceCache, clamp(subprobe_pos, ivec3(0), world_size)).xyz;
-//     vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
-//     return clamp(light, 0, 2);
-// }
+vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
+    ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
+    ivec3 subprobe_pos;
+          subprobe_pos.x  = probe_ipos_clamped.x; //same as local_pos actually but its optimized away and worth it for modularity
+          subprobe_pos.yz = probe_ipos_clamped.yz; //reuses but its optimized away
+    // vec3 light = imageLoad(radianceCache, (subprobe_pos)).xyz;
+    vec3 light = texelFetch(radianceCache, (subprobe_pos), 0).rgb;
+    return clamp(light, 0, 2);
+}
 float square(float a){return a*a;}
 
-// vec3 sample_radiance(vec3 position, vec3 normal){
-//     vec3 sampled_light;
+vec3 sample_radiance(vec3 position, vec3 normal){
+    vec3 sampled_light;
 
-//     float total_weight =      0 ;
-//      vec3 total_colour = vec3(0);
+    float total_weight =      0 ;
+     vec3 total_colour = vec3(0);
 
-//     ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
-//      vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
+    ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
+     vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
 
-//     vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
-//     // alpha = vec3(1);
-
-//     for (int i=0; i<8; i++){
-//         //to make it little more readable
-//         ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
-
-//         float probe_weight =     (1);
-//          vec3 probe_colour = vec3(0);
-
-//         vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
-
-//         vec3  probeToPoint = probe_pos - position;
-//         vec3 direction_to_probe = normalize(probeToPoint);
-
-//         vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
-//         probe_weight = trilinear.x * trilinear.y * trilinear.z;
-
-        
-//         /*
-//         actually, not using directional weight **might** increase quality 
-//         by adding extra shadows in corners made of solid blocks
-//         but im still going to use it
-
-//         0.1 clamp to prevent weird cases where occasionally every single one would be 0 - in such cases, it will lead to trilinear
-//         */
-//         float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
-//         // float direction_weight = square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
-//         // float direction_weight = float(dot(direction_to_probe, normal) > 0);
-
-//         probe_weight *= direction_weight;
-        
-//         // const float crushThreshold = 0.2;
-//         // if (probe_weight < crushThreshold) {
-//         //     probe_weight *= probe_weight * probe_weight * (1.0 / square(crushThreshold)); 
-//         // }
-
-//         // probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
-//         // probe_colour = vec3(zero_probe_ipos + offset) / vec3(world_size);
-
-//         probe_weight  = max(1e-7, probe_weight);
-//         total_weight += probe_weight;
-//         total_colour += probe_weight * probe_colour;
-//     }
-
-//     return total_colour / total_weight;
-// }
-
-vec3 sample_radiance(vec3 position){
-    // vec3 sampled_light;
-
-    // float total_weight =      0 ;
-    //  vec3 total_colour = vec3(0);
-
-    // ivec3 zero_probe_ipos = clamp(ivec3(floor(position - 8.0))/16, ivec3(0), world_size);
-    //  vec3 zero_probe_pos = vec3(zero_probe_ipos)*16.0 + 8.0;
-
-    vec3 block_pos = position / 16.0;
-    vec3 sampled_light = textureLod(radianceCache, (((block_pos / vec3(world_size)))), 0).rgb;
-    // vec3 sampled_light = texture(radianceCache, (block_pos / vec3(world_size))).rgb;
-
-    return sampled_light;
-    // vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
+    vec3 alpha = clamp((position - zero_probe_pos) / 16.0, 0,1);
     // alpha = vec3(1);
 
-    // for (int i=0; i<8; i++){
-    //     //to make it little more readable
-    //     ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
+    for (int i=0; i<8; i++){
+        //to make it little more readable
+        ivec3 offset = ivec3(i, i >> 1, i >> 2) & ivec3(1);
 
-    //     float probe_weight =     (1);
-    //      vec3 probe_colour = vec3(0);
+        float probe_weight =     (1);
+         vec3 probe_colour = vec3(0);
 
-    //     vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
+        vec3 probe_pos = zero_probe_pos + vec3(offset)*16.0;
 
-    //     vec3  probeToPoint = probe_pos - position;
-    //     vec3 direction_to_probe = normalize(probeToPoint);
+        vec3  probeToPoint = probe_pos - position;
+        vec3 direction_to_probe = normalize(probeToPoint);
 
-    //     vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
-    //     probe_weight = trilinear.x * trilinear.y * trilinear.z;
+        vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
+        probe_weight = trilinear.x * trilinear.y * trilinear.z;
 
         
         /*
@@ -145,29 +79,34 @@ vec3 sample_radiance(vec3 position){
 
         0.1 clamp to prevent weird cases where occasionally every single one would be 0 - in such cases, it will lead to trilinear
         */
-        // float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
+        float direction_weight = clamp(dot(direction_to_probe, normal), 0.1,1);
         // float direction_weight = square(max(0.0001, (dot(direction_to_probe, normal) + 1.0) * 0.5)) + 0.2;
         // float direction_weight = float(dot(direction_to_probe, normal) > 0);
 
-        // probe_weight *= direction_weight;
+        probe_weight *= direction_weight;
         
         // const float crushThreshold = 0.2;
         // if (probe_weight < crushThreshold) {
         //     probe_weight *= probe_weight * probe_weight * (1.0 / square(crushThreshold)); 
         // }
 
-        // probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
+        probe_colour = sample_probe(zero_probe_ipos + offset, direction_to_probe);
         // probe_colour = vec3(zero_probe_ipos + offset) / vec3(world_size);
 
-    //     probe_weight  = max(1e-7, probe_weight);
-    //     total_weight += probe_weight;
-    //     total_colour += probe_weight * probe_colour;
-    // }
+        probe_weight  = max(1e-7, probe_weight);
+        total_weight += probe_weight;
+        total_colour += probe_weight * probe_colour;
+    }
 
-    // return total_colour / total_weight;
+    return total_colour / total_weight;
 }
 
-
+vec3 sample_radiance(vec3 position){
+    vec3 block_pos = position / 16.0;
+    vec3 sampled_light = textureLod(radianceCache, (((block_pos / vec3(world_size)))), 0).rgb;
+    // vec3 sampled_light = texture(radianceCache, (block_pos / vec3(world_size))).rgb;
+    return sampled_light;
+}
 
 struct Material{
     vec3 color;
@@ -177,15 +116,11 @@ struct Material{
 };
 vec3 load_norm(){
     // vec3 norm = (imageLoad(matNorm, pixel).gba);
-    // vec3 norm = normalize(((subpassLoad(matNorm).gba)/1.0)*2.0 - 1.0);
-    vec3 norm = normalize(((subpassLoad(matNorm).gba/255.0)*2.0 - 1.0));
-    // subpass
+    vec3 norm = (((subpassLoad(matNorm).gba/255.0)*2.0 - 1.0));
     return norm;
 }
 int load_mat(){
     int mat = int((subpassLoad(matNorm).x));
-    // int mat = 9;
-    // int mat = int(subpassLoad(matNorm).x);
     return mat;
 }
 highp float load_depth(){
@@ -231,10 +166,8 @@ float prev_befor (float x){ return prev_befor(x, 1);}
 float sample_lightmap_with_shift(int xx, int yy, vec2 base_uv, float test_depth){
     vec2 pcfshift = vec2(1.0/1024.0);
     vec2 lighmap_shift = vec2(xx, yy) * pcfshift;
-    // float light_depth = texture(lightmap, vec3(light_uv + lighmap_shift, 0.0)).x; //TODO PCF
 
     float shadow = texture(lightmap, vec3(base_uv + lighmap_shift, test_depth)).r; //TODO PCF
-    // float diff = abs(world_depth - light_depth);
     return shadow;
 }
 float sample_lightmap(vec3 world_pos, vec3 normal){
@@ -269,24 +202,9 @@ float sample_lightmap(vec3 world_pos, vec3 normal){
     float total_weight = 00;
     vec2 ratio = vec2(1);
 
-    // [[unroll]]
-    // for(int i=00; i<sample_count; i++){
-    //     // angle += 0.69420; //best possible step size
-    //     float radius = (normalized_radius) * max_radius;
-    //     vec2 lighmap_shift = radius*ratio*vec2(sin(angle), cos(angle));
-
-    //     float light_depth = texture(lightmap, light_uv + lighmap_shift).x;
-
-    //     float weight = square(max(light_depth - world_depth, 0));
-    //     weight = 1 - square(normalized_radius);
-    //     total_light += float(((world_depth) <= (light_depth))) * weight;
-    //     total_weight += weight;
-    //     angle += (6.9*PI)/float(sample_count); //to cover evenly
-    //     normalized_radius += norm_radius_step;
-    // }
-
     vec2 pcfshift = vec2(1.0/1024.0);
     // [[unroll]]
+    //this loop was not unrolled for whatever reason, so i did it manually
     // for(int xx=-1; xx<=+1; xx++){
     // for(int yy=-1; yy<=+1; yy++){
     //     // if((xx==00) || (yy==00)) continue;
@@ -308,19 +226,7 @@ float sample_lightmap(vec3 world_pos, vec3 normal){
     total_light += sample_lightmap_with_shift(0,-1,light_uv,world_depth);
     total_light += sample_lightmap_with_shift(0,1,light_uv,world_depth);
 
-    // return 1 * 0.15;
     return ((total_light / 5.0)) * 0.15;
-    // return ((total_light / total_weight)) * 0.15;
-    // return ((total_light)) * 0.15;
-    
-    // if(((world_depth-bias) <= (light_depth)) && (dot(normal, ubo.globalLightDir.xyz) < 0)) {
-    // float sub = float(dot(normal, ubo.globalLightDir.xyz) > 0);
-    // if((dot(normal, ubo.globalLightDir.xyz) < 0)) {
-    // if(abs(light_depth - world_depth) < 0.01) {
-        // return ((total_light / total_weight)-sub*0.5) * 0.1984;
-    // } else {
-    //     return 0.0;
-    // }
 }
 
 const float COLOR_ENCODE_VALUE = 8.0;
@@ -348,7 +254,4 @@ void main(void){
 
     final_color = (2.0*incoming_light+stored_mat.emmitance + sunlight) * stored_mat.color;
     frame_color = vec4(encode_color(final_color),1);
-    // frame_color = vec4(abs(vec3(load_depth()))/1000.0, 1);
-    // frame_color = vec4(clip_pos,0,1);
-    // vec2 a = gl_; 
 }

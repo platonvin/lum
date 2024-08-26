@@ -13,6 +13,7 @@ layout(location = 0) lowp out uvec4 outMatNorm;
 void main() {
     uvec3 normal_encoded;
 
+    //normal to surface
     vec3 normal = normalize(cross(
         dFdxFine(orig),
         dFdyFine(orig)

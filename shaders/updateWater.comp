@@ -1,13 +1,11 @@
 #version 450 core
 
 /*
-wow, this quickly turned overcomplicated
 I wanted water that has no visible repetions
 this code basically generates several heightmaps used to later lift vertices 
 multiple heightmaps is like inverse fourier but for different frequancy and amplitude tiles mixed together
 its dft cause gpus are fast.
 */
-//rotate, add deriv
 
 precision highp int;
 precision highp float;

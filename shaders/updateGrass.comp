@@ -21,42 +21,15 @@ void main(){
     ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
     vec2 pos = (vec2(pix) + 0.5) /16.0;
 
-    // vec2 old_direction = imageLoad(state, pix).xy;
     vec2 new_direction = vec2(0);
 
-    // vec2 direction = vec2(sin(pco.time / 600.0), cos(pco.time / 600.0));
-    vec2 direction = vec2(1, 1);
+    vec2 wind_direction = vec2(1, 1);
     
-    vec2 uv_shift = direction * pco.time / 300.0;
+    vec2 uv_shift = wind_direction * pco.time / 300.0;
     vec2 noise_uv = (pos) + uv_shift;
     
     new_direction.x = textureGrad(perlin_noise, noise_uv, vec2(1.0/96.0,0), vec2(0)).x;
     new_direction.y = textureGrad(perlin_noise, noise_uv, vec2(0), vec2(0,1.0/96.0)).x;
-    // new_direction = normalize(new_direction)*2.0;
-    // new_direction *= 2.0;
-    // new_direction.x = 0;
-    // new_direction.y = 0;
-    // vec2 tg = texture(perlin_noise, pos*pco.time).xx;
-    // vec2 tg = mod(pos*pco.time/100.0,5.0);
-    // //global wave wiggling from wind
-    //yeah ~32 iteration, but this will be offloaded to compute shader+texture soon
-    // for(float freq=3.0; freq < 100.0; freq *= 1.15){
-    //     float ampl = 0.3 / freq;
-    //     float t = pco.time / 300.0;
-    //     new_direction += sin((t + dot(pos*128.0,direction)/400.0)*freq) * ampl;
-    // }
 
-    // float collision_ratio = 2.0/length(pos - pco.collisionPoint);
-    // vec2 collision_direction = -normalize(pco.collisionPoint - pos);
-
-    // new_direction = mix(
-    //     new_direction, 
-    //     collision_direction * 1.0,
-    //     collision_ratio
-    // );
-
-    // new_direction = normalize(tg);
-    // new_direction = (tg);
-    // new_direction = vec2(0);
     imageStore(state, pix, vec4(new_direction,0,0));
 }
