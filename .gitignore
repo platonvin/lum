@@ -32,3 +32,4 @@ diag.mmd
 #generating compile commands without 10000 lines of cmake
 build_wrapper_output_directory
 vcpkg_installed
+*.tar

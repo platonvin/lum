@@ -2,6 +2,8 @@
     "dependencies": [
       "rmlui",
       "glm",
-      "glfw3"
+      "glfw3",
+      "volk",
+      "vulkan-memory-allocator"
     ]
   }

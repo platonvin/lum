@@ -15,9 +15,9 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/ext/matrix_transform.hpp>
 
-#include <Volk/volk.h>
-#include <vulkan/vulkan.h>
-#include <vulkan/vk_enum_string_helper.h>
+#include <volk.h>
+// #include <vulkan/vulkan.h>
+#include <vk_enum_string_helper.h> //idk why but it is neither shipped with Linux Vulkan SDK nor bundled in vulkan-sdk-components
 #include <vma/vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
 
