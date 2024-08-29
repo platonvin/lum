@@ -6,32 +6,27 @@
 
 ## Installation 
 - ### Prerequisites
-  - **MinGW64 C++ Compiler**: If you're on Windows, follow instructions at [MSYS2](https://www.msys2.org/)
+  - **C++ Compiler**: [MSYS2 MinGW](https://www.msys2.org/) recommended for Windows. For Linux prefer GNU
     - other compilers support not tested
-  - **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started)
-  - **Vulkan SDK**: follow instructions at [LunarG](https://vulkan.lunarg.com/sdk/home)
+  - **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started). Make sure VCPKG_ROOT and VCPKG_DEFAULT_TRIPLET are set
+    - might work without VCPKG_DEFAULT_TRIPLET, especially on Linux or OSX 
+  - **Vulkan SDK**: follow instructions at [LunarG](https://vulkan.lunarg.com/sdk/home). Make sure VULKAN_SDK is set
     - Vulkan support is required. However, you might be able to use MoltenVK or other implementations
-  - **GNU Make**: installed with MinGW64 as mingw32-make.exe (mingw32-make.exe is refered as make)
+  - **Make**: for Windows, install with MinGW64. For Linux, typically installed by default
 - ### Required Libraries
-  - **[GLM](https://github.com/g-truc/glm)**: Install via MSYS2
-  - **[GLFW](https://www.glfw.org/)**: Install via MSYS2
+  - **[GLM](https://github.com/g-truc/glm)**: Install via Vcpkg
+  - **[GLFW](https://www.glfw.org/)**: Install via Vcpkg
+  - **[RmlUi](https://mikke89.github.io/RmlUiDoc/)**: Install via Vcpkg
   - **[Volk](https://github.com/zeux/volk)**: Part of the Vulkan SDK
-  - **[RmlUi](https://mikke89.github.io/RmlUiDoc/)**: Install via Vcpkg (for MinGW64 static triplet)
+  - **[Vma](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)**: Part of the Vulkan SDK
 - ### Steps  
-  - Install Prerequisites, make sure VULKAN_SDK and VCPKG_ROOT are set and Mingw is in the Path
-  - Install RmlUi using Vcpkg:\
-`$vcpkg install rmlui --triplet=x64-mingw-static --host-triplet=x64-mingw-static`
-    - you may be able to use other triplets, but i didnt test it
-
-  - Install GLM and GLFW using MSYS2: \
-`$ pacman -S mingw-w64-x86_64-glm mingw-w64-x86_64-glfw`
-    - if not using MSYS2, just make sure necessary libraries and headers are installed in any other way and visible to your compiler
-
+  - Install Prerequisites, make sure VULKAN_SDK, VCPKG_ROOT and VCPKG_DEFAULT_TRIPLET are set 
   - Get the repository: \
 `$ git clone https://github.com/platonvin/lum.git` for *unstable* version or [download code from releases](https://github.com/platonvin/lum/releases)     
-
   - Navigate to the project directory:\
 `$ cd lum` 
+  - install dependencies:\
+`$vcpkg install`
   - Build and run:\
 `$ make -j10`
 

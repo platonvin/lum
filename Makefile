@@ -1,19 +1,27 @@
 .ONESHELL:
 
-#libs are -lglfw3 -lglew32s -lopengl32 -lgdi32 -lccd -lenet64 -lws2_32 -lwinmm
-# G++ = C:/msys64/mingw64/bin/g++ exe
+#setting up include and lib directories for dependencies
+I = -Isrc -I${VULKAN_SDK}/Include -Icommon
+L = -L${VULKAN_SDK}/Lib 
 
-I = -Isrc -I${VULKAN_SDK}/Include -Icommon -I${VCPKG_ROOT}/installed/x64-mingw-static/Include
-L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
-#-ftrivial-auto-var-init=zero sets "local" vars to 0 by default
+OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
+INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS))
+INCLUDE_LIST := $(addprefix -I, $(INCLUDE_LIST))
+# OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
+LIB_LIST := $(addsuffix /lib, $(OTHER_DIRS))
+LIB_LIST := $(addprefix -L, $(LIB_LIST))
 
-# all of them united
+I += $(INCLUDE_LIST)
+L += $(LIB_LIST)
+
+#flags. Just flags
 always_enabled_flags = -pipe -fno-exceptions -Wuninitialized
 debug_specific_flags   = -O1
 release_specific_flags = -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
-#for "just libs"
+
+#for "common libs"
 special_otp_flags = -pipe -fno-exceptions -Wuninitialized -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 #for crazy builds
 crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DNDEBUG -fno-exceptions -funroll-loops -w -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -fno-math-errno -Wl,--gc-sections
@@ -22,6 +30,7 @@ SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 SHADER_OPT_FLAGS = --target-env=vulkan1.1
 # SHADER_OPT_FLAGS = --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions --scalar-replacement --eliminate-local-single-block --eliminate-local-single-store --simplify-instructions --vector-dce --eliminate-dead-inserts --eliminate-dead-code-aggressive --eliminate-dead-branches --merge-blocks --eliminate-local-multi-store --simplify-instructions --vector-dce --eliminate-dead-inserts --redundancy-elimination --eliminate-dead-code-aggressive --strip-debug
 
+#manually for convenience
 deb_objs := \
 	obj/deb/main.o\
 	obj/deb/engine.o\
@@ -63,6 +72,7 @@ srcs := \
 #default target
 all: init release
 
+#scripts that actually build. Also generate .d dependency files included into this makefile (for incremental build) 
 obj/%.o: common/%.cpp
 	g++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
@@ -88,6 +98,7 @@ build_deb: $(deb_objs) $(com_objs)
 build_rel: $(rel_objs) $(com_objs)
 	g++ $(rel_objs) $(com_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
 
+#shader part
 SHADER_SRC_DIR = shaders
 SHADER_OUT_DIR = shaders/compiled
 
@@ -113,18 +124,22 @@ $(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT)
 	glslc -o $(SHADER_OUT_DIR)/$*_unopt.spv $< $(SHADER_FLAGS)
 	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*_unopt.spv $(SHADER_OPT_FLAGS)
 	del "$(SHADER_OUT_DIR)/$*_unopt.spv"
+	del "$(SHADER_OUT_DIR)\$*_unopt.spv"
 $(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT)
 	glslc -o $(SHADER_OUT_DIR)/$*Vert_unopt.spv $< $(SHADER_FLAGS)
 	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*Vert_unopt.spv $(SHADER_OPT_FLAGS)
 	del "$(SHADER_OUT_DIR)/$*Vert_unopt.spv"
+	del "$(SHADER_OUT_DIR)\$*Vert_unopt.spv"
 $(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT)
 	glslc -o $(SHADER_OUT_DIR)/$*Frag_unopt.spv $< $(SHADER_FLAGS)
 	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*Frag_unopt.spv $(SHADER_OPT_FLAGS)
 	del "$(SHADER_OUT_DIR)/$*Frag_unopt.spv"
+	del "$(SHADER_OUT_DIR)\$*Frag_unopt.spv"
 $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
 	glslc -o $(SHADER_OUT_DIR)/$*Geom_unopt.spv $< $(SHADER_FLAGS)
 	spirv-opt -o $@ $(SHADER_OUT_DIR)/$*Geom_unopt.spv $(SHADER_OPT_FLAGS)
 	del "$(SHADER_OUT_DIR)/$*Geom_unopt.spv"
+	del "$(SHADER_OUT_DIR)\$*Geom_unopt.spv"
 
 shaders: $(ALL_SHADER_TARGETS)
 
@@ -165,7 +180,10 @@ clean:
 	del "obj/deb/*.o" 
 	del "obj/rel/*.o" 
 	del "shaders/compiled/*.spv" 
-# mkdir obj
+	del "obj\*.o" 
+	del "obj\deb\*.o" 
+	del "obj\rel\*.o" 
+	del "shaders\compiled\*.spv" 
 init: obj obj/deb obj/rel shaders/compiled
 obj:
 	mkdir "obj"
