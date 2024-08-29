@@ -6,7 +6,6 @@
 #include <vector>
 #include <string.h>
 #include <stdio.h>
-#include <io.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdio.h>

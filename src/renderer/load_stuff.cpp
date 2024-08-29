@@ -90,16 +90,18 @@ void Renderer::updateMaterialPalette (Material* materialPalette) {
     vmaDestroyBuffer (VMAllocator, stagingBuffer, stagingAllocation);
 }
 
-char* readFileBuffer (const char* path, size_t* size) {
+char* readFileBuffer(const char* path, size_t* size) {
     FILE* fp = fopen (path, "rb");
     assert (fp != NULL);
-    *size = _filelength (_fileno (fp));
+    fseek(fp, 0, SEEK_END);
+    *size = ftell(fp);
+    rewind(fp);
     char* buffer = (char*) malloc (*size);
+    assert (buffer != NULL);
     fread (buffer, *size, 1, fp);
     fclose (fp);
     return buffer;
 }
-
 // namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
 #include <ogt_vox.hpp>
 #include <ogt_voxel_meshify.hpp>
@@ -113,7 +115,9 @@ void Renderer::load_scene (const char* vox_file) {
         origin_world.set (0);
         return;
     }
-    buffer_size = _filelength (_fileno (fp));
+    fseek(fp, 0, SEEK_END);
+    buffer_size = ftell(fp);
+    rewind(fp);
     char* buffer = (char*) malloc (buffer_size);
     fread (buffer, buffer_size, 1, fp);
     fclose (fp);
