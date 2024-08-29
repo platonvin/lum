@@ -1,7 +1,7 @@
 #version 450 core
 
 /*
-this is basically lowres ray tracing shader
+this is basically ray tracing shader
 */
 #extension GL_EXT_control_flow_attributes : enable
 

@@ -32,11 +32,8 @@
 
   - Navigate to the project directory:\
 `$ cd lum` 
-  - Initialize:\
-`$ make init`   
   - Build and run:\
-`$ make release -j10`
-    - during development, `$make clean` if something (-pipe) broke
+`$ make -j10`
 
 Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for windows
 

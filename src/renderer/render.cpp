@@ -1696,16 +1696,13 @@ void Renderer::updade_water() {
 }
 
 //blade is hardcoded but it does not really increase perfomance
-//done this way for simplicity, can easilly be replaced
+//done this way for simplicity, can easilly be replaced with any vertex buffer
 void Renderer::raygen_map_grass (vec4 shift, int size) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers[currentFrame];
     bool x_flip = camera.cameraDir.x < 0;
     bool y_flip = camera.cameraDir.y < 0;
     struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {shift, size, iFrame, x_flip, y_flip};
     vkCmdPushConstants (commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
-    // const int verts_per_blade = 4*6 + 3; //for triangle list
-    // const int verts_per_blade = 11+3; //for triangle strip
-    // const int blade_per_instance = 2; //for triangle strip
     const int verts_per_blade = 6; //for triangle strip
     const int blade_per_instance = 1; //for triangle strip
     vkCmdDraw (commandBuffer,

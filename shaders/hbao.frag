@@ -44,9 +44,7 @@ const ivec3 world_size = ivec3(48,48,16);
 
 vec3 load_norm(){
     // i16vec3 nenc = i16vec3(subpassLoad(matNorm).gba);
-    // vec3 norm = vec3(((nenc*int16_t(2) - i16vec3(255))))/255.0;
     vec3 norm = (((subpassLoad(matNorm).gba)/255.0)*2.0 - 1.0);
-    // vec3 norm = ((ivec3(subpassLoad(matNorm).gba)*2 - 255))/255.0;
     return norm;
 }
 int load_mat(){
@@ -64,19 +62,10 @@ float load_depth(vec2 uv){
     float depth_encoded = (textureLod(depthBuffer, (uv), 0).x);
     return (depth_encoded)*1000.0;
 }
-// vec3 horizline_doublescaled; 
-// vec3 vertiline_doublescaled;
 // vec3 get_shift_from_depth(float depth_diff, vec2 clip_shift){
 //     vec3 shift = 
 //         (ubo.horizline_scaled.xyz*clip_shift.x) + 
 //         (ubo.vertiline_scaled.xyz*clip_shift.y) +
-//         (ubo.camdir.xyz*depth_diff);
-//     return shift;
-// }
-// vec3 get_shift_from_depth_uv(float depth_diff, vec2 uv){
-//     vec3 shift = 
-//         (horizline_doublescaled*uv.x) + 
-//         (vertiline_doublescaled*uv.y) +
 //         (ubo.camdir.xyz*depth_diff);
 //     return shift;
 // }

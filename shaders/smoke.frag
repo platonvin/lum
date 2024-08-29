@@ -195,21 +195,12 @@ vec3 encode_color(vec3 color){
 }
 
 void main() {
-    // smoke_color = vec4(0);
-    // outColor = vec4(fragColor, 1.0);
-    // vec2 clip_pos = fragclip_pos - vec2(0.5);
-    // vec2 vxx = (fragclip_pos / 2 + vec2(0.5)).xx; 
-    // vec2 clip_pos = fragclip_pos / 2 + vec2(0.5);
-    // clip_pos.x = (vxx.yy).y;
-    // vec2 size = textureSize(ui_elem_texture, 0);
     vec3 direction = (ubo.camdir.xyz);
-    // outColor = final_color;
 
     float near = (load_depth_near());
     float  far = (load_depth_far());
 
     float diff = (far-near);
-    
 
     int max_steps = 8; //does not really matter
     float step_size = diff/float(max_steps);
@@ -255,43 +246,18 @@ void main() {
 
         float dencity = (noises.x + noises.y + noises.z - noises.w / close_to_border) / 2.0 - treshhold;
 
-        dencity = clamp(dencity,0,treshhold) * multiplier;
-        // float dencity = (noises.x) / 1.0;
+        dencity = clamp(dencity, 0,treshhold) * multiplier;
         // dencity *= exp(-clamp(diff, 0, 100)/100.0);
         // dencity += clamp(diff/10,0,1)/20.0;
-
         I = (1.0 - dencity * step_size) * I;
         total_dencity += dencity * step_size;
     }
-    // int8_t a;
     //at point of leaving smoke
     //does not look realistic but fits engine blocky style
     vec3 final_light = sample_radiance(position, direction);
 
-    float smoke_opacity = 1.0 - I;
-
-    // if(diff < 10.5){
-    //     smoke_opacity *= square(diff / 10.5);
-    // }
-    // smoke_opacity = 1.0 / (1.5-smoke_opacity);
     //1-I because its inverted
-    // smoke_color = vec4(vec3(0.3), smoke_opacity);
-    // smoke_color = vec4(vec3(0.42-total_dencity/diff), smoke_opacity);
+    float smoke_opacity = 1.0 - I;
     smoke_color = vec4(encode_color(vec3(final_light)), smoke_opacity);
-    // smoke_color.w = 0;
-    // }   
-    // float mix_ratio = 
-    // smoke_color = vec4(0.5);
-    // vec4 old_color = subpassLoad(inFrame);
-    // int mat = load_mat();
-    // smoke_color = sin(old_color * 42.2);
-    // frame_color = old_color;
-    // smoke_color = vec4(vec3(mat)/256.0,1);
-    // smoke_color = vec4(non_clip_pos, 0.0, 0.0);
 
-    /*
-    raymarch:
-        move forward
-        check smoke dencity
-    */
 } 

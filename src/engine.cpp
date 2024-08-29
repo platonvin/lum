@@ -440,7 +440,7 @@ void Engine::cull_meshes(){
         dvec3 clip_coords = (render.camera.cameraTransform * dvec4(wrr.pos,1));
             clip_coords.z = -clip_coords.z;
         wrr.cam_dist = clip_coords.z;
-
+ 
         // if(is_block_visible(render.camera.cameraTransform, dvec3(grr.pos))){
         water_que.push_back(wrr);
         render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
@@ -448,6 +448,11 @@ void Engine::cull_meshes(){
         // render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,0),0));
     }}
     std::sort(water_que.begin(), water_que.end(), &sort_grass);
+
+    // printl(block_que.size());
+    // printl(grass_que.size());
+    // printl(water_que.size());
+    // abort();
 }
 
 void Engine::draw()

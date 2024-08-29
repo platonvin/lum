@@ -33,11 +33,7 @@ deb_objs := \
 	obj/deb/load_stuff.o\
 	obj/deb/render_ui_interface.o\
 	obj/deb/ui.o\
-	obj/ogt_vox.o\
-	obj/ogt_voxel_meshify.o\
-	obj/meshopt.o\
-	obj/ao_lut.o\
-
+	obj/deb/ao_lut.o
 rel_objs := \
 	obj/rel/main.o\
 	obj/rel/engine.o\
@@ -46,11 +42,11 @@ rel_objs := \
 	obj/rel/load_stuff.o\
 	obj/rel/render_ui_interface.o\
 	obj/rel/ui.o\
+	obj/rel/ao_lut.o
+com_objs := \
 	obj/ogt_vox.o\
 	obj/ogt_voxel_meshify.o\
-	obj/meshopt.o\
-	obj/ao_lut.o\
-
+	obj/meshopt.o
 srcs := \
 	src/main.cpp\
 	src/engine.cpp\
@@ -64,61 +60,33 @@ srcs := \
 	common/ogt_voxel_meshify.cpp\
 	common/meshopt.cpp\
 
-# flags = 
-all: Flags=$(release_specific_flags)
-all: clean build
-	@echo compiled
-measure: build
+#default target
+all: init release
 
-obj/ogt_vox.o: common/ogt_vox.cpp common/ogt_vox.hpp
-	g++ common/ogt_vox.cpp -c -o obj/ogt_vox.o $(special_otp_flags) $(I) $(args)
-obj/ogt_voxel_meshify.o: common/ogt_voxel_meshify.cpp common/ogt_voxel_meshify.hpp common/meshopt.hpp
-	g++ common/ogt_voxel_meshify.cpp -c -o obj/ogt_voxel_meshify.o $(special_otp_flags) $(I) $(args)
-obj/meshopt.o: common/meshopt.cpp common/meshopt.hpp
-	g++ common/meshopt.cpp -c -o obj/meshopt.o $(special_otp_flags) $(I) $(args)
-obj/ao_lut.o: src/renderer/ao_lut.cpp src/renderer/ao_lut.hpp
-	g++ src/renderer/ao_lut.cpp -c -o obj/ao_lut.o $(special_otp_flags) $(I) $(args)
+obj/%.o: common/%.cpp
+	g++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+DEPS = $(com_objs:.o=.d)
+-include $(DEPS)
 
-obj/deb/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
-	g++ src/engine.cpp $(Flags) obj/deb/engine.o
-obj/deb/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/ao_lut.hpp common/defines.hpp
-	g++ src/renderer/render.cpp $(Flags) obj/deb/render.o 
-obj/deb/setup.o: src/renderer/setup.cpp src/renderer/render.hpp common/defines.hpp
-	g++ src/renderer/setup.cpp $(Flags) obj/deb/setup.o
-obj/deb/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp common/defines.hpp
-	g++ src/renderer/load_stuff.cpp $(Flags) obj/deb/load_stuff.o
-obj/deb/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp common/defines.hpp
-	g++ src/renderer/render_ui_interface.cpp $(Flags) obj/deb/render_ui_interface.o
-obj/deb/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
-	g++ src/renderer/ui.cpp $(Flags) obj/deb/ui.o
-.PHONY: obj/deb/main.o
-obj/deb/main.o:
-	g++ src/main.cpp $(Flags) obj/deb/main.o
+obj/rel/%.o: src/%.cpp
+	g++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+obj/rel/%.o: src/renderer/%.cpp
+	g++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+DEPS = $(rel_objs:.o=.d)
+-include $(DEPS)
 
-obj/rel/engine.o: src/engine.cpp src/engine.hpp src/renderer/render.cpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
-	g++ src/engine.cpp $(Flags) obj/rel/engine.o
-obj/rel/render.o: src/renderer/render.cpp src/renderer/render.hpp src/renderer/ao_lut.hpp common/defines.hpp
-	g++ src/renderer/render.cpp $(Flags) obj/rel/render.o
-obj/rel/setup.o: src/renderer/setup.cpp src/renderer/render.hpp common/defines.hpp
-	g++ src/renderer/setup.cpp $(Flags) obj/rel/setup.o
-obj/rel/load_stuff.o: src/renderer/load_stuff.cpp src/renderer/render.hpp common/defines.hpp
-	g++ src/renderer/load_stuff.cpp $(Flags) obj/rel/load_stuff.o
-obj/rel/render_ui_interface.o: src/renderer/render_ui_interface.cpp src/renderer/render.hpp common/defines.hpp
-	g++ src/renderer/render_ui_interface.cpp $(Flags) obj/rel/render_ui_interface.o
-obj/rel/ui.o: src/renderer/ui.cpp src/renderer/ui.hpp src/renderer/render.hpp
-	g++ src/renderer/ui.cpp $(Flags) obj/rel/ui.o
-# .PHONY: obj/rel/main.o
-obj/rel/main.o: src/main.cpp src/engine.hpp src/renderer/render.hpp src/renderer/ui.hpp common/defines.hpp
-	g++ src/main.cpp $(Flags) obj/rel/main.o
+obj/deb/%.o: src/%.cpp
+	g++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+obj/deb/%.o: src/renderer/%.cpp
+	g++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+DEPS = $(deb_objs:.o=.d)
+-include $(DEPS)
 
 
-build_deb: $(deb_objs)
-	g++ $(deb_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
-build_rel: $(rel_objs)
-	g++ $(rel_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
-
-# client_opt:
-# 	g++ $(srcs) $(I) $(L) $(D) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlCore -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static -Os -pipe -fno-exceptions -fdata-sections -ffunction-sections -o client.exe -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(args)
+build_deb: $(deb_objs) $(com_objs)
+	g++ $(deb_objs) $(com_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
+build_rel: $(rel_objs) $(com_objs)
+	g++ $(rel_objs) $(com_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
 
 SHADER_SRC_DIR = shaders
 SHADER_OUT_DIR = shaders/compiled
@@ -132,6 +100,7 @@ COMP_SHADERS = $(wildcard $(SHADER_SRC_DIR)/*$(COMP_EXT))
 VERT_SHADERS = $(wildcard $(SHADER_SRC_DIR)/*$(VERT_EXT))
 FRAG_SHADERS = $(wildcard $(SHADER_SRC_DIR)/*$(FRAG_EXT))
 GEOM_SHADERS = $(wildcard $(SHADER_SRC_DIR)/*$(GEOM_EXT))
+SHADERS = $(wildcard $(SHADER_SRC_DIR)/*$(GEOM_EXT))
 
 COMP_TARGETS = $(patsubst $(SHADER_SRC_DIR)/%$(COMP_EXT), $(SHADER_OUT_DIR)/%.spv, $(COMP_SHADERS))
 VERT_TARGETS = $(patsubst $(SHADER_SRC_DIR)/%$(VERT_EXT), $(SHADER_OUT_DIR)/%Vert.spv, $(VERT_SHADERS))
@@ -159,16 +128,16 @@ $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
 
 shaders: $(ALL_SHADER_TARGETS)
 
-debug: Flags=$(debug_flags) 
-debug: shaders build_deb
+debug: Flags=$(debug_flags)  
+debug: init shaders build_deb
 	client.exe
 release: Flags=$(release_flags)
-release: shaders build_rel
+release: init shaders build_rel
 	client.exe
 #crazy fast
-crazy: shaders
+crazy: init shaders
 	g++ $(srcs) -o crazy_client.exe $(crazy_flags) $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
-crazy_native: shaders
+crazy_native: init shaders
 	g++ $(srcs) -o crazy_client.exe $(crazy_flags) -march=native $(I) $(L) -l:libglfw3.a -lgdi32 -l:volk.lib -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
 
 fun:
@@ -196,8 +165,13 @@ clean:
 	del "obj\deb\*.o" 
 	del "obj\rel\*.o" 
 	del "shaders\compiled\*.spv" 
-init:
+# mkdir obj
+init: ./obj ./obj/deb ./obj/rel ./shaders/compiled
+./obj:
 	mkdir obj
+./obj/deb:
 	mkdir obj\deb
+./obj/rel:
 	mkdir obj\rel
+./shaders/compiled:
 	mkdir shaders\compiled
