@@ -8,15 +8,15 @@ L = -L${VULKAN_SDK}/Lib -L${VCPKG_ROOT}/installed/x64-mingw-static/lib
 #-ftrivial-auto-var-init=zero sets "local" vars to 0 by default
 
 # all of them united
-always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero
+always_enabled_flags = -pipe -fno-exceptions -Wuninitialized
 debug_specific_flags   = -O1
 release_specific_flags = -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
 #for "just libs"
-special_otp_flags = -pipe -fno-exceptions -Wuninitialized -ftrivial-auto-var-init=zero -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
+special_otp_flags = -pipe -fno-exceptions -Wuninitialized -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 #for crazy builds
-crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DNDEBUG -fno-exceptions -funroll-loops -w -ftrivial-auto-var-init=zero -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -fno-math-errno -Wl,--gc-sections
+crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DNDEBUG -fno-exceptions -funroll-loops -w -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -fno-math-errno -Wl,--gc-sections
 
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 SHADER_OPT_FLAGS = --target-env=vulkan1.1
