@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdio.h>
 
+// #undef __STRICT_ANSI__
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -18,7 +19,7 @@
 #include <volk.h>
 // #include <vulkan/vulkan.h>
 #include <vk_enum_string_helper.h> //idk why but it is neither shipped with Linux Vulkan SDK nor bundled in vulkan-sdk-components
-#include <vma/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
 
 #define RMLUI_STATIC_LIB
@@ -27,7 +28,11 @@
 #include <defines.hpp>
 
 using namespace glm;
-using namespace std;
+using std::vector;
+using std::cout;
+using std::tuple;
+using std::tie;
+// using std::set;
 
 //Everything is X -> Y -> Z order in arrays (vectors)
 const int BLOCK_SIZE = 16; // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
@@ -38,9 +43,6 @@ const int BLOCK_PALETTE_SIZE_Y = 64;
 const int BLOCK_PALETTE_SIZE = (BLOCK_PALETTE_SIZE_X* BLOCK_PALETTE_SIZE_Y);
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
-
-using namespace std;
-using namespace glm;
 
 typedef u8 MatID_t;
 typedef i16 BlockID_t;
@@ -278,7 +280,7 @@ typedef struct Window {
 typedef struct Camera {
     dvec3 cameraPos = vec3(60, 0, 194);
     dvec3 cameraDir = normalize(vec3(0.61, 1.0, -0.8));
-    dmat4 cameraTransform = identity<dmat4>();
+    dmat4 cameraTransform = glm::identity<dmat4>();
     double pixelsInVoxel = 5.0;
     dvec2 originViewSize = dvec2(1920, 1080);
     dvec2 viewSize = originViewSize / pixelsInVoxel;
@@ -290,8 +292,8 @@ typedef struct Camera {
 } Camera;
 
 typedef struct QueueFamilyIndices {
-    optional<u32> graphicalAndCompute;
-    optional<u32> present;
+    std::optional<u32> graphicalAndCompute;
+    std::optional<u32> present;
 
   public:
     bool isComplete() {
@@ -394,7 +396,7 @@ struct Renderer {
     Settings settings = {};
 
     dvec3 lightDir = normalize (vec3 (0.5, 0.5, -0.9));
-    dmat4 lightTransform = identity<mat4>();
+    dmat4 lightTransform = glm::identity<mat4>();
     void update_light_transform();
 
     Camera camera = {};
@@ -782,13 +784,13 @@ class MyRenderInterface : public Rml::RenderInterface {
 
     // Called by RmlUi when it wants the renderer to use a new transform matrix.
     // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
-    // an identity matrix or otherwise omit the multiplication with the transform.
+    // an glm::identity matrix or otherwise omit the multiplication with the transform.
     void SetTransform (const Rml::Matrix4f* transform) override;
 
     Renderer* render;
     Image* default_image = NULL;
 
-    mat4 current_transform = identity<mat4>();
+    mat4 current_transform = glm::identity<mat4>();
     // bool has_scissors = true;
     VkRect2D last_scissors = {{0, 0}, {1, 1}};
 };

@@ -1,11 +1,11 @@
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #include "render.hpp"
-#include <stdfloat>
+// #include <stdfloat>
 // #include <BS_thread_pool.hpp> //TODO: howto depend
 #include "ao_lut.hpp"
 
-using namespace std;
+// using namespace std;
 using namespace glm;
 
 tuple<int, int> get_block_xy (int N);

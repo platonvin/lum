@@ -13,22 +13,29 @@ LIB_LIST := $(addprefix -L, $(LIB_LIST))
 
 I += $(INCLUDE_LIST)
 L += $(LIB_LIST)
+#spirv things are installed with vcpkg and not set in envieroment, so i find needed tools myself
+GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc)))
+GLSLC = $(GLSLC_DIR)/glslc
 
-
+ifeq ($(OS),Windows_NT)
+	REQUIRED_LIBS = -lglfw3 -lgdi32        -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
+else
+	REQUIRED_LIBS = -lglfw3 -lpthread -ldl -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
+endif
+	
 # all of them united
-always_enabled_flags = -pipe -fno-exceptions -Wuninitialized
-debug_specific_flags   = -O1
-release_specific_flags = -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
+always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -std=c++20 -nostartfiles
+debug_specific_flags   = -O0 -g
+release_specific_flags = -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
 #for "just libs"
-special_otp_flags = -pipe -fno-exceptions -Wuninitialized -Ofast -DNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
+special_otp_flags = -pipe -fno-exceptions -Wuninitialized -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 #for crazy builds
-crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DNDEBUG -fno-exceptions -funroll-loops -w -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -fno-stack-protector -fomit-frame-pointer -fmerge-all-constants -momit-leaf-frame-pointer -fno-math-errno -Wl,--gc-sections
+crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DVKNDEBUG -fno-exceptions -funroll-loops -w -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -fno-math-errno -Wl,--gc-sections
 
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
-SHADER_OPT_FLAGS = --target-env=vulkan1.1
-# SHADER_OPT_FLAGS = --merge-return --inline-entry-points-exhaustive --eliminate-dead-functions --scalar-replacement --eliminate-local-single-block --eliminate-local-single-store --simplify-instructions --vector-dce --eliminate-dead-inserts --eliminate-dead-code-aggressive --eliminate-dead-branches --merge-blocks --eliminate-local-multi-store --simplify-instructions --vector-dce --eliminate-dead-inserts --redundancy-elimination --eliminate-dead-code-aggressive --strip-debug
+
 
 deb_objs := \
 	obj/deb/main.o\
@@ -71,6 +78,7 @@ srcs := \
 #default target
 all: init release
 
+#If someone knows nice way to simplify this, please tell me 
 obj/%.o: common/%.cpp
 	g++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
@@ -89,12 +97,6 @@ obj/deb/%.o: src/renderer/%.cpp
 	g++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(deb_objs:.o=.d)
 -include $(DEPS)
-
-
-build_deb: $(deb_objs) $(com_objs)
-	g++ $(deb_objs) $(com_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -lglfw3 -lgdi32 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
-build_rel: $(rel_objs) $(com_objs)
-	g++ $(rel_objs) $(com_objs) -o client.exe $(always_enabled_flags) $(I) $(L) -lglfw3 -lgdi32 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
 
 SHADER_SRC_DIR = shaders
 SHADER_OUT_DIR = shaders/compiled
@@ -118,27 +120,35 @@ GEOM_TARGETS = $(patsubst $(SHADER_SRC_DIR)/%$(GEOM_EXT), $(SHADER_OUT_DIR)/%Geo
 ALL_SHADER_TARGETS = $(COMP_TARGETS) $(VERT_TARGETS) $(FRAG_TARGETS) $(GEOM_TARGETS)
 
 $(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 $(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 $(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
-	glslc -o $@ $< $(SHADER_FLAGS)
+	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 
 shaders: $(ALL_SHADER_TARGETS)
 
-debug: Flags=$(debug_flags)  
-debug: init shaders build_deb
-	client.exe
-release: Flags=$(release_flags)
-release: init shaders build_rel
-	client.exe
+debug: Flags= $(debug_specific_flags)  
+debug: init shaders $(deb_objs) $(com_objs) build_deb
+	./client
+	
+release: Flags= $(release_specific_flags)
+release: init shaders $(com_objs) $(rel_objs) build_rel
+	./client
+
 #crazy fast
 crazy: init shaders
-	g++ $(srcs) -o crazy_client.exe $(crazy_flags) $(I) $(L) -lglfw3 -lgdi32 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
+	g++ $(srcs) -o crazy_client $(crazy_flags) $(I) $(L) $(REQUIRED_LIBS) -static
 crazy_native: init shaders
-	g++ $(srcs) -o crazy_client.exe $(crazy_flags) -march=native $(I) $(L) -lglfw3 -lgdi32 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2 -static
+	g++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) -static
+
+#i could not make it work without this
+build_deb: $(deb_objs) $(com_objs)
+	g++ -o client $(deb_objs) $(com_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS)
+build_rel: $(com_objs) $(rel_objs)
+	g++ -o client $(com_objs) $(rel_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS)
 
 fun:
 	@echo fun was never an option
@@ -146,14 +156,17 @@ test:
 	g++ -pg test.cpp -o test -Wl,--stack,1000000
 	test
 
+#is not supposed to work on Linux. 
 pack:
 	mkdir "package"
 	mkdir "package/shaders/compiled"
 	mkdir "package/assets"
-	copy "client.exe" "package/client.exe"
+	copy "client" "package/client"
 	copy "shaders/compiled" "package/shaders/compiled"
 	copy "assets" "package/assets"
 	powershell Compress-Archive -Update package package.zip
+
+# yes windows wants quotes and backslashes so linux obviously want no quotes and normal slashes. They have to incompatible.
 cleans:
 ifeq ($(OS),Windows_NT)
 	del "shaders\compiled\*.spv" 
@@ -191,10 +204,28 @@ endif
 # mkdir obj
 init: obj obj/deb obj/rel shaders/compiled
 obj:
+ifeq ($(OS),Windows_NT)
 	mkdir "obj"
+else
+	mkdir -p obj
+endif
+
 obj/deb:
+ifeq ($(OS),Windows_NT)
 	mkdir "obj/deb"
+else
+	mkdir -p obj/deb
+endif
+
 obj/rel:
+ifeq ($(OS),Windows_NT)
 	mkdir "obj/rel"
+else
+	mkdir -p obj/rel
+endif
 shaders/compiled:
+ifeq ($(OS),Windows_NT)
 	mkdir "shaders/compiled"
+else
+	mkdir -p shaders/compiled
+endif

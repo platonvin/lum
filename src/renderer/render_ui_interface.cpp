@@ -275,7 +275,7 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
         const Rml::byte* source,
         const Rml::Vector2i& source_dimensions) {
     Image* texture_image = new Image;
-    VkDeviceSize bufferSize = (sizeof (byte) * 4) * source_dimensions.x * source_dimensions.y;
+    VkDeviceSize bufferSize = (sizeof (Rml::byte) * 4) * source_dimensions.x * source_dimensions.y;
     assert (bufferSize != 0);
     // if(bufferSize == 0) return false;
     VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};

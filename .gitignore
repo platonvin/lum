@@ -1,6 +1,7 @@
 obj
 
 *.exe
+client
 
 # compiled shaders
 shaders/*.spv

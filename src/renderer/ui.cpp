@@ -385,7 +385,7 @@ void Ui::setup() {
 
 void Ui::update() {
     if (renderer->ui_render_interface->default_image == NULL) {
-        byte def_img_src[4] = { (byte)255, (byte)255, (byte)255, (byte)255};
+        std::byte def_img_src[4] = { (std::byte)255, (std::byte)255, (std::byte)255, (std::byte)255};
         bool res = renderer->ui_render_interface->GenerateTexture ((Rml::TextureHandle&) (renderer->ui_render_interface->default_image), (Rml::byte*)&def_img_src, (Rml::Vector2i) {1, 1});
         assert (res);
     }

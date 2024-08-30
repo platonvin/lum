@@ -4,6 +4,8 @@
       "glm",
       "glfw3",
       "volk",
-      "vulkan-memory-allocator"
+      "vulkan-memory-allocator",
+      "glslang",
+      "shaderc"
     ]
   }
