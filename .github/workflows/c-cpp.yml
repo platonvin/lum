@@ -13,17 +13,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: vcpkg-action
-        uses: johnwason/vcpkg-action@v6                  
-          
-      - name: Checkout code
+      - name: checkout code
         uses: actions/checkout@v3
 
-      - name: run-vcpkg
-        uses: lukka/run-vcpkg@v7.6
+      - name: clone vcpkg
+        run: git clone https://github.com/microsoft/vcpkg.git
 
-      - name: Install dependencies
-        run: vcpkg install
+      - name: bootstrap vcpkg
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: install dependencies
+        run: ./vcpkg/vcpkg install
         # env: 
         #   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
           
