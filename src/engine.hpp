@@ -1,9 +1,8 @@
 #pragma once
 
-#include <algorithm>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/ext/scalar_constants.hpp>
-#include <random>
+// #include <algorithm>
+// #include <glm/ext/matrix_transform.hpp>
+// #include <glm/ext/scalar_constants.hpp>
 
 #include <renderer/render.hpp>
 #include <renderer/ui.hpp>

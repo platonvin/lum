@@ -28,15 +28,15 @@ else
 endif
 	
 # all of them united
-always_enabled_flags = -pipe -fno-exceptions -Wuninitialized -std=c++20
+always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20
 debug_specific_flags   = -O0 -g
 release_specific_flags = -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
   debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
 #for "just libs"
-special_otp_flags = -pipe -fno-exceptions -Wuninitialized -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
+special_otp_flags = $(always_enabled_flags) -fno-exceptions -Wuninitialized -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 #for crazy builds
-crazy_flags = -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DVKNDEBUG -fno-exceptions -funroll-loops -w -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -fno-math-errno -Wl,--gc-sections
+crazy_flags = $(always_enabled_flags) -Ofast -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -DVKNDEBUG -fno-exceptions -funroll-loops -w -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -fno-math-errno -Wl,--gc-sections
 
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 
@@ -82,23 +82,23 @@ srcs := \
 #default target
 all: init release
 
-#If someone knows nice way to simplify this, please tell me 
+#If someone knows a way to simplify this, please tell me 
 obj/%.o: common/%.cpp
-	g++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+	c++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
 -include $(DEPS)
 
 obj/rel/%.o: src/%.cpp
-	g++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 obj/rel/%.o: src/renderer/%.cpp
-	g++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(rel_objs:.o=.d)
 -include $(DEPS)
 
 obj/deb/%.o: src/%.cpp
-	g++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 obj/deb/%.o: src/renderer/%.cpp
-	g++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(deb_objs:.o=.d)
 -include $(DEPS)
 
@@ -144,24 +144,24 @@ release: init shaders $(com_objs) $(rel_objs) build_rel
 
 #crazy fast
 crazy: init shaders
-	g++ $(srcs) -o crazy_client $(crazy_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ $(srcs) -o crazy_client $(crazy_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 crazy_native: init shaders
-	g++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 #i could not make it work without this
 build_deb: $(deb_objs) $(com_objs)
-	g++ -o client $(deb_objs) $(com_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ -o client $(deb_objs) $(com_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 build_rel: $(com_objs) $(rel_objs)
-	g++ -o client $(com_objs) $(rel_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ -o client $(com_objs) $(rel_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 fun:
-	@echo fun was never an option
+	@echo -e '\033[0;36m' fun was never an option '\033[0m'
 test:
-	g++ -pg test.cpp -o test -Wl,--stack,1000000
+	c++ -pg test.cpp -o test -Wl,--stack,1000000
 	test
 
-#is not supposed to work on Linux. 
 pack:
+ifeq ($(OS),Windows_NT)
 	mkdir "package"
 	mkdir "package/shaders/compiled"
 	mkdir "package/assets"
@@ -169,8 +169,17 @@ pack:
 	copy "shaders/compiled" "package/shaders/compiled"
 	copy "assets" "package/assets"
 	powershell Compress-Archive -Update package package.zip
+else
+	mkdir -p package
+	mkdir -p package/shaders/compiled
+	mkdir -p package/assets
+	cp client package/client
+	cp -a /shaders/compiled /package/shaders/compiled
+	cp -a /assets           /package/assets
+	zip -r package.zip package
+endif
 
-# yes windows wants quotes and backslashes so linux obviously want no quotes and normal slashes. They have to incompatible.
+# yeah windows wants quotes and backslashes so linux obviously wants no quotes and forward slashes. They have to be incompatible.
 cleans:
 ifeq ($(OS),Windows_NT)
 	del "shaders\compiled\*.spv" 
@@ -227,6 +236,7 @@ ifeq ($(OS),Windows_NT)
 else
 	mkdir -p obj/rel
 endif
+
 shaders/compiled:
 ifeq ($(OS),Windows_NT)
 	mkdir "shaders/compiled"

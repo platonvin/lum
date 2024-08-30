@@ -1,14 +1,7 @@
 #pragma once
 
-#include <climits>
-#include <cmath>
 #include <optional>
 #include <vector>
-#include <string.h>
-#include <stdio.h>
-#include <limits.h>
-#include <stdio.h>
-#include <stdio.h>
 
 // #undef __STRICT_ANSI__
 #define GLM_ENABLE_EXPERIMENTAL
