@@ -19,6 +19,7 @@ L += $(LIB_LIST)
 GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc)))
 GLSLC = $(GLSLC_DIR)/glslc
 
+
 STATIC_OR_DYNAMIC = 
 ifeq ($(OS),Windows_NT)
 	REQUIRED_LIBS = -lglfw3 -lgdi32        -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
@@ -31,8 +32,8 @@ endif
 always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20
 debug_specific_flags   = -O0 -g
 release_specific_flags = -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
-release_flags = $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -c -o
-  debug_flags = $(debug_specific_flags)   $(always_enabled_flags) $(I) $(args) -c -o
+release_flags = $(release_specific_flags) $(always_enabled_flags)
+  debug_flags = $(debug_specific_flags)   $(always_enabled_flags)
 #for "just libs"
 special_otp_flags = $(always_enabled_flags) -fno-exceptions -Wuninitialized -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s  -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 #for crazy builds
@@ -134,13 +135,19 @@ $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
 
 shaders: $(ALL_SHADER_TARGETS)
 
-debug: Flags= $(debug_specific_flags)  
-debug: init shaders $(deb_objs) $(com_objs) build_deb
+debug: init shaders $(com_objs) $(deb_objs) build_deb
+ifeq ($(OS),Windows_NT)
+	.\client
+else
 	./client
+endif
 	
-release: Flags= $(release_specific_flags)
 release: init shaders $(com_objs) $(rel_objs) build_rel
+ifeq ($(OS),Windows_NT)
+	.\client
+else
 	./client
+endif
 
 #crazy fast
 crazy: init shaders
@@ -150,9 +157,9 @@ crazy_native: init shaders
 
 #i could not make it work without this
 build_deb: $(deb_objs) $(com_objs)
-	c++ -o client $(deb_objs) $(com_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ -o client $(deb_objs) $(com_objs) $(debug_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 build_rel: $(com_objs) $(rel_objs)
-	c++ -o client $(com_objs) $(rel_objs) $(release_specific_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ -o client $(com_objs) $(rel_objs) $(release_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 fun:
 	@echo -e '\033[0;36m' fun was never an option '\033[0m'
