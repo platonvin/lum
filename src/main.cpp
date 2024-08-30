@@ -22,7 +22,7 @@ int main() {
     
 
     if (engine.render.measureAll){
-        printf("%-22s: %7.3f: %7.3f\n", engine.render.timestampNames[0], 0.0);
+        printf("%-22s: %7.3f: %7.3f\n", engine.render.timestampNames[0], 0.0, 0.0);
         
         // float timestampPeriod = engine.render.physicalDeviceProperties.limits.timestampPeriod;
         for (int i=1; i<engine.render.currentTimestamp; i++){
