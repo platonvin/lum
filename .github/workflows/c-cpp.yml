@@ -1,0 +1,30 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v3
+      - name: clone vcpkg
+        run: git clone https://github.com/microsoft/vcpkg.git
+      - name: bootstrap vcpkg
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+      - name: at update
+        run: sudo apt update
+      - name: apt-install package dependencies
+        run: sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
+      - name: install dependencies
+        run: ./vcpkg/vcpkg install
+        # env: 
+        #   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      - name: Build the project
+        run: make
