@@ -13,20 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Install latest CMake and Ninja.
-      - uses: lukka/get-cmake@latest
-      - name: Setup anew (or from cache) vcpkg (and does not build any package)
-        uses: lukka/run-vcpkg@v11 # Always specify the specific _version_ of the
-                                  # action you need, `v11` in this case to stay up
-                                  # to date with fixes on the v11 branch.
+      - name: vcpkg-action
+        uses: johnwason/vcpkg-action@v6                  
           
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-      
       - name: Checkout code
         uses: actions/checkout@v3
 
@@ -34,9 +23,9 @@ jobs:
         uses: lukka/run-vcpkg@v7.6
 
       - name: Install dependencies
-        run: ./vcpkg install
-        env: 
-          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+        run: vcpkg install
+        # env: 
+        #   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
           
       - name: Build the project
         run: make
