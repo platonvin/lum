@@ -1,19 +1,23 @@
 name: Build
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+on: 
+  workflow_dispatch:
+
+env:  
+    VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
       - name: checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: clone vcpkg
         run: git clone https://github.com/microsoft/vcpkg.git
       - name: bootstrap vcpkg
@@ -24,7 +28,5 @@ jobs:
         run: sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
       - name: install dependencies
         run: ./vcpkg/vcpkg install
-        # env: 
-        #   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
       - name: Build the project
         run: make

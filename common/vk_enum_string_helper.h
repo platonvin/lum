@@ -3478,9 +3478,10 @@ static inline const char* string_VkDriverId(VkDriverId input_value) {
             return "VK_DRIVER_ID_MESA_NVK";
         case VK_DRIVER_ID_IMAGINATION_OPEN_SOURCE_MESA:
             return "VK_DRIVER_ID_IMAGINATION_OPEN_SOURCE_MESA";
-        case VK_DRIVER_ID_MESA_AGXV:
-            return "VK_DRIVER_ID_MESA_AGXV";
-        default:
+        // makes github workflow crash...
+        // case VK_DRIVER_ID_MESA_AGXV: 
+        //     return "VK_DRIVER_ID_MESA_AGXV";
+        // default:
             return "Unhandled VkDriverId";
     }
 }
