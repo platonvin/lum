@@ -1,6 +1,24 @@
 #include "engine.hpp"
 #include <random>
 
+using glm::u8, glm::u16, glm::u16, glm::u32;
+using glm::i8, glm::i16, glm::i32;
+using glm::f32, glm::f64;
+using glm::defaultp;
+using glm::ivec2,glm::ivec3,glm::ivec4;
+using glm::i8vec2,glm::i8vec3,glm::i8vec4;
+using glm::i16vec2,glm::i16vec3,glm::i16vec4;
+using glm::uvec2,glm::uvec3,glm::uvec4;
+using glm::u8vec2,glm::u8vec3,glm::u8vec4;
+using glm::u16vec2,glm::u16vec3,glm::u16vec4;
+using glm::vec,glm::vec2,glm::vec3,glm::vec4;
+using glm::dvec2,glm::dvec3,glm::dvec4;
+using glm::mat, glm::mat2, glm::mat3, glm::mat4;
+using glm::dmat2, glm::dmat3, glm::dmat4;
+using glm::quat, glm::dquat;
+using glm::quat_identity, glm::identity;
+using glm::pi;
+
 #include <chrono>
 void printFPS() {
     static int frame_count = 0;

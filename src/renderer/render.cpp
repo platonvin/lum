@@ -5,8 +5,27 @@
 // #include <BS_thread_pool.hpp> //TODO: howto depend
 #include "ao_lut.hpp"
 
-// using namespace std;
-using namespace glm;
+using std::array;
+using std::vector;
+
+using glm::u8, glm::u16, glm::u16, glm::u32;
+using glm::i8, glm::i16, glm::i32;
+using glm::f32, glm::f64;
+using glm::defaultp;
+using glm::quat;
+using glm::ivec2,glm::ivec3,glm::ivec4;
+using glm::i8vec2,glm::i8vec3,glm::i8vec4;
+using glm::i16vec2,glm::i16vec3,glm::i16vec4;
+using glm::uvec2,glm::uvec3,glm::uvec4;
+using glm::u8vec2,glm::u8vec3,glm::u8vec4;
+using glm::u16vec2,glm::u16vec3,glm::u16vec4;
+using glm::vec,glm::vec2,glm::vec3,glm::vec4;
+using glm::dvec2,glm::dvec3,glm::dvec4;
+using glm::mat, glm::mat2, glm::mat3, glm::mat4;
+using glm::dmat2, glm::dmat3, glm::dmat4;
+using glm::quat_identity;
+using glm::identity;
+using glm::intBitsToFloat, glm::floatBitsToInt, glm::floatBitsToUint;
 
 tuple<int, int> get_block_xy (int N);
 
@@ -1973,7 +1992,7 @@ void Renderer::end_frame() {
     }
     if (iFrame > 5) {
         for (int i = 0; i < timestampCount; i++) {
-            average_ftimestamps[i] = mix (average_ftimestamps[i], ftimestamps[i], 0.1);
+            average_ftimestamps[i] = glm::mix (average_ftimestamps[i], ftimestamps[i], 0.1);
         }
     } else {
         for (int i = 0; i < timestampCount; i++) {

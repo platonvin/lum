@@ -1,7 +1,6 @@
 //compute lut for ambient occlusion shader
 #include "ao_lut.hpp"
 
-using namespace glm;
 using std::vector;
 
 vec3 get_world_shift_from_clip_shift (vec2 clip_shift, vec3 horizline_scaled, vec3 vertiline_scaled) {

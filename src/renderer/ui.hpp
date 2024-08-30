@@ -8,7 +8,6 @@
     im ui monkey now
     lmao just found perfect library for what i need - RmlUi
 */
-// using namespace Rml;
 
 class SystemInterface_GLFW : public Rml::SystemInterface {
   public:

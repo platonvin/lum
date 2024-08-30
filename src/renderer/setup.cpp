@@ -3,8 +3,22 @@
 #include <set>
 #include <fstream>
 
-using namespace std;
-using namespace glm;
+// using namespace std;
+using glm::u8, glm::u16, glm::u16, glm::u32;
+using glm::i8, glm::i16, glm::i32;
+using glm::f32, glm::f64;
+using glm::defaultp;
+using glm::quat;
+using glm::ivec2,glm::ivec3,glm::ivec4;
+using glm::i8vec2,glm::i8vec3,glm::i8vec4;
+using glm::i16vec2,glm::i16vec3,glm::i16vec4;
+using glm::uvec2,glm::uvec3,glm::uvec4;
+using glm::u8vec2,glm::u8vec3,glm::u8vec4;
+using glm::u16vec2,glm::u16vec3,glm::u16vec4;
+using glm::vec,glm::vec2,glm::vec3,glm::vec4;
+using glm::dvec2,glm::dvec3,glm::dvec4;
+using glm::mat, glm::mat2, glm::mat3, glm::mat4;
+using glm::dmat2, glm::dmat3, glm::dmat4;
 
 //they are global because its easier lol
 const vector<const char*> instanceLayers = {
@@ -73,7 +87,7 @@ void Renderer::createSyncObjects() {
 }
 
 vector<char> readFile (const char* filename) {
-    ifstream file (filename, ios::ate | ios::binary);
+    std::ifstream file (filename, std::ios::ate | std::ios::binary);
     assert (file.is_open());
     u32 fileSize = file.tellg();
     vector<char> buffer (fileSize);
@@ -121,7 +135,7 @@ VkAttachmentStoreOp Renderer::getOpStore(LoadStoreOp op){
 void Renderer::createRenderPass(vector<AttachmentDescription> attachments, vector<SubpassAttachments> sas, VkRenderPass* rpass){
     vector<VkAttachmentDescription> adescs(attachments.size());
     vector<VkAttachmentReference  > arefs(attachments.size());
-    std::map<void*, uint32> img2ref = {};
+    std::map<void*, u32> img2ref = {};
 
     for(int i=0; i<attachments.size(); i++){
         adescs[i].format = attachments[i].image->format;
@@ -135,7 +149,7 @@ void Renderer::createRenderPass(vector<AttachmentDescription> attachments, vecto
             adescs[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         } else adescs[i].initialLayout = VK_IMAGE_LAYOUT_GENERAL;
         adescs[i].finalLayout = attachments[i].finalLayout;
-        arefs[i] = {uint32(i), VK_IMAGE_LAYOUT_GENERAL};
+        arefs[i] = {u32(i), VK_IMAGE_LAYOUT_GENERAL};
         img2ref[attachments[i].image] = i;
     }
 
@@ -613,7 +627,7 @@ void Renderer::pickPhysicalDevice() {
 void Renderer::createLogicalDevice() {
     QueueFamilyIndices indices = findQueueFamilies (physicalDevice);
     vector<VkDeviceQueueCreateInfo> queueCreateInfos = {};
-    set<u32> uniqueQueueFamilies = {indices.graphicalAndCompute.value(), indices.present.value()};
+    std::set<u32> uniqueQueueFamilies = {indices.graphicalAndCompute.value(), indices.present.value()};
     float queuePriority = 1.0f; //random priority?
     for (u32 queueFamily : uniqueQueueFamilies) {
         VkDeviceQueueCreateInfo 

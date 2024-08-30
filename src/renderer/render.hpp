@@ -20,12 +20,26 @@
 
 #include <defines.hpp>
 
-using namespace glm;
 using std::vector;
 using std::cout;
 using std::tuple;
 using std::tie;
 // using std::set;
+using glm::u8, glm::u16, glm::u16, glm::u32;
+using glm::i8, glm::i16, glm::i32;
+using glm::f32, glm::f64;
+using glm::defaultp;
+using glm::quat;
+using glm::ivec2,glm::ivec3,glm::ivec4;
+using glm::i8vec2,glm::i8vec3,glm::i8vec4;
+using glm::i16vec2,glm::i16vec3,glm::i16vec4;
+using glm::uvec2,glm::uvec3,glm::uvec4;
+using glm::u8vec2,glm::u8vec3,glm::u8vec4;
+using glm::u16vec2,glm::u16vec3,glm::u16vec4;
+using glm::vec,glm::vec2,glm::vec3,glm::vec4;
+using glm::dvec2,glm::dvec3,glm::dvec4;
+using glm::mat, glm::mat2, glm::mat3, glm::mat4;
+using glm::dmat2, glm::dmat3, glm::dmat4;
 
 //Everything is X -> Y -> Z order in arrays (vectors)
 const int BLOCK_SIZE = 16; // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
@@ -734,54 +748,53 @@ struct Renderer {
 };
 
 
-using namespace Rml;
-class MyRenderInterface : public RenderInterface {
+class MyRenderInterface : public Rml::RenderInterface {
   public:
     MyRenderInterface() {}
 
-    ~MyRenderInterface() {}
-
+    ~MyRenderInterface() override {}
     // Called by RmlUi when it wants to render geometry that the application does not wish to optimise
-    void RenderGeometry (Vertex* vertices,
+    void RenderGeometry (Rml::Vertex* vertices,
                          int num_vertices,
                          int* indices,
                          int num_indices,
-                         TextureHandle texture,
-                         const Vector2f& translation);
+                         Rml::TextureHandle texture,
+                         const Rml::Vector2f& translation) override;
 
     // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
-    CompiledGeometryHandle CompileGeometry (Vertex* vertices, int num_vertices, int* indices, int num_indices, TextureHandle texture);
+    Rml::CompiledGeometryHandle CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture) override;
 
     // Called by RmlUi when it wants to render application-compiled geometry.
-    void RenderCompiledGeometry (CompiledGeometryHandle geometry, const Vector2f& translation);
+    void RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation) override;
 
     // Called by RmlUi when it wants to release application-compiled geometry.
-    void ReleaseCompiledGeometry (CompiledGeometryHandle geometry);
+    void ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry) override;
 
     // Called by RmlUi when it wants to enable or disable scissoring to clip content.
-    void EnableScissorRegion (bool enable);
+    void EnableScissorRegion (bool enable) override;
 
     // Called by RmlUi when it wants to change the scissor region.
-    void SetScissorRegion (int x, int y, int width, int height);
+    void SetScissorRegion (int x, int y, int width, int height) override;
 
     // Called by RmlUi when a texture is required by the library.
-    bool LoadTexture (TextureHandle& texture_handle,
-                      Vector2i& texture_dimensions,
-                      const String& source);
+    bool LoadTexture (Rml::TextureHandle& texture_handle,
+                      Rml::Vector2i& texture_dimensions,
+                      const Rml::String& source) override;
 
     // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
-    bool GenerateTexture (TextureHandle& texture_handle,
-                          const byte* source,
-                          const Vector2i& source_dimensions);
+    bool GenerateTexture (Rml::TextureHandle& texture_handle,
+                          const Rml::byte* source,
+                          const Rml::Vector2i& source_dimensions) override;
 
     // Called by RmlUi when a loaded texture is no longer required.
-    void ReleaseTexture (TextureHandle texture_handle);
+    void ReleaseTexture (Rml::TextureHandle texture_handle) override;
 
     // Called by RmlUi when it wants the renderer to use a new transform matrix.
     // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
     // an glm::identity matrix or otherwise omit the multiplication with the transform.
-    void SetTransform (const Matrix4f* transform);
+    void SetTransform (const Rml::Matrix4f* transform) override;
 
+    // Rml::Context* GetContext() override {};
     Renderer* render;
     Image* default_image = NULL;
 
