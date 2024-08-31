@@ -34,7 +34,7 @@ const vector<const char*> instanceLayers = {
 #endif
 
     VK_KHR_SURFACE_EXTENSION_NAME,
-    "VK_KHR_win32_surface",
+    // "VK_KHR_win32_surface",
 };
 const vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -811,7 +811,7 @@ void Renderer::getInstanceExtensions() {
             if (strcmp (ext, sup.extensionName) == 0) { supported = true; }
         }
         if (not supported) {
-            cout << KRED << ext << " not supported" << KEND;
+            cout << KRED << ext << " not supported\n" << KEND;
             exit (1);
         }
     }

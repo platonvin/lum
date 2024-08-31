@@ -7,15 +7,10 @@
 ## Installation 
 - ### Prerequisites
   - **C++ Compiler**: [MSYS2 MinGW](https://www.msys2.org/) recommended for Windows. For Linux prefer GNU C++
-    - other compilers not tested
   - **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started)
   - **Make**: for Windows, install with MinGW64. For Linux, typically installed by default
-- ### Required Libraries
-  - **[GLM](https://github.com/g-truc/glm)**: Installed automatically via Vcpkg
-  - **[GLFW](https://www.glfw.org/)**: Installed automatically via Vcpkg
-  - **[RmlUi](https://mikke89.github.io/RmlUiDoc/)**: Installed automatically via Vcpkg
-  - **[Volk](https://github.com/zeux/volk)**: Installed automatically via Vcpkg
-  - **[Vma](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)**: Installed automatically via Vcpkg
+  - **Vulkan support**
+
 - ### Steps  
   - make sure you have C++20 compiler, Vcpkg and Make
   - get the repository: \
