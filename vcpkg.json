@@ -10,5 +10,11 @@
     "vulkan-memory-allocator",
     "shaderc"
   ],
-  "builtin-baseline": "afa12e7292fb47771e619675d7915645fe0adb1b"
+  "builtin-baseline": "afa12e7292fb47771e619675d7915645fe0adb1b",
+  "overrides": [
+    { 
+        "name": "rmlui", 
+        "version": "5.1"
+    }
+  ]
 }
