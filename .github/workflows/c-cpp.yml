@@ -29,4 +29,4 @@ jobs:
       - name: install dependencies
         run: ./vcpkg/vcpkg install
       - name: Build the project
-        run: make
+        run: make only_build

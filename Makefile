@@ -149,6 +149,9 @@ else
 	./client
 endif
 
+#mostly for testing
+only_build: init shaders $(com_objs) $(rel_objs) build_rel
+
 #crazy fast
 crazy: init shaders
 	c++ $(srcs) -o crazy_client $(crazy_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)

@@ -1,3 +1,5 @@
+[![Build](https://github.com/platonvin/lum/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/c-cpp.yml)
+
 # Lum
 **Lum** is a voxel engine I'm developing because none of the existing ones meet my needs. Currently, it's not available as a standalone project but is bundled with a demo instead
 
@@ -19,6 +21,8 @@
 `$ cd lum` 
   - install dependencies:\
 `$vcpkg install`
+    - on Linux, GLFW will ask you to install multiple different packages, but you can do it in advance:\
+     `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential`
     - for MSYS2 MinGW on Windows use `vcpkg install --triplet=x64-mingw-static --host-triplet=x64-mingw-static` becuase on Windows triplets default to x64-windows
   - Build and run:\
 `$ make -j10`
