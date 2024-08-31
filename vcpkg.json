@@ -1,10 +1,14 @@
 {
-    "dependencies": [
-      "rmlui",
-      "glm",
-      "glfw3",
-      "volk",
-      "vulkan-memory-allocator",
-      "shaderc"
-    ]
-  }
+  "dependencies": [
+    {
+      "name": "rmlui",
+      "version>=": "5.1"
+    },
+    "glm",
+    "glfw3",
+    "volk",
+    "vulkan-memory-allocator",
+    "shaderc"
+  ],
+  "builtin-baseline": "afa12e7292fb47771e619675d7915645fe0adb1b"
+}
