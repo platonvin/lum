@@ -65,16 +65,16 @@ void Renderer::init (Settings settings) {
                                         VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
     createCommandPool();
     createImages();
-// println
+println
     createSwapchainDependentImages();
-// println
+println
     //ok i did it
     createRenderPass({
             {&lightmap, Clear, Store, DontCare, DontCare}
         }, {
             {{&lightmapBlocksPipe, &lightmapModelsPipe}, {}, {}, &lightmap}
         }, &lightmapRpass);
-// println
+println
     createRenderPass({
             {&highresMatNorm, DontCare, Store, DontCare, DontCare},
             {&highresDepthStencil, Clear, Store, Clear, Store},
@@ -85,7 +85,7 @@ void Renderer::init (Settings settings) {
             {{&raygenGrassPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
             {{&raygenWaterPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
         }, &gbufferRpass);
-// println
+println
     createRenderPass({
             {&highresMatNorm,      Load    , DontCare, DontCare, DontCare},
             {&highresFrame,        DontCare, DontCare, DontCare, DontCare},
@@ -104,22 +104,22 @@ void Renderer::init (Settings settings) {
             {{&overlayPipe},           {/*empty*/},                             {&swapchainImages[0]},   NULL},
         }, &shadeRpass);
     createFramebuffers();
-// println
+println
     createSamplers();
     printl (swapChainImageFormat)
     createCommandBuffers ( &computeCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     createCommandBuffers (&lightmapCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     createCommandBuffers (&graphicsCommandBuffers, MAX_FRAMES_IN_FLIGHT);
     createCommandBuffers ( &copyCommandBuffers, MAX_FRAMES_IN_FLIGHT);
-// println
+println
     setupDescriptors();
-// println
+println
     createPipilines();
-// println
+println
     createSyncObjects();
     gen_perlin_2d();
     gen_perlin_3d();
-// println
+println
     assert (timestampCount != 0);
     timestampNames.resize (timestampCount);
     timestamps.resize (timestampCount);
@@ -133,7 +133,7 @@ void Renderer::init (Settings settings) {
     for (auto &q : queryPoolTimestamps) {
         VK_CHECK (vkCreateQueryPool (device, &query_pool_info, NULL, &q));
     }
-// println
+println
 }
 
 void Renderer::createImages() {
@@ -157,7 +157,7 @@ void Renderer::createImages() {
         VK_IMAGE_ASPECT_DEPTH_BIT,
     {lightmapExtent.width, lightmapExtent.height, 1});
     transitionImageLayoutSingletime (&lightmap, VK_IMAGE_LAYOUT_GENERAL);
-// println
+println
     createImageStorages (&radianceCache,
         VK_IMAGE_TYPE_3D,
         RADIANCE_FORMAT,
@@ -251,12 +251,12 @@ void Renderer::createImages() {
     }
     transitionImageLayoutSingletime (&world, VK_IMAGE_LAYOUT_GENERAL);
     transitionImageLayoutSingletime (&radianceCache, VK_IMAGE_LAYOUT_GENERAL);
-// println
+println
     if (settings.scaled) {
         transitionImageLayoutSingletime (&lowresDepthStencil, VK_IMAGE_LAYOUT_GENERAL);
         transitionImageLayoutSingletime (&lowresMatNorm, VK_IMAGE_LAYOUT_GENERAL);
     }
-// println
+println
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         transitionImageLayoutSingletime (&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
         transitionImageLayoutSingletime (&materialPalette[i], VK_IMAGE_LAYOUT_GENERAL);
@@ -275,7 +275,7 @@ void Renderer::setupDescriptors() {
     deferDescriptorsetup (&lightmapModelsPipe.setLayout, &lightmapModelsPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
-// println
+println
     deferDescriptorsetup (&radiancePipe.setLayout, &radiancePipe.sets, {
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {world}, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
@@ -284,7 +284,7 @@ void Renderer::setupDescriptors() {
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {radianceCache}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RD_FIRST, {gpuRadianceUpdates}, {}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
-// println
+println
     deferDescriptorsetup (&diffusePipe.setLayout, &diffusePipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorm}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -294,27 +294,27 @@ void Renderer::setupDescriptors() {
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     deferDescriptorsetup (&aoPipe.setLayout, &aoPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorm}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     deferDescriptorsetup (&tonemapPipe.setLayout, &tonemapPipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresFrame}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     deferDescriptorsetup (&fillStencilGlossyPipe.setLayout, &fillStencilGlossyPipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorm}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     deferDescriptorsetup (&fillStencilSmokePipe.setLayout, &fillStencilSmokePipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
-// println
+println
     deferDescriptorsetup (&glossyPipe.setLayout, &glossyPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresMatNorm}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
@@ -324,7 +324,7 @@ void Renderer::setupDescriptors() {
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache}, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     deferDescriptorsetup (&smokePipe.setLayout, &smokePipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {farDepth}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -332,7 +332,7 @@ void Renderer::setupDescriptors() {
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {radianceCache}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {perlinNoise3d}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     // create_DescriptorSetLayout({
     // VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // per-quad attributes
     // },
@@ -352,7 +352,7 @@ void Renderer::setupDescriptors() {
     deferDescriptorsetup (&raygenModelsPipe.setLayout, &raygenModelsPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-// println
+println
     deferDescriptorsetup (&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {world}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -405,15 +405,15 @@ void Renderer::setupDescriptors() {
     // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_COMPUTE_BIT);
-// println
+println
     flushDescriptorSetup();
-// println
+println
 }
 
 void Renderer::createPipilines() {
     //that is why NOT abstracting vulkan is also an option
     //if you cannot guess what things mean by just looking at them maybe read old (0.0.3) release src
-// println
+println
     lightmapBlocksPipe.subpassId = 0;
     createRasterPipeline (&lightmapBlocksPipe, 0, {
         {"shaders/compiled/lightmapBlocksVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -443,7 +443,7 @@ void Renderer::createPipilines() {
     },
     sizeof (PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     swapChainExtent, {NO_BLEND}, (12), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     raygenModelsPipe.subpassId = 1;
     createRasterPipeline (&raygenModelsPipe, raygenModelsPushLayout, {
         {"shaders/compiled/rayGenModelsVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -453,7 +453,7 @@ void Renderer::createPipilines() {
     },
     sizeof (PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     swapChainExtent, {NO_BLEND}, (sizeof (vec4) * 3), FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     raygenParticlesPipe.subpassId = 2;
     createRasterPipeline (&raygenParticlesPipe, 0, {
         {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -467,7 +467,7 @@ void Renderer::createPipilines() {
     },
     sizeof (Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
     swapChainExtent, {NO_BLEND}, 0, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     raygenGrassPipe.subpassId = 3;
     createRasterPipeline (&raygenGrassPipe, 0, {
         {"shaders/compiled/grassVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -475,7 +475,7 @@ void Renderer::createPipilines() {
     }, {/*empty*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     swapChainExtent, {NO_BLEND}, sizeof (vec4) + sizeof (int) * 2 + sizeof (int) * 2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     raygenWaterPipe.subpassId = 4;
     createRasterPipeline (&raygenWaterPipe, 0, {
         {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -483,7 +483,7 @@ void Renderer::createPipilines() {
     }, {/*empty*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     swapChainExtent, {NO_BLEND}, sizeof (vec4) + sizeof (int) * 2, FULL_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     diffusePipe.subpassId = 0;
     createRasterPipeline (&diffusePipe, 0, {
         {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -498,7 +498,7 @@ void Renderer::createPipilines() {
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     swapChainExtent, {BLEND_MIX}, 0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     fillStencilGlossyPipe.subpassId = 2;
     createRasterPipeline (&fillStencilGlossyPipe, 0, {
         {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -515,7 +515,7 @@ void Renderer::createPipilines() {
         .writeMask = 0b01, //01 for reflection
         .reference = 0b01,
     });
-// println
+println
     fillStencilSmokePipe.subpassId = 3;
     createRasterPipeline (&fillStencilSmokePipe, 0, {
         {"shaders/compiled/fillStencilSmokeVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -532,7 +532,7 @@ void Renderer::createPipilines() {
         .writeMask = 0b10, //10 for smoke
         .reference = 0b10,
     });
-// println
+println
     glossyPipe.subpassId = 4;
     createRasterPipeline (&glossyPipe, 0, {
         {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -549,7 +549,7 @@ void Renderer::createPipilines() {
         .writeMask = 0b00, //01 for glossy
         .reference = 0b01,
     });
-// println
+println
     smokePipe.subpassId = 5;
     createRasterPipeline (&smokePipe, 0, {
         {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -566,7 +566,7 @@ void Renderer::createPipilines() {
         .writeMask = 0b00, //10 for smoke
         .reference = 0b10,
     });
-// println
+println
     tonemapPipe.subpassId = 6;
     createRasterPipeline (&tonemapPipe, 0, {
         {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -574,7 +574,7 @@ void Renderer::createPipilines() {
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     swapChainExtent, {NO_BLEND}, 0, NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     overlayPipe.subpassId = 7;
     createRasterPipeline (&overlayPipe, 0, {
         {"shaders/compiled/overlayVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -586,23 +586,23 @@ void Renderer::createPipilines() {
     },
     sizeof (Rml::Vertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     swapChainExtent, {BLEND_MIX}, sizeof (vec4) + sizeof (mat4), NO_DEPTH_TEST, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-// println
+println
     createComputePipeline (&radiancePipe, 0, "shaders/compiled/radiance.spv", sizeof (int) * 4, VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
-// println
+println
     createComputePipeline (&updateGrassPipe, 0, "shaders/compiled/updateGrass.spv", sizeof (vec2) * 2 + sizeof (float), 0);
-// println
+println
     createComputePipeline (&updateWaterPipe, 0, "shaders/compiled/updateWater.spv", sizeof (float) + sizeof (vec2) * 2, 0);
-// println
+println
     createComputePipeline (&genPerlin2dPipe, 0, "shaders/compiled/perlin2.spv", 0, 0);
-// println
+println
     createComputePipeline (&genPerlin3dPipe, 0, "shaders/compiled/perlin3.spv", 0, 0);
-// println
+println
     // createComputePipeline(&dfxPipe,0, "shaders/compiled/dfx.spv", 0, 0);
     // createComputePipeline(&dfyPipe,0, "shaders/compiled/dfy.spv", 0, 0);
     // createComputePipeline(&dfzPipe,0, "shaders/compiled/dfz.spv", 0, 0);
     // createComputePipeline(&bitmaskPipe,0, "shaders/compiled/bitmask.spv", 0, 0);
     createComputePipeline (&mapPipe, mapPushLayout, "shaders/compiled/map.spv", sizeof (mat4) + sizeof (ivec4), 0);
-// println
+println
 }
 
 void Renderer::createSwapchainDependentImages() {
@@ -703,13 +703,13 @@ void Renderer::createFramebuffers() {
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         lightmapVeiws[0].push_back (lightmap.view);
     }
-// println
+println
     createNFramebuffers (&lightmapFramebuffers, &lightmapVeiws, lightmapRpass, MAX_FRAMES_IN_FLIGHT, lightmapExtent.width, lightmapExtent.height);
-// println
+println
     createNFramebuffers (&rayGenFramebuffers, &rayGenVeiws, gbufferRpass, MAX_FRAMES_IN_FLIGHT, swapChainExtent.width, swapChainExtent.height);
-// println
+println
     createNFramebuffers (&altFramebuffers, &altVeiws, shadeRpass, swapchainImages.size(), raytraceExtent.width, raytraceExtent.height);
-// println
+println
 }
 void Renderer::recreateSwapchainDependent() {
     int width = 0, height = 0;
@@ -805,11 +805,11 @@ void Renderer::cleanup() {
         vkDestroyQueryPool (device, queryPoolTimestamps[i], NULL);
     }
     vkDestroyCommandPool (device, commandPool, NULL);
-// println
+println
     vkDestroyRenderPass (device, lightmapRpass, NULL);
     vkDestroyRenderPass (device, gbufferRpass , NULL);
     vkDestroyRenderPass (device, shadeRpass   , NULL);
-// println
+println
     destroyComputePipeline ( &mapPipe);
     vkDestroyDescriptorSetLayout (device, mapPushLayout, NULL);
     destroyComputePipeline ( &raytracePipe);

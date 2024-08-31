@@ -149,6 +149,10 @@ else
 	./client
 endif
 
+#not separate on purpose
+release_p: args = -D_PRINTLINE
+release_p: release
+
 #mostly for testing
 only_build: init shaders $(com_objs) $(rel_objs) build_rel
 
