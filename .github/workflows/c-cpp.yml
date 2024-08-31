@@ -10,36 +10,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
+      - name: Cache APT Packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-            
+          packages: libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
+          execute_install_scripts: true  # optional, set to true if you need to run install scripts
+      
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: Cache apt packages
-        uses: actions/cache@v3
-        with:
-          path: |
-            /var/cache/apt
-            /var/lib/apt/lists
-          key: ${{ runner.os }}-apt-${{ hashFiles('apt-packages.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-            
-      - name: Update apt and install packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y $(cat apt-packages.txt)
-        env:
-          DEBIAN_FRONTEND: noninteractive
           
-      - name: Create a list of apt packages
-        run: echo "libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential" > apt-packages.txt
-        
       - name: Clone vcpkg
         run: git clone https://github.com/microsoft/vcpkg.git
       - name: Bootstrap vcpkg
