@@ -16,17 +16,36 @@ jobs:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-      - name: checkout code
+            
+      - name: Checkout code
         uses: actions/checkout@v4
-      - name: clone vcpkg
+        
+      - name: Cache apt packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            /var/cache/apt
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-${{ hashFiles('apt-packages.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+            
+      - name: Update apt and install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $(cat apt-packages.txt)
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          
+      - name: Create a list of apt packages
+        run: echo "libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential" > apt-packages.txt
+        
+      - name: Clone vcpkg
         run: git clone https://github.com/microsoft/vcpkg.git
-      - name: bootstrap vcpkg
+      - name: Bootstrap vcpkg
         run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-      - name: at update
-        run: sudo apt update
-      - name: apt-install package dependencies
-        run: sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
-      - name: install dependencies
+      - name: Install dependencies
         run: ./vcpkg/vcpkg install
+        
       - name: Build the project
         run: make only_build
