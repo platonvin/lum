@@ -126,13 +126,18 @@ static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
     Settings settings = {};
-        settings.fullscreen = false;
         settings.world_size = ivec3(48, 48, 16);
         settings.static_block_palette_size = 15;
         settings.maxParticleCount = 8128;
-        settings.vsync = false;
         settings.ratio = vec2(1);
         settings.scaled = false;
+        #ifdef VSYNC_FULLSCREEN
+            settings.vsync = true;
+            settings.fullscreen = true;
+            #else
+            settings.vsync = false;
+            settings.fullscreen = false;
+        #endif
     render.init(settings);
     // render.init(48, 48, 16, 15, 8128, float(1.), true, false);
 println

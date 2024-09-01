@@ -149,9 +149,13 @@ else
 	./client
 endif
 
-#not separate on purpose
+#not separate on purpose. make cleanr before usage
 release_p: args = -D_PRINTLINE
 release_p: release
+
+#not separate on purpose. make cleanr before usage
+release_vfs: args = -DVSYNC_FULLSCREEN
+release_vfs: release
 
 #mostly for testing
 only_build: init shaders $(com_objs) $(rel_objs) build_rel
