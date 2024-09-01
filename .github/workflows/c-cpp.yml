@@ -15,18 +15,26 @@ jobs:
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-      - name: checkout code
-        uses: actions/checkout@v4
-      - name: clone vcpkg
-        run: git clone https://github.com/microsoft/vcpkg.git
-      - name: bootstrap vcpkg
-        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-      - name: at update
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');      
+      
+      - name: Maybe useful update
         run: sudo apt update
-      - name: apt-install package dependencies
-        run: sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
-      - name: install dependencies
+        
+      - name: Cache APT Packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+        with:
+          packages: libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential
+          execute_install_scripts: true  # optional, set to true if you need to run install scripts
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+          
+      - name: Clone vcpkg
+        run: git clone https://github.com/microsoft/vcpkg.git
+      - name: Bootstrap vcpkg
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+      - name: Install dependencies
         run: ./vcpkg/vcpkg install
+        
       - name: Build the project
         run: make only_build
