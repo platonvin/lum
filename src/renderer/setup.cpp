@@ -1119,7 +1119,7 @@ static void allocate_Descriptor (vector<VkDescriptorSet>& sets, VkDescriptorSetL
     VK_CHECK (vkAllocateDescriptorSets (device, &allocInfo, sets.data()));
 }
 
-void Renderer::deferDescriptorsetup (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptorSets, vector<DescriptorInfo> descriptions, VkShaderStageFlags baseStages, VkDescriptorSetLayoutCreateFlags createFlags) {
+void Renderer::deferDescriptorSetup (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptorSets, vector<DescriptorInfo> descriptions, VkShaderStageFlags baseStages, VkDescriptorSetLayoutCreateFlags createFlags) {
     if (*dsetLayout == VK_NULL_HANDLE) {
         vector<VkDescriptorType> descriptorTypes (descriptions.size());
         vector<VkShaderStageFlags> descriptorStages (descriptions.size());

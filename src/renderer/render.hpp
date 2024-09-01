@@ -530,7 +530,7 @@ struct Renderer {
     void destroyComputePipeline (ComputePipe* pipe);
 
     void createDescriptorPool();
-    void deferDescriptorsetup (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages, VkDescriptorSetLayoutCreateFlags createFlags = 0);
+    void deferDescriptorSetup (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages, VkDescriptorSetLayoutCreateFlags createFlags = 0);
     void setupDescriptor (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
     vector<DelayedDescriptorSetup> delayed_descriptor_setups;
     void flushDescriptorSetup();

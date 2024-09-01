@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "rmlui",
-      "version>=": "5.1"
+      "version>=": "5.1#1"
     },
     "glm",
     "glfw3",
@@ -14,7 +14,7 @@
   "overrides": [
     { 
         "name": "rmlui", 
-        "version": "5.1"
+        "version": "5.1#1"
     }
   ]
 }
