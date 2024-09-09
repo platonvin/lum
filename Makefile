@@ -29,7 +29,7 @@ else
 endif
 	
 # all of them united
-always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20 -Wno-inconsistent-missing-destructor-override
+always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20
 debug_specific_flags   = -O0 -g
 release_specific_flags = -Ofast -DVKNDEBUG -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul -fdata-sections -ffunction-sections -s -mfancy-math-387 -fno-math-errno -Wl,--gc-sections
 release_flags = $(release_specific_flags) $(always_enabled_flags)

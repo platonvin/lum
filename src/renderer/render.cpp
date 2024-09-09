@@ -156,7 +156,6 @@ void Renderer::createImages() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT,
     {lightmapExtent.width, lightmapExtent.height, 1});
-    transitionImageLayoutSingletime (&lightmap, VK_IMAGE_LAYOUT_GENERAL);
 println
     createImageStorages (&radianceCache,
         VK_IMAGE_TYPE_3D,
@@ -191,7 +190,6 @@ println
         0,
         VK_IMAGE_ASPECT_COLOR_BIT,
     {settings.world_size.x * 2, settings.world_size.y * 2, 1}); //for quality
-    transitionImageLayoutSingletime (&grassState, VK_IMAGE_LAYOUT_GENERAL);
     createImageStorages (&waterState,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -200,7 +198,6 @@ println
         0,
         VK_IMAGE_ASPECT_COLOR_BIT,
     {settings.world_size.x * 2, settings.world_size.y * 2, 1}); //for quality
-    transitionImageLayoutSingletime (&waterState, VK_IMAGE_LAYOUT_GENERAL);
     createImageStorages (&perlinNoise2d,
         VK_IMAGE_TYPE_2D,
         VK_FORMAT_R16G16_SNORM,
@@ -209,7 +206,6 @@ println
         0,
         VK_IMAGE_ASPECT_COLOR_BIT,
     {settings.world_size.x, settings.world_size.y, 1}); //does not matter than much
-    transitionImageLayoutSingletime (&perlinNoise2d, VK_IMAGE_LAYOUT_GENERAL);
     createImageStorages (&perlinNoise3d,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R16G16B16A16_UNORM,
@@ -218,7 +214,6 @@ println
         0,
         VK_IMAGE_ASPECT_COLOR_BIT,
     {32, 32, 32}); //does not matter than much
-    transitionImageLayoutSingletime (&perlinNoise3d, VK_IMAGE_LAYOUT_GENERAL);
     createBufferStorages (&gpuParticles,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         settings.maxParticleCount* sizeof (Particle), true);
@@ -237,7 +232,6 @@ println
     createBufferStorages (&stagingRadianceUpdates,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         sizeof (ivec4)*settings.world_size.x* settings.world_size.y* settings.world_size.z, true); //TODO test extra mem
-    // staging_uniform_mapped.resize(MAX_FRAMES_IN_FLIGHT);
     stagingWorldMapped.resize (MAX_FRAMES_IN_FLIGHT);
     gpuParticlesMapped.resize (MAX_FRAMES_IN_FLIGHT);
     stagingRadianceUpdatesMapped.resize (MAX_FRAMES_IN_FLIGHT);
@@ -248,18 +242,6 @@ println
             stagingWorld[i].is_mapped = true;
         vmaMapMemory (VMAllocator, stagingRadianceUpdates[i].alloc, &stagingRadianceUpdatesMapped[i]);
             stagingRadianceUpdates[i].is_mapped = true;
-    }
-    transitionImageLayoutSingletime (&world, VK_IMAGE_LAYOUT_GENERAL);
-    transitionImageLayoutSingletime (&radianceCache, VK_IMAGE_LAYOUT_GENERAL);
-println
-    if (settings.scaled) {
-        transitionImageLayoutSingletime (&lowresDepthStencil, VK_IMAGE_LAYOUT_GENERAL);
-        transitionImageLayoutSingletime (&lowresMatNorm, VK_IMAGE_LAYOUT_GENERAL);
-    }
-println
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        transitionImageLayoutSingletime (&originBlockPalette[i], VK_IMAGE_LAYOUT_GENERAL);
-        transitionImageLayoutSingletime (&materialPalette[i], VK_IMAGE_LAYOUT_GENERAL);
     }
 }
 
@@ -681,8 +663,6 @@ void Renderer::createSwapchainDependentImages() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
     {raytraceExtent.width, raytraceExtent.height, 1});
-    transitionImageLayoutSingletime (&farDepth, VK_IMAGE_LAYOUT_GENERAL);
-    transitionImageLayoutSingletime (&nearDepth, VK_IMAGE_LAYOUT_GENERAL);
 }
 void Renderer::createFramebuffers() {
     vector<vector<VkImageView>> rayGenVeiws (2);
@@ -1047,20 +1027,25 @@ void Renderer::update_light_transform() {
 void Renderer::start_frame() {
     camera.updateCamera();
     update_light_transform();
-    vkWaitForFences (device, 1, &frameInFlightFences[currentFrame], VK_TRUE, UINT32_MAX);
-    vkResetFences (device, 1, &frameInFlightFences[currentFrame]);
-    vkResetCommandBuffer (computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-    vkResetCommandBuffer (graphicsCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-    vkResetCommandBuffer (copyCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-    vkResetCommandBuffer (lightmapCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0;
-    beginInfo.pInheritanceInfo = NULL;
+    VK_CHECK (vkWaitForFences (device, 1, &frameInFlightFences[currentFrame], VK_TRUE, UINT32_MAX));
+    VK_CHECK (vkResetFences (device, 1, &frameInFlightFences[currentFrame]));
+    assert(computeCommandBuffers[currentFrame]);
+    assert(graphicsCommandBuffers[currentFrame]);
+    assert(copyCommandBuffers[currentFrame]);
+    assert(lightmapCommandBuffers[currentFrame]);
+    VK_CHECK (vkResetCommandBuffer (computeCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0));
+    VK_CHECK (vkResetCommandBuffer (graphicsCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0));
+    VK_CHECK (vkResetCommandBuffer (copyCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0));
+    VK_CHECK (vkResetCommandBuffer (lightmapCommandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0));
+    VkCommandBufferBeginInfo 
+        beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0;
+        beginInfo.pInheritanceInfo = NULL;
     VK_CHECK (vkBeginCommandBuffer (computeCommandBuffers[currentFrame], &beginInfo));
     VK_CHECK (vkBeginCommandBuffer (lightmapCommandBuffers[currentFrame], &beginInfo));
-    VK_CHECK (vkBeginCommandBuffer (graphicsCommandBuffers[currentFrame], &beginInfo));
     VK_CHECK (vkBeginCommandBuffer (copyCommandBuffers[currentFrame], &beginInfo));
+    VK_CHECK (vkBeginCommandBuffer (graphicsCommandBuffers[currentFrame], &beginInfo));
 }
 
 void Renderer::start_compute() {

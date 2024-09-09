@@ -929,9 +929,7 @@ void Renderer::createImageStorages (Image* image,
         viewInfo.subresourceRange.levelCount = mipmaps;
         viewInfo.subresourceRange.layerCount = 1;
     VK_CHECK (vkCreateImageView (device, &viewInfo, NULL, &image->view));
-    // transition_Image_Layout_Singletime(image->image, format, aspect, VK_IMAGE_LAYOUT_UNDEFINED, layout,
-    // VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
-    // 0, access);
+    transitionImageLayoutSingletime(image, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 //fill manually with cmd or copy
