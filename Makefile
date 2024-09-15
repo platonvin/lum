@@ -1,8 +1,8 @@
 .ONESHELL:
 
 #setting up include and lib directories for dependencies
-I = -Isrc -Icommon
-L = 
+I = -Isrc -Icommon -Ilum-al/src
+L = -Llum-al/lib
 
 OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
 INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS))
@@ -21,11 +21,12 @@ GLSLC = $(GLSLC_DIR)/glslc
 
 
 STATIC_OR_DYNAMIC = 
+REQUIRED_LIBS = -llumal -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
 ifeq ($(OS),Windows_NT)
-	REQUIRED_LIBS = -lglfw3 -lgdi32        -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
+	REQUIRED_LIBS += -lgdi32       
 	STATIC_OR_DYNAMIC += -static
 else
-	REQUIRED_LIBS = -lglfw3 -lpthread -ldl -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
+	REQUIRED_LIBS += -lpthread -ldl
 endif
 	
 # all of them united

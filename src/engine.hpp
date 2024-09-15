@@ -1,7 +1,7 @@
 #pragma once
 #include <renderer/render.hpp>
 #include <renderer/ui.hpp>
-#include <defines.hpp>
+#include <defines/macros.hpp>
 
 struct block_render_request{
     ivec3 pos;
@@ -20,7 +20,7 @@ struct grass_render_request{
  
 class Engine {
 public:
-    Renderer render = Renderer();
+    LumRenderer render = LumRenderer();
     Ui ui = {};
 
     //cpu culled sorted array of blocks to raygen as example. You egnine responsible for doing this, bot renderer

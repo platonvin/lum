@@ -126,22 +126,25 @@ static double block_placement_delay = 0;
 
 void Engine::setup_graphics(){
     Settings settings = {};
-        settings.world_size = ivec3(48, 48, 16);
-        settings.static_block_palette_size = 15;
-        settings.maxParticleCount = 8128;
-        settings.ratio = vec2(1);
-        settings.scaled = false;
-        #ifdef VSYNC_FULLSCREEN
-            settings.vsync = true;
-            settings.fullscreen = true;
-            #else
-            settings.vsync = false;
-            settings.fullscreen = false;
-        #endif
+        settings.vsync = false; //every time deciding to which image to render, wait until monitor draws current. Icreases perfomance, but limits fps
+        settings.fullscreen = false;
+        settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
+        settings.timestampCount = 128;
+        settings.profile = false; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
+        settings.fif = 2; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
+
+        settings.deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
+        settings.deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
+        settings.deviceFeatures.geometryShader = VK_TRUE;
+        settings.deviceFeatures.independentBlend = VK_TRUE;
+        settings.deviceFeatures.shaderInt16 = VK_TRUE;
+        settings.deviceFeatures11.storagePushConstant16 = VK_TRUE;
+        settings.deviceFeatures12.storagePushConstant8 = VK_TRUE;
+        settings.deviceFeatures12.shaderInt8 = VK_TRUE;
+        settings.deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
     render.init(settings);
-    // render.init(48, 48, 16, 15, 8128, float(1.), true, false);
 println
-    vkDeviceWaitIdle(render.device);
+    vkDeviceWaitIdle(render.render.device);
 println
 
     render.load_scene("assets/scene");
@@ -163,7 +166,7 @@ println
         render.load_mesh(&tank_rb_leg, "assets/tank_lf_rb_leg.vox");
 println
 
-    block_palette = (Block**)calloc(render.settings.static_block_palette_size, sizeof(Block*));
+    block_palette = (Block**)calloc(render.static_block_palette_size, sizeof(Block*));
     
 println
     //block_palette[0] is "air"
@@ -187,20 +190,20 @@ println
 println
     render.updateMaterialPalette(render.mat_palette);
 
-    vkDeviceWaitIdle(render.device);
+    vkDeviceWaitIdle(render.render.device);
 println
 }
 void Engine::setup_ui(){
 println
     ui.renderer = &render;
     ui.setup();
-    vkDeviceWaitIdle(render.device);
+    vkDeviceWaitIdle(render.render.device);
 println
 }
 
 void Engine::update_system(){
     glfwPollEvents();
-    should_close |= glfwWindowShouldClose(render.window.pointer);
+    should_close |= glfwWindowShouldClose(render.render.window.pointer);
 }
 
 // void Engine::update(){
@@ -208,9 +211,9 @@ void Engine::update_system(){
 // }
 
 void Engine::handle_input(){
-    should_close |= (glfwGetKey(render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
+    should_close |= (glfwGetKey(render.render.window.pointer, GLFW_KEY_ESCAPE) == GLFW_PRESS);
     
-    #define set_key(key, action) if(glfwGetKey(render.window.pointer, key) == GLFW_PRESS) {action;}
+    #define set_key(key, action) if(glfwGetKey(render.render.window.pointer, key) == GLFW_PRESS) {action;}
     set_key(GLFW_KEY_W, render.camera.cameraPos += delt_time* dvec3(dvec2(render.camera.cameraDir),0) * 400.5 / render.camera.pixelsInVoxel );
     set_key(GLFW_KEY_S, render.camera.cameraPos -= delt_time* dvec3(dvec2(render.camera.cameraDir),0) * 400.5 / render.camera.pixelsInVoxel );
 
@@ -240,7 +243,7 @@ void Engine::handle_input(){
     // set_key(GLFW_KEY_LEFT_ALT      , tank_body.shift.z -= tank_speed);
 
     ivec3 block_to_set = ivec3(vec3(tank_body.shift) + tank_body.rot*(vec3(tank_body.size)/2.0f))/16;
-    block_to_set = clamp(block_to_set, ivec3(0), render.settings.world_size-1);
+    block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.world_size)-(1));
 
     // if(block_placement_delay < 0){
         for(int i=1; i<10; i++){
@@ -255,7 +258,7 @@ void Engine::handle_input(){
     //     block_placement_delay -= delt_time;
     // }
 
-    if(glfwGetKey(render.window.pointer, GLFW_KEY_LEFT) == GLFW_PRESS){
+    if(glfwGetKey(render.render.window.pointer, GLFW_KEY_LEFT) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
         tank_body.rot *= quat(vec3(0,0,+.05 * 50.0*delt_time));
         quat new_rot = tank_body.rot;
@@ -267,7 +270,7 @@ void Engine::handle_input(){
 
         tank_body.shift -= difference;
     }
-    if(glfwGetKey(render.window.pointer, GLFW_KEY_RIGHT) == GLFW_PRESS){
+    if(glfwGetKey(render.render.window.pointer, GLFW_KEY_RIGHT) == GLFW_PRESS){
         quat old_rot = tank_body.rot;
         tank_body.rot *= quat(vec3(0,0,-.05 * 50.0*delt_time));
         quat new_rot = tank_body.rot;
@@ -288,7 +291,7 @@ void Engine::process_physics(){
     int block_under_body = int(tank_body_center.z) / 16;
 
     if(any(lessThan(tank_body_center_in_blocks, ivec2(0)))) return;
-    if(any(greaterThanEqual(tank_body_center_in_blocks, ivec2(render.settings.world_size)))) return;
+    if(any(greaterThanEqual(tank_body_center_in_blocks, ivec2(render.world_size)))) return;
 
     int selected_block = 0;
     
@@ -299,7 +302,7 @@ void Engine::process_physics(){
     }else if(render.origin_world(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, block_under_body-1) != 0){
         selected_block = block_under_body-1;
     } else {
-        for(selected_block=render.settings.world_size.z-1; selected_block>=0; selected_block--){
+        for(selected_block=render.world_size.z-1; selected_block>=0; selected_block--){
             BlockID_t blockId = render.origin_world(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, selected_block);
 
             if (blockId != 0) break;
@@ -321,7 +324,7 @@ void Engine::process_animations(){
         // p.matID = 170;
         p.matID = 79;
     render.particles.push_back(p);
-    if(glfwGetKey(render.window.pointer, GLFW_KEY_ENTER) == GLFW_PRESS) {
+    if(glfwGetKey(render.render.window.pointer, GLFW_KEY_ENTER) == GLFW_PRESS) {
             p.lifeTime = 12.0;
             p.pos = tank_head.rot*vec3(16.5,3,9.5) + tank_head.shift;
             p.matID = 249;
@@ -423,7 +426,7 @@ void Engine::cull_meshes(){
                 block_que.push_back(brr);
             }
         }
-        assert(block_id <= render.settings.static_block_palette_size);
+        assert(block_id <= render.static_block_palette_size);
     }}}
     std::sort(block_que.begin(), block_que.end(), &sort_blocks);
     // for (auto b : block_que){
@@ -485,7 +488,7 @@ println
     render.start_frame();
 println
 
-        render.start_compute();
+        // render.start_compute();
             render.start_blockify();
 println
                 render.blockify_mesh(&tank_body);
@@ -616,8 +619,8 @@ println
         render.end_ui(); 
 println
         render.end_2nd_spass();
-println
-       render.present();
+// println
+    //    render.present();
 println
     render.end_frame();
 }
@@ -644,7 +647,7 @@ println
 }
 
 void Engine::cleanup(){
-    vkDeviceWaitIdle(render.device);
+    vkDeviceWaitIdle(render.render.device);
 
     render.save_scene("assets/scene");
 
@@ -655,11 +658,11 @@ void Engine::cleanup(){
     render.free_mesh(&tank_lf_leg);
     render.free_mesh(&tank_rb_leg);
 
-    for(int i=1; i<render.settings.static_block_palette_size; i++){
+    for(int i=1; i<render.static_block_palette_size; i++){
         render.free_block(&block_palette[i]);
     }
 
-    vkDeviceWaitIdle(render.device);
+    vkDeviceWaitIdle(render.render.device);
     ui.cleanup();
     render.cleanup();
 }

@@ -1,8 +1,6 @@
 //exists to make compiler happy
 //TODO: move code here so parsing headers isnt painfully slow
 // #include "renderer/render.hpp"
-#include "defines.hpp"
-#include <algorithm>
 #include <cstdio>
 #include <unordered_map>
 #define OGT_VOXEL_MESHIFY_IMPLEMENTATION

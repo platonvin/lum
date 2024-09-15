@@ -3,11 +3,7 @@
 #include "render.hpp"
 
 #include <RmlUi/Debugger.h>
-// #include <RmlUi/../../Backends/RmlUi_Renderer_VK.h>
-/*
-    im ui monkey now
-    lmao just found perfect library for what i need - RmlUi
-*/
+#include "defines/macros.hpp"
 
 class SystemInterface_GLFW : public Rml::SystemInterface {
   public:
@@ -73,7 +69,7 @@ class Ui {
     void update();
     void draw();
     void cleanup();
-    Renderer* renderer;
+    LumRenderer* renderer;
     SystemInterface_GLFW sysInterface;
 
     Rml::Context* context;

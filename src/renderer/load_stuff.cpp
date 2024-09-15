@@ -1,4 +1,5 @@
 #include "render.hpp"
+#include "defines/macros.hpp"
 #include <glm/gtx/string_cast.hpp>
 
 using std::array;
@@ -31,14 +32,14 @@ struct bp_tex {u8 r;};
 
 #endif
 //block palette on cpu side is expected to be array of pointers to blocks
-void Renderer::updateBlockPalette (Block** blockPalette) {
+void LumRenderer::updateBlockPalette (Block** blockPalette) {
     //block palette is in u8, but for easy copying we convert it to u16 cause block palette is R16_UNIT
     VkDeviceSize bufferSize = (sizeof (bp_tex)) * 16 * BLOCK_PALETTE_SIZE_X * 16 * BLOCK_PALETTE_SIZE_Y * 16;
     table3d<bp_tex> blockPaletteLinear = {};
     blockPaletteLinear.allocate (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16);
     blockPaletteLinear.set ({0});
     // printl(static_block_palette_size)
-    for (i32 N = 0; N < settings.static_block_palette_size; N++) {
+    for (i32 N = 0; N < static_block_palette_size; N++) {
         for (i32 x = 0; x < BLOCK_SIZE; x++) {
             for (i32 y = 0; y < BLOCK_SIZE; y++) {
                 for (i32 z = 0; z < BLOCK_SIZE; z++) {
@@ -46,7 +47,7 @@ void Renderer::updateBlockPalette (Block** blockPalette) {
                     if (blockPalette[N] == NULL) {
                         blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
                     } else {
-                        if (N < settings.static_block_palette_size) {
+                        if (N < static_block_palette_size) {
                             blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = (u16) blockPalette[N]->voxels[x][y][z];
                         } else {
                             blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
@@ -69,21 +70,21 @@ void Renderer::updateBlockPalette (Block** blockPalette) {
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     void* data = NULL;
-    VK_CHECK (vmaCreateBuffer (VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
-    VK_CHECK (vmaMapMemory (VMAllocator, stagingAllocation, &data));
+    VK_CHECK (vmaCreateBuffer (render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
+    VK_CHECK (vmaMapMemory (render.VMAllocator, stagingAllocation, &data));
     assert (data != NULL);
     assert (bufferSize != 0);
     assert (blockPaletteLinear.data() != NULL);
     memcpy (data, blockPaletteLinear.data(), bufferSize);
-    vmaUnmapMemory (VMAllocator, stagingAllocation);
+    vmaUnmapMemory (render.VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        copyBufferSingleTime (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
+        render.copyBufferSingleTime (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
     }
-    vmaDestroyBuffer (VMAllocator, stagingBuffer, stagingAllocation);
+    vmaDestroyBuffer (render.VMAllocator, stagingBuffer, stagingAllocation);
 }
 
 //TODO: do smth with frames in flight
-void Renderer::updateMaterialPalette (Material* materialPalette) {
+void LumRenderer::updateMaterialPalette (Material* materialPalette) {
     VkDeviceSize bufferSize = sizeof (Material) * 256;
     VkBufferCreateInfo 
         stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -96,15 +97,15 @@ void Renderer::updateMaterialPalette (Material* materialPalette) {
         stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
-    vmaCreateBuffer (VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
+    vmaCreateBuffer (render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
     void* data;
-    vmaMapMemory (VMAllocator, stagingAllocation, &data);
+    vmaMapMemory (render.VMAllocator, stagingAllocation, &data);
     memcpy (data, materialPalette, bufferSize);
-    vmaUnmapMemory (VMAllocator, stagingAllocation);
+    vmaUnmapMemory (render.VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        copyBufferSingleTime (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
+        render.copyBufferSingleTime (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
     }
-    vmaDestroyBuffer (VMAllocator, stagingBuffer, stagingAllocation);
+    vmaDestroyBuffer (render.VMAllocator, stagingBuffer, stagingAllocation);
 }
 
 char* readFileBuffer(const char* path, size_t* size) {
@@ -125,7 +126,7 @@ char* readFileBuffer(const char* path, size_t* size) {
 // } //so we'll have to use ogt::ogt_func :(
 // struct scene_file_header = {int }
 
-void Renderer::load_scene (const char* vox_file) {
+void LumRenderer::load_scene (const char* vox_file) {
     size_t buffer_size;
     FILE* fp = fopen (vox_file, "rb");
     if (fp == NULL) {
@@ -141,33 +142,33 @@ void Renderer::load_scene (const char* vox_file) {
     ivec3* header = (ivec3*)buffer;
     ivec3 stored_world_size = *header;
     BlockID_t* stored_world = (BlockID_t*) (buffer + sizeof (ivec3));
-    printl(settings.world_size.x);
-    printl(settings.world_size.y);
-    printl(settings.world_size.z);
-    printl(settings.static_block_palette_size);
-    ivec3 size2read = glm::clamp (stored_world_size, ivec3 (0), settings.world_size);
+    printl(world_size.x);
+    printl(world_size.y);
+    printl(world_size.z);
+    printl(static_block_palette_size);
+    ivec3 size2read = glm::clamp (stored_world_size, ivec3 (0), ivec3(world_size));
     // buffer
     for (int xx = 0; xx < size2read.x; xx++) {
         for (int yy = 0; yy < size2read.y; yy++) {
             for (int zz = 0; zz < size2read.z; zz++) {
                 BlockID_t loaded_block = stored_world[xx + stored_world_size.x * yy + (stored_world_size.x* stored_world_size.y) * zz];
-                origin_world (xx, yy, zz) = glm::clamp (loaded_block, BlockID_t(0), BlockID_t(settings.static_block_palette_size));
+                origin_world (xx, yy, zz) = glm::clamp (loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
             }
         }
     }
     free (buffer);
 }
 
-void Renderer::save_scene (const char* vox_file) {
+void LumRenderer::save_scene (const char* vox_file) {
     FILE* fp = fopen (vox_file, "wb");
     assert (fp != NULL);
-    fwrite (&settings.world_size, sizeof (ivec3), 1, fp);
-    fwrite (origin_world.data(), sizeof (BlockID_t), settings.world_size.x* settings.world_size.y* settings.world_size.z, fp);
+    fwrite (&world_size, sizeof (ivec3), 1, fp);
+    fwrite (origin_world.data(), sizeof (BlockID_t), world_size.x* world_size.y* world_size.z, fp);
     fclose (fp);
 }
 
 //size limited by 256^3
-void Renderer::load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette) {
+void LumRenderer::load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette) {
     size_t buffer_size;
     char* buffer = readFileBuffer (vox_file, &buffer_size);
     const ogt::vox_scene* scene = ogt::vox_read_scene ((u8*)buffer, buffer_size);
@@ -221,7 +222,7 @@ void Renderer::load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertices,
     ogt::vox_destroy_scene (scene);
 }
 
-void Renderer::load_block (Block** block, const char* vox_file) {
+void LumRenderer::load_block (Block** block, const char* vox_file) {
     size_t buffer_size;
     char* buffer = readFileBuffer (vox_file, &buffer_size);
     const ogt::vox_scene* scene = ogt::vox_read_scene ((u8*)buffer, buffer_size);
@@ -247,8 +248,8 @@ void Renderer::load_block (Block** block, const char* vox_file) {
 }
 
 #define free_helper(dir) \
-if(not (*block)->mesh.triangles.dir.indexes.empty()) vmaDestroyBuffer(VMAllocator, (*block)->mesh.triangles.dir.indexes[i].buffer, (*block)->mesh.triangles.dir.indexes[i].alloc);
-void Renderer::free_block (Block** block) {
+if(not (*block)->mesh.triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, (*block)->mesh.triangles.dir.indexes[i].buffer, (*block)->mesh.triangles.dir.indexes[i].alloc);
+void LumRenderer::free_block (Block** block) {
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         free_helper (Pzz);
         free_helper (Nzz);
@@ -256,12 +257,12 @@ void Renderer::free_block (Block** block) {
         free_helper (zNz);
         free_helper (zzP);
         free_helper (zzN);
-        if (not (*block)->mesh.triangles.vertexes.empty()) { vmaDestroyBuffer (VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc); }
+        if (not (*block)->mesh.triangles.vertexes.empty()) { vmaDestroyBuffer (render.VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc); }
     }
     if (not ((*block) == NULL)) { delete (*block); }
 }
 
-void Renderer::load_mesh (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
+void LumRenderer::load_mesh (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
     mesh->size = ivec3 (x_size, y_size, z_size);
     if (_make_vertices) {
         make_vertices (mesh, Voxels, x_size, y_size, z_size);
@@ -274,19 +275,19 @@ void Renderer::load_mesh (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int
 //frees only gpu side stuff, not mesh ptr
 #undef  free_helper
 #define free_helper(dir) \
-if(not mesh->triangles.dir.indexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->triangles.dir.indexes[i].buffer, mesh->triangles.dir.indexes[i].alloc);
-void Renderer::free_mesh (Mesh* mesh) {
+if(not mesh->triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, mesh->triangles.dir.indexes[i].buffer, mesh->triangles.dir.indexes[i].alloc);
+void LumRenderer::free_mesh (Mesh* mesh) {
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        // if(not mesh->vertexes.empty()) vmaDestroyBuffer(VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
+        // if(not mesh->vertexes.empty()) vmaDestroyBuffer(render.VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
         free_helper (Pzz);
         free_helper (Nzz);
         free_helper (zPz);
         free_helper (zNz);
         free_helper (zzP);
         free_helper (zzN);
-        if (not mesh->triangles.vertexes.empty()) { vmaDestroyBuffer (VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc); }
-        if (not mesh->voxels.empty()) { vmaDestroyImage (VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc); }
-        if (not mesh->voxels.empty()) { vkDestroyImageView (device, mesh->voxels[i].view, NULL); }
+        if (not mesh->triangles.vertexes.empty()) { vmaDestroyBuffer (render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc); }
+        if (not mesh->voxels.empty()) { vmaDestroyImage (render.VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc); }
+        if (not mesh->voxels.empty()) { vkDestroyImageView (render.device, mesh->voxels[i].view, NULL); }
     }
 #undef free_helper
 }
@@ -368,7 +369,7 @@ void repack_helper (vector<PackedVoxelVertex>& vs, vector<PackedVoxelQuad>& qs, 
 }
 
 //defenetly not an example of highly optimized code
-void Renderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size) {
+void LumRenderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size) {
     ogt::ogt_voxel_meshify_context ctx = {};
     //code to generate cube lol
     // const u8 a[] = {1};
@@ -436,7 +437,7 @@ void Renderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_size,
     }
 // println
     assert (circ_verts.size() == ogt_mesh->vertex_count);
-    mesh->triangles.vertexes = createElemBuffers<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    mesh->triangles.vertexes = render.createElemBuffers<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 // println
     assert (verts_Pzz.size() != 0);  
     assert (verts_Nzz.size() != 0); 
@@ -444,12 +445,12 @@ void Renderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_size,
     assert (verts_zNz.size() != 0); 
     assert (verts_zzP.size() != 0); 
     assert (verts_zzN.size() != 0); 
-    mesh->triangles.Pzz.indexes = createElemBuffers<u16> (verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.Nzz.indexes = createElemBuffers<u16> (verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zPz.indexes = createElemBuffers<u16> (verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zNz.indexes = createElemBuffers<u16> (verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzP.indexes = createElemBuffers<u16> (verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzN.indexes = createElemBuffers<u16> (verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.Pzz.indexes = render.createElemBuffers<u16> (verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.Nzz.indexes = render.createElemBuffers<u16> (verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zPz.indexes = render.createElemBuffers<u16> (verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zNz.indexes = render.createElemBuffers<u16> (verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zzP.indexes = render.createElemBuffers<u16> (verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    mesh->triangles.zzN.indexes = render.createElemBuffers<u16> (verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 // println
     mesh->triangles.Pzz.icount = verts_Pzz.size();
     mesh->triangles.Nzz.icount = verts_Nzz.size();

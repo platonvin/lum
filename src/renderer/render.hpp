@@ -1,24 +1,24 @@
 #pragma once
 
-#include <optional>
+// #include <optional>
 #include <vector>
 
 // #undef __STRICT_ANSI__
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <glm/ext/matrix_transform.hpp>
+// #define GLM_ENABLE_EXPERIMENTAL
+// #include <glm/glm.hpp>
+// #include <glm/gtx/quaternion.hpp>
+// #include <glm/ext/matrix_transform.hpp>
 
-#include <volk.h>
+// #include <volk.h>
 // #include <vulkan/vulkan.h>
-#include <vk_enum_string_helper.h> //idk why but it is neither shipped with Linux Vulkan SDK nor bundled in vulkan-sdk-components
-#include <vk_mem_alloc.h>
-#include <GLFW/glfw3.h>
+// #include <vk_enum_string_helper.h> //idk why but it is neither shipped with Linux Vulkan SDK nor bundled in vulkan-sdk-components
+// #include <vk_mem_alloc.h>
+// #include <GLFW/glfw3.h>
 
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
 
-#include <defines.hpp>
+#include "../../lum-al/src/al.hpp"
 
 using std::vector;
 using std::cout;
@@ -91,43 +91,25 @@ typedef struct Particle {
     MatID_t matID;
 } Particle;
 
-typedef struct Buffer {
-    VkBuffer buffer;
-    VmaAllocation alloc;
-    bool is_mapped = false;
-} Buffer;
-
-typedef struct Image {
-    VkImage image;
-    VkImageView view;
-    VmaAllocation alloc;
-    VkFormat format;
-    VkImageLayout layout;
-    VkImageAspectFlags aspect;
-} Image;
-
-enum MeshVertexTypes {
-    // MESH_VERTEX_TYPE_
-};
 typedef struct IndexedVertices {
-    vector<Buffer> indexes;
+    ring<Buffer> indexes;
     u32 icount;
 } IndexedVertices;
 
 typedef struct NonIndexedVertices {
-    vector<Buffer> vertices;
+    ring<Buffer> vertices;
     u32 vcount;
 } NonIndexedVertices;
 
 typedef struct FaceBuffers {
     IndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
-    vector<Buffer> vertexes;
+    ring<Buffer> vertexes;
 } FaceBuffers;
 
 typedef struct Mesh {
     //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
     FaceBuffers triangles;
-    vector<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
+    ring<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
     quat rot;
     vec3 shift;
     ivec3 size;
@@ -139,100 +121,6 @@ typedef struct UiMesh {
     u32 icount;
     Image* image;
 } UiMesh;
-
-typedef struct ImageDeletion {
-    Image image;
-    int life_counter;
-} ImageDeletion;
-
-typedef struct BufferDeletion {
-    Buffer buffer;
-    int life_counter;
-} BufferDeletion;
-
-//used for configuring raster pipeline
-typedef struct AttrFormOffs {
-    VkFormat format;
-    uint32_t offset;
-} AttrFormOffs;
-
-enum BlendAttachment {
-    NO_BLEND,
-    BLEND_MIX,
-    BLEND_SUB,
-    BLEND_REPLACE_IF_GREATER, //basically max
-    BLEND_REPLACE_IF_LESS, //basically max
-};
-enum DepthTesting {
-    NO_DEPTH_TEST,
-    FULL_DEPTH_TEST,
-    READ_DEPTH_TEST,
-    WRITE_DEPTH_TEST,
-};
-//it was not discard in fragment. FML
-enum Discard {
-    NO_DISCARD,
-    DO_DISCARD,
-};
-enum LoadStoreOp {
-    DontCare,
-    Clear,
-    Store,
-    Load,
-};
-const VkStencilOpState NO_STENCIL = {};
-
-typedef struct ShaderStage {
-    const char* src;
-    VkShaderStageFlagBits stage;
-} ShaderStage;
-typedef struct RasterPipe {
-    VkPipeline line;
-    VkPipelineLayout lineLayout;
-
-    vector<VkDescriptorSet> sets;
-    VkDescriptorSetLayout setLayout;
-
-    VkRenderPass renderPass; //we dont really need to store it in here but why not
-    i32 subpassId;
-} RasterPipe;
-
-typedef struct ComputePipe {
-    VkPipeline line;
-    VkPipelineLayout lineLayout;
-
-    vector<VkDescriptorSet> sets;
-    VkDescriptorSetLayout setLayout;
-} ComputePipe;
-typedef struct AttachmentDescription {
-    Image* image;
-    LoadStoreOp load,store, sload, sstore;
-    VkImageLayout finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-}AttachmentDescription;
-typedef struct SubpassAttachments {
-    vector<RasterPipe*> pipes;
-    vector<Image*> a_input;
-    vector<Image*> a_color;
-    Image* a_depth;
-}SubpassAttachments;
-typedef struct SubpassAttachmentRefs {
-    vector<VkAttachmentReference> a_input;
-    vector<VkAttachmentReference> a_color;
-    VkAttachmentReference a_depth;
-}SubpassAttachmentRefs;
-
-
-//problem with such abstractions in vulkan is that they almost always have to be extended to a point where they make no sense
-//pipeline with extra info for subpass creation
-typedef struct subPass {
-    VkPipeline pipe;
-    VkPipelineLayout pipeLayout;
-
-    VkDescriptorSetLayout dsetLayout;
-    vector<VkDescriptorSet> descriptors;
-
-    VkRenderPass rpass; //we dont really need to store it in here but why not
-} subPass;
 
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
@@ -278,12 +166,6 @@ template <typename Type> class table3d {
 
 };
 
-typedef struct Window {
-    GLFWwindow* pointer;
-    int width;
-    int height;
-} Window;
-
 typedef struct Camera {
     dvec3 cameraPos = vec3(60, 0, 194);
     dvec3 cameraDir = normalize(vec3(0.61, 1.0, -0.8));
@@ -298,80 +180,21 @@ typedef struct Camera {
     void updateCamera();
 } Camera;
 
-typedef struct QueueFamilyIndices {
-    std::optional<u32> graphicalAndCompute;
-    std::optional<u32> present;
-
-  public:
-    bool isComplete() {
-        return graphicalAndCompute.has_value() && present.has_value();
-    }
-} QueueFamilyIndices;
-
-typedef struct SwapChainSupportDetails {
-    VkSurfaceCapabilitiesKHR capabilities;
-    vector<VkSurfaceFormatKHR> formats;
-    vector<VkPresentModeKHR> presentModes;
-
-  public:
-    bool is_Suitable() {
-        return (not formats.empty()) and (not presentModes.empty());
-    }
-} SwapChainSupportDetails;
-
-//TODO:
-enum denoise_targets {
-    DENOISE_TARGET_LOWRES,
-    DENOISE_TARGET_HIGHRES,
-};
-enum RelativeDescriptorPos {
-    RD_NONE, //what?
-    RD_PREVIOUS, //Relatove Descriptor position previous - for accumulators
-    RD_CURRENT, //Relatove Descriptor position matching - common cpu-paired
-    RD_FIRST, //Relatove Descriptor position first    - for gpu-only
-};
-
-#define NO_SAMPLER ((VkSampler)(0))
-#define NO_LAYOUT ((VkImageLayout)(0))
-typedef struct DescriptorInfo {
-    VkDescriptorType type;
-    RelativeDescriptorPos relativePos;
-    vector<Buffer> buffers;
-    vector<Image> images;
-    VkSampler imageSampler;
-    VkImageLayout imageLayout; //ones that will be in use, not current
-    VkShaderStageFlags stages;
-} DescriptorInfo;
-
-typedef struct DelayedDescriptorSetup {
-    VkDescriptorSetLayout* setLayout;
-    vector<VkDescriptorSet>* sets;
-    vector<DescriptorInfo> descriptions;
-    VkShaderStageFlags stages;
-    VkDescriptorSetLayoutCreateFlags createFlags;
-} DelayedDescriptorSetup;
-
-typedef struct Settings {
-    ivec3 world_size;
-    int maxParticleCount;
-    vec2 ratio;
-    ivec2 lightmapExtent = {1024, 1024};
-    int static_block_palette_size;
-    bool scaled;
-    bool vsync;
-    bool fullscreen;
-} Settings;
-
 //forward declaration for pointer
 class MyRenderInterface;
 
-struct Renderer {
+struct LumRenderer {
+    Renderer render;
+    
   public:
     void init (Settings settings);
     void setupDescriptors();
     void createImages();
+    void createSwapchainDependentImages();
+    void cleanupSwapchainDependent();
     void createPipilines();
     void cleanup();
+    void createSamplers();
 
     // sets voxels and size. By default uses first .vox palette as main palette
     void load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertices = true, bool extrude_palette = true);
@@ -392,15 +215,16 @@ struct Renderer {
     table3d<BlockID_t> current_world = {};
     MyRenderInterface* ui_render_interface;
     // float fratio;
-  private:
+    uvec3 world_size = uvec3(48, 48, 16);
+    u32 static_block_palette_size = 15;
+    int maxParticleCount = 8128;
+
     bool hasPalette = false;
     vector<VkImageCopy> blockCopyQueue = {};
     vector<VkImageSubresourceRange> blockclearQueue = {};
-  public:
     double deltaTime = 0;
 
     bool resized = false;
-    Settings settings = {};
 
     dvec3 lightDir = normalize (vec3 (0.5, 0.5, -0.9));
     dmat4 lightTransform = glm::identity<mat4>();
@@ -463,140 +287,15 @@ struct Renderer {
         void present();
     void end_frame();
 
-    void cmdPipelineBarrier (VkCommandBuffer commandBuffer,
-                             VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
-                             VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
-                             Buffer buffer);
-    void cmdPipelineBarrier (VkCommandBuffer commandBuffer,
-                             VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
-                             VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
-                             Image image);
-    void cmdPipelineBarrier (VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask);
-    //used as just barrier and can also transfer image layout
-    void cmdTransLayoutBarrier (VkCommandBuffer commandBuffer, VkImageLayout targetLayout,
-                                VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
-                                Image* image);
-    void cmdTransLayoutBarrier (VkCommandBuffer commandBuffer, VkImageLayout srcLayout, VkImageLayout targetLayout,
-                                VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
-                                Image* image);
-    void cmdSetViewport(VkCommandBuffer commandBuffer, int width, int height);
-    void cmdSetViewport(VkCommandBuffer commandBuffer, VkExtent2D extent);
-
     template<class Vertex_T> vector<Buffer> createElemBuffers (Vertex_T* vertices, u32 count, u32 buffer_usage = 0);
     template<class Vertex_T> vector<Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
 
-    vector<Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
+    ring<Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
     void updateBlockPalette (Block** blockPalette);
     void updateMaterialPalette (Material* materialPalette);
 
-  private:
-    void cleanupSwapchainDependent();
-    void createSwapchainDependentImages();
-    void createFramebuffers();
-    void recreateSwapchainDependent();
-
-    void cleanupImages();
-
-    void createAllocator();
-    void createWindow();
-    void createInstance();
-    void setupDebugMessenger();
-    void debugSetName();
-    void createSurface();
-    SwapChainSupportDetails querySwapchainSupport (VkPhysicalDevice);
-    QueueFamilyIndices findQueueFamilies (VkPhysicalDevice);
-    bool checkFormatSupport (VkPhysicalDevice device, VkFormat format, VkFormatFeatureFlags features);
-    bool isPhysicalDeviceSuitable (VkPhysicalDevice);
-    bool checkPhysicalDeviceExtensionSupport (VkPhysicalDevice);
-    void pickPhysicalDevice();
-    void createLogicalDevice();
-    void createSwapchain();
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat (vector<VkSurfaceFormatKHR> availableFormats);
-    VkPresentModeKHR chooseSwapPresentMode (vector<VkPresentModeKHR> availablePresentModes);
-    VkExtent2D chooseSwapExtent (VkSurfaceCapabilitiesKHR capabilities);
-    void createSwapchainImageViews();
-    VkAttachmentLoadOp  getOpLoad (LoadStoreOp op);
-    VkAttachmentStoreOp getOpStore(LoadStoreOp op);
-    void createRenderPass(vector<AttachmentDescription> attachments, vector<SubpassAttachments> subpasses, VkRenderPass* rpass);
-
-    VkFormat findSupportedFormat (vector<VkFormat> candidates, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage);
-
-    void createRasterPipeline (RasterPipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, vector<ShaderStage> shader_stages, vector<AttrFormOffs> attr_desc,
-                                 u32 stride, VkVertexInputRate input_rate, VkPrimitiveTopology topology,
-                                 VkExtent2D extent, vector<BlendAttachment> blends, u32 push_size, DepthTesting depthTest, VkCullModeFlags culling, Discard discard, VkStencilOpState stencil);
-    void destroyRasterPipeline (RasterPipe* pipe);
-
-    void createComputePipeline (ComputePipe* pipe, VkDescriptorSetLayout extra_dynamic_layout, const char* src, u32 push_size, VkPipelineCreateFlags create_flags);
-    void destroyComputePipeline (ComputePipe* pipe);
-
-    void createDescriptorPool();
-    void deferDescriptorSetup (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages, VkDescriptorSetLayoutCreateFlags createFlags = 0);
-    void setupDescriptor (VkDescriptorSetLayout* dsetLayout, vector<VkDescriptorSet>* descriptors, vector<DescriptorInfo> description, VkShaderStageFlags stages);
-    vector<DelayedDescriptorSetup> delayed_descriptor_setups;
-    void flushDescriptorSetup();
-
-    void createSamplers();
-
-    void deleteImages (vector<Image>* images);
-    void deleteImages (Image* images);
-    void deleteBuffers (vector<Buffer>* buffers);
-    void deleteBuffers (Buffer* buffers);
-    void createImageStorages (vector<Image>* images,
-                                VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect,
-                                uvec3 size, int mipmaps = 1, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
-    void createImageStorages (Image* image,
-                                VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect,
-                                uvec3 size, int mipmaps = 1, VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT);
-    void createImageStoragesDepthStencil (vector<VkImage>* images, vector<VmaAllocation>* allocs, vector<VkImageView>* depthViews, vector<VkImageView>* stencilViews,
-            VkImageType type, VkFormat format, VkImageUsageFlags usage, VmaMemoryUsage vma_usage, VmaAllocationCreateFlags vma_flags, VkImageAspectFlags aspect, VkImageLayout layout, VkPipelineStageFlags pipeStage, VkAccessFlags access,
-            uvec3 size);
-    void generateMipmaps (VkCommandBuffer commandBuffer, VkImage image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, VkImageAspectFlags aspect);
-    void createBufferStorages (vector<Buffer>* buffers, VkBufferUsageFlags usage, u32 size, bool host = false);
-    void createBufferStorages (Buffer* buffer, VkBufferUsageFlags usage, u32 size, bool host = false);
-    VkShaderModule createShaderModule (vector<char>* code);
-    void createNFramebuffers (vector<VkFramebuffer>* framebuffers, vector<vector<VkImageView>>* views, VkRenderPass renderPass, u32 N, u32 Width, u32 Height);
-    void createCommandPool();
-    void createCommandBuffers (vector<VkCommandBuffer>* commandBuffers, u32 size);
-    void createSyncObjects();
-
-  public:
-    void createBuffer (VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
-    void copyBufferSingleTime (VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-    void copyBufferSingleTime (VkBuffer srcBuffer, Image* image, uvec3 size);
-    VkCommandBuffer beginSingleTimeCommands();
-    void endSingleTimeCommands (VkCommandBuffer commandBuffer);
-    void transitionImageLayoutSingletime (Image* image, VkImageLayout newLayout, int mipmaps = 1);
-    void copyWholeImage (VkExtent3D extent, VkCommandBuffer cmdbuf, VkImage src, VkImage dst);
-    void processDeletionQueue();
-    void getInstanceExtensions();
-
-    u32 STORAGE_BUFFER_DESCRIPTOR_COUNT = 0;
-    u32 STORAGE_IMAGE_DESCRIPTOR_COUNT = 0;
-    u32 COMBINED_IMAGE_SAMPLER_DESCRIPTOR_COUNT = 0;
-    u32 UNIFORM_BUFFER_DESCRIPTOR_COUNT = 0;
-    u32 INPUT_ATTACHMENT_DESCRIPTOR_COUNT = 0;
-    u32 descriptor_sets_count = 0;
-    void countDescriptor (const VkDescriptorType type);
-    void createDescriptorSetLayout (vector<VkDescriptorType> descriptorTypes, VkShaderStageFlags baseStages, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
-    void createDescriptorSetLayout (vector<VkDescriptorType> descriptorTypes, vector<VkShaderStageFlags> stages, VkDescriptorSetLayout* layout, VkDescriptorSetLayoutCreateFlags flags = 0);
-  public:
-
-    Window window;
-    VkInstance instance;
-    //picked one. Maybe will be multiple in future
-    VkPhysicalDevice physicalDevice;
-    VkDevice device;
-    VkSurfaceKHR surface;
-
-    QueueFamilyIndices familyIndices;
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
-    VkCommandPool commandPool;
-
-    VkSwapchainKHR swapchain;
-    VkFormat swapChainImageFormat;
-    VkExtent2D swapChainExtent;
-    VkExtent2D raytraceExtent;
+    // VkExtent2D swapChainExtent;
+    // VkExtent2D raytraceExtent;
     VkExtent2D lightmapExtent;
 
     RasterPipe lightmapBlocksPipe;
@@ -618,37 +317,28 @@ struct Renderer {
     RasterPipe tonemapPipe;
     RasterPipe overlayPipe;
 
-    VkRenderPass lightmapRpass;
-    VkRenderPass gbufferRpass;
-    VkRenderPass shadeRpass; //for no downscaling
+    RenderPass lightmapRpass;
+    RenderPass gbufferRpass;
+    RenderPass shadeRpass; //for no downscaling
 
-    vector<VkFramebuffer> lightmapFramebuffers;
-    vector<VkFramebuffer> rayGenFramebuffers; //for 1st rpass
-    vector<VkFramebuffer> altFramebuffers; //for no downscaling
+    ring<VkCommandBuffer> computeCommandBuffers;
+    ring<VkCommandBuffer> lightmapCommandBuffers;
+    ring<VkCommandBuffer> graphicsCommandBuffers;
+    ring<VkCommandBuffer> copyCommandBuffers; //runtime copies for ui. Also does first frame resources
 
-    vector<VkCommandBuffer> computeCommandBuffers;
-    vector<VkCommandBuffer> lightmapCommandBuffers;
-    vector<VkCommandBuffer> graphicsCommandBuffers;
-    vector<VkCommandBuffer> copyCommandBuffers; //runtime copies for ui. Also does first frame resources
-
-    vector<VkSemaphore> imageAvailableSemaphores;
-    vector<VkSemaphore> renderFinishedSemaphores; //to sync renering with presenting
-
-    vector<VkFence> frameInFlightFences;
-
-    Image lightmap;
-    vector<Image> swapchainImages;
-    Image highresFrame;
-    Image highresDepthStencil;
+    ring<Image> lightmap;
+    ring<Image> swapchainImages;
+    ring<Image> highresFrame;
+    ring<Image> highresDepthStencil;
     // Image highresStencils;
-    Image highresMatNorm;
+    ring<Image> highresMatNorm;
     //downscaled version for memory coherence. TODO:TEST perfomance on tiled
-    Image lowresMatNorm;
-    Image lowresDepthStencil;
-    VkImageView stencilViewForDS;
-    Image farDepth; //represents how much should smoke traversal for
-    Image nearDepth; //represents how much should smoke traversal for
-    Image maskFrame; //where lowres renders to. Blends with highres afterwards
+    // ring<Image> lowresMatNorm;
+    // ring<Image> lowresDepthStencil;
+    ring<VkImageView> stencilViewForDS;
+    ring<Image> farDepth; //represents how much should smoke traversal for
+    ring<Image> nearDepth; //represents how much should smoke traversal for
+    ring<Image> maskFrame; //where lowres renders to. Blends with highres afterwards
 
     VkSampler nearestSampler;
     VkSampler linearSampler;
@@ -660,38 +350,35 @@ struct Renderer {
     VkSampler unnormNearest;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
-    vector<Buffer> stagingWorld;
-    vector<void*> stagingWorldMapped;
-    Image world; //can i really use just one?
+    ring<Buffer> stagingWorld;
+    ring<void*> stagingWorldMapped;
+    ring<Image> world; //can i really use just one?
 
-    Image radianceCache;
+    ring<Image> radianceCache;
 
-    vector<Image> originBlockPalette;
-    Image distancePalette;
-    Image bitPalette; //bitmask of originBlockPalette
-    vector<Image> materialPalette;
+    ring<Image> originBlockPalette;
+    ring<Image> distancePalette;
+    ring<Image> bitPalette; //bitmask of originBlockPalette
+    ring<Image> materialPalette;
 
-    vector<Buffer> lightUniform;
-    vector<Buffer> uniform;
-    vector<Buffer> aoLutUniform;
+    ring<Buffer> lightUniform;
+    ring<Buffer> uniform;
+    ring<Buffer> aoLutUniform;
     vector<i8vec4> radianceUpdates;
     vector<i8vec4> specialRadianceUpdates;
-    Buffer gpuRadianceUpdates;
-    vector<void*> stagingRadianceUpdatesMapped;
-    vector<Buffer> stagingRadianceUpdates;
+    ring<Buffer> gpuRadianceUpdates;
+    ring<void*> stagingRadianceUpdatesMapped;
+    ring<Buffer> stagingRadianceUpdates;
 
     vector<Particle> particles;
-    vector<Buffer> gpuParticles; //multiple because cpu-related work
-    vector<void* > gpuParticlesMapped; //multiple because cpu-related work
+    ring<Buffer> gpuParticles; //multiple because cpu-related work
+    ring<void* > gpuParticlesMapped; //multiple because cpu-related work
 
-    Image perlinNoise2d; //full-world grass shift (~direction) texture sampled in grass
-    Image grassState; //full-world grass shift (~direction) texture sampled in grass
-    Image waterState; //~same but water
+    ring<Image> perlinNoise2d; //full-world grass shift (~direction) texture sampled in grass
+    ring<Image> grassState; //full-world grass shift (~direction) texture sampled in grass
+    ring<Image> waterState; //~same but water
 
-    Image perlinNoise3d; //4 channels of different tileable noise for volumetrics
-
-    vector<ImageDeletion> imageDeletionQueue; //cpu side  image abstractions deletion queue. Exists for delayed copies
-    vector<BufferDeletion> bufferDeletionQueue; //cpu side buffer abstractions deletion queue. Exists for delayed copies
+    ring<Image> perlinNoise3d; //4 channels of different tileable noise for volumetrics
 
     VkDescriptorPool descriptorPool;
     ComputePipe raytracePipe;
@@ -707,29 +394,9 @@ struct Renderer {
     ComputePipe dfzPipe;
     ComputePipe bitmaskPipe;
 
-    VmaAllocator VMAllocator;
-    u32 imageIndex = 0;
-
-    //wraps around MAX_FRAMES_IN_FLIGHT
-    u32 currentFrame = 0;
-    u32 previousFrame = MAX_FRAMES_IN_FLIGHT - 1;
-    u32 nextFrame = 1;
   private:
-    int iFrame = 0;
     int paletteCounter = 0;
-#ifndef VKNDEBUG
-    VkDebugUtilsMessengerEXT debugMessenger;
-#endif
-    vector<VkQueryPool> queryPoolTimestamps;
-  public:
-    int currentTimestamp = 0;
-    int timestampCount = 0;
-    bool measureAll = true;
-    vector<uint64_t> timestamps = {};
-    vector<double> ftimestamps = {};
-    vector<double> average_ftimestamps = {};
-    vector<const char*> timestampNames = {};
-    VkPhysicalDeviceProperties physicalDeviceProperties;
+
     float timeTakenByRadiance = 0.0;
     int magicSize = 2;
 
@@ -739,8 +406,6 @@ struct Renderer {
     VkFormat DEPTH_FORMAT = VK_FORMAT_UNDEFINED;
     const VkFormat DEPTH_FORMAT_PREFERED = VK_FORMAT_D24_UNORM_S8_UINT;
     const VkFormat DEPTH_FORMAT_SPARE = VK_FORMAT_D32_SFLOAT_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end
-    // const VkFormat DEPTH_FORMAT_PREFERED =  VK_FORMAT_D32_SFLOAT_S8_UINT;
-    // const VkFormat DEPTH_FORMAT_SPARE =  VK_FORMAT_D24_UNORM_S8_UINT; //TODO somehow faster than VK_FORMAT_D24_UNORM_S8_UINT on low-end
 
     const VkFormat MATNORM_FORMAT = VK_FORMAT_R8G8B8A8_UINT;
     const VkFormat RADIANCE_FORMAT = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
@@ -795,47 +460,10 @@ class MyRenderInterface : public Rml::RenderInterface {
     void SetTransform (const Rml::Matrix4f* transform); //override;
 
     // Rml::Context* GetContext(); //override {};
-    Renderer* render;
+    LumRenderer* render;
     Image* default_image = NULL;
 
     mat4 current_transform = glm::identity<mat4>();
     // bool has_scissors = true;
     VkRect2D last_scissors = {{0, 0}, {1, 1}};
 };
-
-template<class Elem_T> vector<Buffer> Renderer::createElemBuffers (Elem_T* elements, u32 count, u32 buffer_usage) {
-    VkDeviceSize bufferSize = sizeof (Elem_T) * count;
-    vector<Buffer> elems (MAX_FRAMES_IN_FLIGHT);
-    VkBufferCreateInfo 
-        stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        stagingBufferInfo.size = bufferSize;
-        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VmaAllocationCreateInfo 
-        stagingAllocInfo = {};
-        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    VkBuffer stagingBuffer = {};
-    VmaAllocation stagingAllocation = {};
-    vmaCreateBuffer (VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
-    void* data;
-    assert (VMAllocator);
-    assert (stagingAllocation);
-    assert (&data);
-    vmaMapMemory (VMAllocator, stagingAllocation, &data);
-    memcpy (data, elements, bufferSize);
-    vmaUnmapMemory (VMAllocator, stagingAllocation);
-    for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkBufferCreateInfo 
-            bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-            bufferInfo.size = bufferSize;
-            bufferInfo.usage = buffer_usage;
-        VmaAllocationCreateInfo 
-            allocInfo = {};
-            allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        vmaCreateBuffer (VMAllocator, &bufferInfo, &allocInfo, &elems[i].buffer, &elems[i].alloc, NULL);
-        copyBufferSingleTime (stagingBuffer, elems[i].buffer, bufferSize);
-    }
-    vmaDestroyBuffer (VMAllocator, stagingBuffer, stagingAllocation);
-    return elems;
-}

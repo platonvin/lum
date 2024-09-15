@@ -1,4 +1,5 @@
 #include "render.hpp"
+#include "defines/macros.hpp"
 
 // typedef struct UiDrawCall {
 // UiMesh mesh;
@@ -26,21 +27,21 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    vmaCreateBuffer (render->VMAllocator, &bufferInfo, &allocInfo, &ui_mesh.vertexes.buffer, &ui_mesh.vertexes.alloc, NULL);
+    vmaCreateBuffer (render->render.VMAllocator, &bufferInfo, &allocInfo, &ui_mesh.vertexes.buffer, &ui_mesh.vertexes.alloc, NULL);
     bufferInfo.size = bufferSizeI;
     bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    vmaCreateBuffer (render->VMAllocator, &bufferInfo, &allocInfo, &ui_mesh.indexes.buffer, &ui_mesh.indexes.alloc, NULL);
+    vmaCreateBuffer (render->render.VMAllocator, &bufferInfo, &allocInfo, &ui_mesh.indexes.buffer, &ui_mesh.indexes.alloc, NULL);
     void* data;
-    vmaMapMemory (render->VMAllocator, ui_mesh.vertexes.alloc, &data);
+    vmaMapMemory (render->render.VMAllocator, ui_mesh.vertexes.alloc, &data);
     memcpy (data, vertices, bufferSizeV);
-    vmaUnmapMemory (render->VMAllocator, ui_mesh.vertexes.alloc);
-    vmaMapMemory (render->VMAllocator, ui_mesh.indexes.alloc, &data);
+    vmaUnmapMemory (render->render.VMAllocator, ui_mesh.vertexes.alloc);
+    vmaMapMemory (render->render.VMAllocator, ui_mesh.indexes.alloc, &data);
     memcpy (data, indices, bufferSizeI);
-    vmaUnmapMemory (render->VMAllocator, ui_mesh.indexes.alloc);
-    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers[render->currentFrame];
+    vmaUnmapMemory (render->render.VMAllocator, ui_mesh.indexes.alloc);
+    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     VkBuffer vertexBuffers[] = {ui_mesh.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
-    struct {vec4 shift; mat4 trans;} ui_pc = {vec4 (translation.x, translation.y, render->swapChainExtent.width, render->swapChainExtent.height), current_transform};
+    struct {vec4 shift; mat4 trans;} ui_pc = {vec4 (translation.x, translation.y, render->render.swapChainExtent.width, render->render.swapChainExtent.height), current_transform};
     //TODO:
     vkCmdPushConstants (renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (ui_pc), &ui_pc);
     Image* texture_image = (Image*)texture;
@@ -65,12 +66,12 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
     vkCmdPushDescriptorSetKHR (renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
     vkCmdBindVertexBuffers (renderCommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer (renderCommandBuffer, ui_mesh.indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
-    // render->cmdPipelineBarrier(renderCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS);
+    // render->render.cmdPipelineBarrier(renderCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS);
     vkCmdDrawIndexed (renderCommandBuffer, ui_mesh.icount, 1, 0, 0, 0);
     BufferDeletion vBufferDel = {ui_mesh.vertexes, MAX_FRAMES_IN_FLIGHT};
     BufferDeletion iBufferDel = {ui_mesh.indexes, MAX_FRAMES_IN_FLIGHT};
-    render->bufferDeletionQueue.push_back (vBufferDel);
-    render->bufferDeletionQueue.push_back (iBufferDel);
+    render->render.bufferDeletionQueue.push_back (vBufferDel);
+    render->render.bufferDeletionQueue.push_back (iBufferDel);
 }
 
 // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
@@ -99,41 +100,41 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* ver
     bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     VmaAllocationCreateInfo allocInfo = {};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    vmaCreateBuffer (render->VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferV, &stagingAllocationV, NULL);
+    vmaCreateBuffer (render->render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferV, &stagingAllocationV, NULL);
     stagingBufferInfo.size = bufferSizeI;
-    vmaCreateBuffer (render->VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferI, &stagingAllocationI, NULL);
-    vmaCreateBuffer (render->VMAllocator, &bufferInfo, &allocInfo, &ui_mesh->vertexes.buffer, &ui_mesh->vertexes.alloc, NULL);
+    vmaCreateBuffer (render->render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferI, &stagingAllocationI, NULL);
+    vmaCreateBuffer (render->render.VMAllocator, &bufferInfo, &allocInfo, &ui_mesh->vertexes.buffer, &ui_mesh->vertexes.alloc, NULL);
     bufferInfo.size = bufferSizeI;
     bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    vmaCreateBuffer (render->VMAllocator, &bufferInfo, &allocInfo, &ui_mesh->indexes.buffer, &ui_mesh->indexes.alloc, NULL);
+    vmaCreateBuffer (render->render.VMAllocator, &bufferInfo, &allocInfo, &ui_mesh->indexes.buffer, &ui_mesh->indexes.alloc, NULL);
     void* data;
-    vmaMapMemory (render->VMAllocator, stagingAllocationV, &data);
+    vmaMapMemory (render->render.VMAllocator, stagingAllocationV, &data);
     memcpy (data, vertices, bufferSizeV);
-    vmaUnmapMemory (render->VMAllocator, stagingAllocationV);
-    vmaMapMemory (render->VMAllocator, stagingAllocationI, &data);
+    vmaUnmapMemory (render->render.VMAllocator, stagingAllocationV);
+    vmaMapMemory (render->render.VMAllocator, stagingAllocationI, &data);
     memcpy (data, indices, bufferSizeI);
-    vmaUnmapMemory (render->VMAllocator, stagingAllocationI);
-    VkCommandBuffer& copyCommandBuffer = render->copyCommandBuffers[render->currentFrame];
+    vmaUnmapMemory (render->render.VMAllocator, stagingAllocationI);
+    VkCommandBuffer& copyCommandBuffer = render->copyCommandBuffers.current();
     VkBufferCopy staging_copy = {};
     staging_copy.size = bufferSizeV;
     vkCmdCopyBuffer (copyCommandBuffer, stagingBufferV, ui_mesh->vertexes.buffer, 1, &staging_copy);
     staging_copy.size = bufferSizeI;
     vkCmdCopyBuffer (copyCommandBuffer, stagingBufferI, ui_mesh->indexes.buffer, 1, &staging_copy);
-    render->bufferDeletionQueue.push_back ({{stagingBufferV, stagingAllocationV}, MAX_FRAMES_IN_FLIGHT});
-    render->bufferDeletionQueue.push_back ({{stagingBufferI, stagingAllocationI}, MAX_FRAMES_IN_FLIGHT});
+    render->render.bufferDeletionQueue.push_back ({{stagingBufferV, stagingAllocationV}, MAX_FRAMES_IN_FLIGHT});
+    render->render.bufferDeletionQueue.push_back ({{stagingBufferI, stagingAllocationI}, MAX_FRAMES_IN_FLIGHT});
     return Rml::CompiledGeometryHandle (ui_mesh);
 }
 
 // Called by RmlUi when it wants to render application-compiled geometry.
 void MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation) {
-    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers[render->currentFrame];
+    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     UiMesh* ui_mesh = (UiMesh*)geometry;
     VkBuffer vertexBuffers[] = {ui_mesh->vertexes.buffer};
     VkDeviceSize offsets[] = {0};
-    struct {vec4 shift; mat4 trans;} ui_pc = {vec4 (translation.x, translation.y, render->swapChainExtent.width, render->swapChainExtent.height), current_transform};
+    struct {vec4 shift; mat4 trans;} ui_pc = {vec4 (translation.x, translation.y, render->render.swapChainExtent.width, render->render.swapChainExtent.height), current_transform};
     //TODO:
     vkCmdPushConstants (renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (ui_pc), &ui_pc);
-    // vkCmdPushConstants(renderCommandBuffer, render->overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
+    // vkCmdPushConstants(renderCommandBuffer, render->render.overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
     Image* texture_image = ui_mesh->image;
 // printl(texture_image);
     VkDescriptorImageInfo
@@ -168,33 +169,33 @@ void MyRenderInterface::ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geo
     UiMesh* mesh = (UiMesh*)geometry;
     BufferDeletion vBufferDel = {mesh->vertexes, MAX_FRAMES_IN_FLIGHT};
     BufferDeletion iBufferDel = {mesh->indexes, MAX_FRAMES_IN_FLIGHT};
-    render->bufferDeletionQueue.push_back (vBufferDel);
-    render->bufferDeletionQueue.push_back (iBufferDel);
+    render->render.bufferDeletionQueue.push_back (vBufferDel);
+    render->render.bufferDeletionQueue.push_back (iBufferDel);
 }
 
 // Called by RmlUi when it wants to enable or disable scissoring to clip content.
 void MyRenderInterface::EnableScissorRegion (bool enable) {
-    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers[render->currentFrame];
+    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     if (true) {
         //do nothing...
         return;
     } else {
         VkRect2D full_scissors = {};
         full_scissors.offset = {0, 0};
-        full_scissors.extent = render->swapChainExtent;
+        full_scissors.extent = render->render.swapChainExtent;
         vkCmdSetScissor (renderCommandBuffer, 0, 1, &full_scissors);
     }
 }
 
 // Called by RmlUi when it wants to change the scissor region.
 void MyRenderInterface::SetScissorRegion (int x, int y, int width, int height) {
-    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers[render->currentFrame];
+    VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     last_scissors = {};
-    last_scissors.offset = {std::clamp (x, 0, int (render->swapChainExtent.width - 1)),
-                            std::clamp (y, 0, int (render->swapChainExtent.height - 1))
+    last_scissors.offset = {std::clamp (x, 0, int (render->render.swapChainExtent.width - 1)),
+                            std::clamp (y, 0, int (render->render.swapChainExtent.height - 1))
                            };
-    last_scissors.extent = { (u32)std::clamp (width, 0, int (render->swapChainExtent.width - 1)),
-                             (u32)std::clamp (height, 0, int (render->swapChainExtent.height - 1))
+    last_scissors.extent = { (u32)std::clamp (width, 0, int (render->render.swapChainExtent.width - 1)),
+                             (u32)std::clamp (height, 0, int (render->render.swapChainExtent.height - 1))
                            };
     vkCmdSetScissor (renderCommandBuffer, 0, 1, &last_scissors);
 }
@@ -287,17 +288,17 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
     stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
-    assert (render->VMAllocator);
+    assert (render->render.VMAllocator);
     assert (bufferSize != 0);
     // printl(bufferSize);
     // printl(source_dimensions.x);
     // printl(source_dimensions.y);
-    VK_CHECK (vmaCreateBuffer (render->VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
+    VK_CHECK (vmaCreateBuffer (render->render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
     void* data = NULL;
-    VK_CHECK (vmaMapMemory (render->VMAllocator, stagingAllocation, &data));
+    VK_CHECK (vmaMapMemory (render->render.VMAllocator, stagingAllocation, &data));
     memcpy (data, source, bufferSize);
-    // vmaFlushAllocation(render->VMAllocator, stagingAllocation, 0, 0);
-    vmaUnmapMemory (render->VMAllocator, stagingAllocation);
+    // vmaFlushAllocation(render->render.VMAllocator, stagingAllocation, 0, 0);
+    vmaUnmapMemory (render->render.VMAllocator, stagingAllocation);
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -313,7 +314,7 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     VmaAllocationCreateInfo imageAllocInfo = {};
     imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    VK_CHECK (vmaCreateImage (render->VMAllocator, &imageInfo, &imageAllocInfo, &texture_image->image, &texture_image->alloc, NULL));
+    VK_CHECK (vmaCreateImage (render->render.VMAllocator, &imageInfo, &imageAllocInfo, &texture_image->image, &texture_image->alloc, NULL));
     VkImageViewCreateInfo viewInfo = {};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = texture_image->image;
@@ -324,7 +325,7 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.layerCount = 1;
-    VK_CHECK (vkCreateImageView (render->device, &viewInfo, NULL, &texture_image->view));
+    VK_CHECK (vkCreateImageView (render->render.device, &viewInfo, NULL, &texture_image->view));
     VkImageMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -340,8 +341,8 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
     barrier.srcAccessMask = VK_ACCESS_NONE;
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     texture_image->aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    VkCommandBuffer& copyCommandBuffer = render->copyCommandBuffers[render->currentFrame];
-    render->cmdTransLayoutBarrier (copyCommandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+    VkCommandBuffer& copyCommandBuffer = render->copyCommandBuffers.current();
+    render->render.cmdExplicitTransLayoutBarrier (copyCommandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
                                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                    VK_ACCESS_NONE, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
                                    texture_image);
@@ -355,19 +356,19 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-    // render->cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier);
-    render->cmdTransLayoutBarrier (copyCommandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    // render->render.cmdPipelineBarrier(copyCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, &barrier);
+    render->render.cmdExplicitTransLayoutBarrier (copyCommandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
                                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
                                    texture_image);
-    render->bufferDeletionQueue.push_back ({{stagingBuffer, stagingAllocation}, MAX_FRAMES_IN_FLIGHT});
+    render->render.bufferDeletionQueue.push_back ({{stagingBuffer, stagingAllocation}, MAX_FRAMES_IN_FLIGHT});
     texture_handle = Rml::TextureHandle (texture_image);
     return true;
 }
 
 // Called by RmlUi when a loaded texture is no longer required.
 void MyRenderInterface::ReleaseTexture (Rml::TextureHandle texture_handle) {
-    render->imageDeletionQueue.push_back ({ * ((Image*)texture_handle), MAX_FRAMES_IN_FLIGHT});
+    render->render.imageDeletionQueue.push_back ({ * ((Image*)texture_handle), MAX_FRAMES_IN_FLIGHT});
 }
 
 // Called by RmlUi when it wants the renderer to use a new transform matrix.
