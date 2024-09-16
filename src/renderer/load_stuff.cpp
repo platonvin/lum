@@ -123,88 +123,104 @@ char* readFileBuffer(const char* path, size_t* size) {
 // namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
 #include <ogt_vox.hpp>
 #include <ogt_voxel_meshify.hpp>
-// } //so we'll have to use ogt::ogt_func :(
-// struct scene_file_header = {int }
 
 void LumRenderer::load_scene (const char* vox_file) {
     size_t buffer_size;
-    FILE* fp = fopen (vox_file, "rb");
+    FILE* fp = fopen(vox_file, "rb");
     if (fp == NULL) {
-        origin_world.set (0);
+        origin_world.set(0);
         return;
     }
     fseek(fp, 0, SEEK_END);
     buffer_size = ftell(fp);
     rewind(fp);
-    char* buffer = (char*) malloc (buffer_size);
-    fread (buffer, buffer_size, 1, fp);
-    fclose (fp);
+
+    if (buffer_size < sizeof(ivec3)) {
+        fclose(fp);
+        origin_world.set(0);
+        return;
+    }
+
+    char* buffer = (char*)malloc(buffer_size);
+
+    fread(buffer, buffer_size, 1, fp);
+    fclose(fp);
+
     ivec3* header = (ivec3*)buffer;
     ivec3 stored_world_size = *header;
-    BlockID_t* stored_world = (BlockID_t*) (buffer + sizeof (ivec3));
+    BlockID_t* stored_world = (BlockID_t*)(buffer + sizeof(ivec3));
+
+    assert((char*)stored_world < buffer + buffer_size);
+    
     printl(world_size.x);
     printl(world_size.y);
     printl(world_size.z);
     printl(static_block_palette_size);
-    ivec3 size2read = glm::clamp (stored_world_size, ivec3 (0), ivec3(world_size));
-    // buffer
+
+    ivec3 size2read = glm::clamp(stored_world_size, ivec3(0), ivec3(world_size));
+
     for (int xx = 0; xx < size2read.x; xx++) {
         for (int yy = 0; yy < size2read.y; yy++) {
             for (int zz = 0; zz < size2read.z; zz++) {
-                BlockID_t loaded_block = stored_world[xx + stored_world_size.x * yy + (stored_world_size.x* stored_world_size.y) * zz];
-                origin_world (xx, yy, zz) = glm::clamp (loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
+                size_t index = xx + stored_world_size.x * yy + (stored_world_size.x * stored_world_size.y) * zz;
+                assert(index < (buffer_size - sizeof(ivec3)) / sizeof(BlockID_t));
+                
+                BlockID_t loaded_block = stored_world[index];
+                origin_world(xx, yy, zz) = glm::clamp(loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
             }
         }
     }
-    free (buffer);
+
+    free(buffer);
+    return;
 }
 
 void LumRenderer::save_scene (const char* vox_file) {
-    FILE* fp = fopen (vox_file, "wb");
-    assert (fp != NULL);
-    fwrite (&world_size, sizeof (ivec3), 1, fp);
-    fwrite (origin_world.data(), sizeof (BlockID_t), world_size.x* world_size.y* world_size.z, fp);
-    fclose (fp);
+    FILE* fp = fopen(vox_file, "wb");
+    assert(fp != NULL);
+    assert(world_size.x > 0 && world_size.y > 0 && world_size.z > 0);
+    fwrite(&world_size, sizeof(ivec3), 1, fp);
+    fwrite(origin_world.data(), sizeof(BlockID_t), world_size.x * world_size.y * world_size.z, fp);
+    fclose(fp);
 }
 
 //size limited by 256^3
-void LumRenderer::load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette) {
+void LumRenderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette) {
     size_t buffer_size;
-    char* buffer = readFileBuffer (vox_file, &buffer_size);
-    const ogt::vox_scene* scene = ogt::vox_read_scene ((u8*)buffer, buffer_size);
-    free (buffer);
-    assert (scene->num_models == 1);
-    load_mesh (mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
-    if (extrude_palette and not hasPalette) {
+    char* buffer = readFileBuffer(vox_file, &buffer_size);
+    assert(buffer != NULL);
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
+    free(buffer);
+    assert(scene != NULL);
+    assert(scene->num_models == 1);
+    
+    load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
+    
+    if (extrude_palette && !hasPalette) {
         hasPalette = true;
         for (int i = 0; i < MATERIAL_PALETTE_SIZE; i++) {
-            mat_palette[i].color = vec4 (
-                                       scene->palette.color[i].r / 256.0,
-                                       scene->palette.color[i].g / 256.0,
-                                       scene->palette.color[i].b / 256.0,
-                                       scene->palette.color[i].a / 256.0
-                                   );
-            // mat_palette[i].emmit = scene->materials.matl[i].;
+            mat_palette[i].color = vec4(
+                scene->palette.color[i].r / 256.0,
+                scene->palette.color[i].g / 256.0,
+                scene->palette.color[i].b / 256.0,
+                scene->palette.color[i].a / 256.0
+            );
             mat_palette[i].emmit = 0;
             float rough;
             switch (scene->materials.matl[i].type) {
-                case ogt::matl_type_diffuse: {
+                case ogt::matl_type_diffuse:
                     rough = 1.0;
                     break;
-                }
-                case ogt::matl_type_emit: {
+                case ogt::matl_type_emit:
                     mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux * 4.0);
                     rough = 0.5;
                     break;
-                }
-                case ogt::matl_type_metal: {
+                case ogt::matl_type_metal:
                     rough = (scene->materials.matl[i].rough + (1.0 - scene->materials.matl[i].metal)) / 2.0;
                     break;
-                }
-                default: {
+                default:
                     rough = 0;
                     break;
-                }
             }
             mat_palette[i].rough = rough;
         }
@@ -219,56 +235,66 @@ void LumRenderer::load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertic
         Power - radiant flux
         Ldr
     */
-    ogt::vox_destroy_scene (scene);
+    ogt::vox_destroy_scene(scene);
 }
 
-void LumRenderer::load_block (Block** block, const char* vox_file) {
+void LumRenderer::load_block(Block** block, const char* vox_file) {
     size_t buffer_size;
-    char* buffer = readFileBuffer (vox_file, &buffer_size);
-    const ogt::vox_scene* scene = ogt::vox_read_scene ((u8*)buffer, buffer_size);
-    free (buffer);
-    assert (scene->num_models == 1);
+    char* buffer = readFileBuffer(vox_file, &buffer_size);
+    assert(buffer != NULL);
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
+    free(buffer);
+    assert(scene != NULL);
+    assert(scene->num_models == 1);
     if ((*block) == NULL) {
         *block = new Block;
     }
-    // load_mesh(&(*block)->mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, true);
-    (*block)->mesh.size = ivec3 (scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
-    (*block)->mesh.shift = vec3 (0);
+    (*block)->mesh.size = ivec3(scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    (*block)->mesh.shift = vec3(0);
     (*block)->mesh.rot = quat_identity<float, defaultp>();
-    make_vertices (& ((*block)->mesh), (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
-    // printl((*block)->mesh.triangles.Pzz.icount);
+    assert(scene->models[0]->size_x > 0 && scene->models[0]->size_y > 0 && scene->models[0]->size_z > 0);
+    make_vertices(&((*block)->mesh), (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
     for (int x = 0; x < scene->models[0]->size_x; x++) {
         for (int y = 0; y < scene->models[0]->size_y; y++) {
             for (int z = 0; z < scene->models[0]->size_z; z++) {
-                (*block)->voxels[x][y][z] = (u16) scene->models[0]->voxel_data[x + y * scene->models[0]->size_x + z * scene->models[0]->size_x * scene->models[0]->size_y];
+                (*block)->voxels[x][y][z] = (u16)scene->models[0]->voxel_data[x + y * scene->models[0]->size_x + z * scene->models[0]->size_x * scene->models[0]->size_y];
             }
         }
     }
-    ogt::vox_destroy_scene (scene);
+    ogt::vox_destroy_scene(scene);
 }
 
 #define free_helper(dir) \
 if(not (*block)->mesh.triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, (*block)->mesh.triangles.dir.indexes[i].buffer, (*block)->mesh.triangles.dir.indexes[i].alloc);
-void LumRenderer::free_block (Block** block) {
+void LumRenderer::free_block(Block** block) {
+    assert(block != NULL);
+    assert(*block != NULL);
+    
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        free_helper (Pzz);
-        free_helper (Nzz);
-        free_helper (zPz);
-        free_helper (zNz);
-        free_helper (zzP);
-        free_helper (zzN);
-        if (not (*block)->mesh.triangles.vertexes.empty()) { vmaDestroyBuffer (render.VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc); }
+        free_helper(Pzz);
+        free_helper(Nzz);
+        free_helper(zPz);
+        free_helper(zNz);
+        free_helper(zzP);
+        free_helper(zzN);
+        if (!(*block)->mesh.triangles.vertexes.empty()) {
+            vmaDestroyBuffer(render.VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);
+        }
     }
-    if (not ((*block) == NULL)) { delete (*block); }
+    delete *block;
+    *block = NULL;
 }
 
-void LumRenderer::load_mesh (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
-    mesh->size = ivec3 (x_size, y_size, z_size);
+void LumRenderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
+    assert(mesh != NULL);
+    assert(Voxels != NULL);
+    assert(x_size > 0 && y_size > 0 && z_size > 0);
+    mesh->size = ivec3(x_size, y_size, z_size);
     if (_make_vertices) {
-        make_vertices (mesh, Voxels, x_size, y_size, z_size);
+        make_vertices(mesh, Voxels, x_size, y_size, z_size);
     }
-    mesh->voxels = create_RayTrace_VoxelImages (Voxels, mesh->size);
-    mesh->shift = vec3 (0);
+    mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
+    mesh->shift = vec3(0);
     mesh->rot = quat_identity<float, defaultp>();
 }
 
@@ -276,22 +302,26 @@ void LumRenderer::load_mesh (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, 
 #undef  free_helper
 #define free_helper(dir) \
 if(not mesh->triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, mesh->triangles.dir.indexes[i].buffer, mesh->triangles.dir.indexes[i].alloc);
-void LumRenderer::free_mesh (Mesh* mesh) {
+void LumRenderer::free_mesh(Mesh* mesh) {
+    assert(mesh != NULL);
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        // if(not mesh->vertexes.empty()) vmaDestroyBuffer(render.VMAllocator, mesh->vertexes[i].buffer, mesh->vertexes[i].alloc);
-        free_helper (Pzz);
-        free_helper (Nzz);
-        free_helper (zPz);
-        free_helper (zNz);
-        free_helper (zzP);
-        free_helper (zzN);
-        if (not mesh->triangles.vertexes.empty()) { vmaDestroyBuffer (render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc); }
-        if (not mesh->voxels.empty()) { vmaDestroyImage (render.VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc); }
-        if (not mesh->voxels.empty()) { vkDestroyImageView (render.device, mesh->voxels[i].view, NULL); }
+        free_helper(Pzz);
+        free_helper(Nzz);
+        free_helper(zPz);
+        free_helper(zNz);
+        free_helper(zzP);
+        free_helper(zzN);
+        if (!mesh->triangles.vertexes.empty()) {
+            vmaDestroyBuffer(render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
+        }
+        if (!mesh->voxels.empty()) {
+            vmaDestroyImage(render.VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
+        }
+        if (!mesh->voxels.empty()) {
+            vkDestroyImageView(render.device, mesh->voxels[i].view, NULL);
+        }
     }
-#undef free_helper
 }
-
 bool operator== (const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
     return
         (one.pos.x == other.pos.x) &&

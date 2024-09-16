@@ -136,14 +136,15 @@ $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
 
 shaders: $(ALL_SHADER_TARGETS)
 
-debug: init shaders $(com_objs) $(deb_objs) build_deb
+
+debug: init shaders $(com_objs) $(deb_objs) build_deb 
 ifeq ($(OS),Windows_NT)
 	.\client
 else
 	./client
 endif
 	
-release: init shaders $(com_objs) $(rel_objs) build_rel
+release: init shaders $(com_objs) $(rel_objs) build_rel 
 ifeq ($(OS),Windows_NT)
 	.\client
 else
@@ -158,8 +159,13 @@ release_p: release
 release_vfs: args = -DVSYNC_FULLSCREEN
 release_vfs: release
 
+lum-al/lib/liblumal.a:
+	cd lum-al
+	make library
+	cd ..
+	
 #mostly for testing
-only_build: init shaders $(com_objs) $(rel_objs) build_rel
+only_build: init shaders $(com_objs) $(rel_objs) lum-al/lib/liblumal.a build_rel
 
 #crazy fast
 crazy: init shaders
@@ -168,9 +174,9 @@ crazy_native: init shaders
 	c++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 #i could not make it work without this
-build_deb: $(deb_objs) $(com_objs)
+build_deb: $(deb_objs) $(com_objs) lum-al/lib/liblumal.a
 	c++ -o client $(deb_objs) $(com_objs) $(debug_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
-build_rel: $(com_objs) $(rel_objs)
+build_rel: $(com_objs) $(rel_objs) lum-al/lib/liblumal.a
 	c++ -o client $(com_objs) $(rel_objs) $(release_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 fun:
@@ -226,11 +232,13 @@ ifeq ($(OS),Windows_NT)
 	del "obj\deb\*.o"
 	del "obj\rel\*.o"
 	del "shaders\compiled\*.spv"
+	del "lum-al\lib\*.a"
 else
 	rm -R obj/*.o
 	rm -R obj/deb/*.o 
 	rm -R obj/rel/*.o 
 	rm -R shaders/compiled/*.spv 
+	rm -R lum-al/lib/*.a
 endif
 
 # mkdir obj
