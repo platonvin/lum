@@ -14,18 +14,15 @@
   - **Vulkan support**
 
 - ### Steps  
-  - make sure you have C++20 compiler, Vcpkg and Make
+  - make sure you have C++20 compiler, Make and Vcpkg. If you want to use non-default triplet (compiler) for Vcpkg, set VCPKG_DEFAULT_TRIPLET environment variable to desired triplet. For MinGW it would be x64-mingw-static
   - get the repository: \
 `$ git clone https://github.com/platonvin/lum.git` for *unstable* version or [download code from releases](https://github.com/platonvin/lum/releases)     
   - navigate to the project directory:\
-`$ cd lum` 
-  - install dependencies:\
-`$vcpkg install`
+ - `$ cd lum` 
+
+ - `$ make -j10`
     - on Linux, GLFW will ask you to install multiple different packages, but you can do it in advance:\
      `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential`
-    - for MSYS2 MinGW on Windows use `vcpkg install --triplet=x64-mingw-static --host-triplet=x64-mingw-static` becuase on Windows triplets default to x64-windows
-  - Build and run:\
-`$ make -j10`
 
 Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for windows
 

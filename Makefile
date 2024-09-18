@@ -4,18 +4,19 @@
 I = -Isrc -Icommon -Ilum-al/src
 L = -Llum-al/lib
 
-OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
-INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS))
-INCLUDE_LIST += $(addsuffix /include/vma, $(OTHER_DIRS))
-INCLUDE_LIST += $(addsuffix /include/volk, $(OTHER_DIRS))
-# OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
-LIB_LIST := $(addsuffix /lib, $(OTHER_DIRS))
+# define EVAL_VARS
+    # OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
+    # INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS))
+    # INCLUDE_LIST += $(addsuffix /include/vma, $(OTHER_DIRS))
+    # INCLUDE_LIST += $(addsuffix /include/volk, $(OTHER_DIRS))
+    # LIB_LIST := $(addsuffix /lib, $(OTHER_DIRS))
 
-I += $(addprefix -I, $(INCLUDE_LIST))
-L += $(addprefix -L, $(LIB_LIST))
-#spirv things are installed with vcpkg and not set in envieroment, so i find needed tools myself
-GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc)))
-GLSLC = $(GLSLC_DIR)/glslc
+    # I := $(addprefix -I, $(INCLUDE_LIST))
+    # L := $(addprefix -L, $(LIB_LIST))
+
+    # GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc)))
+    # GLSLC := $(GLSLC_DIR)/glslc
+# endef
 
 
 STATIC_OR_DYNAMIC = 
@@ -74,24 +75,37 @@ srcs := \
 	common/meshopt.cpp\
 
 #default target
-all: init release
+all: init vcpkg_installed_eval lum-al/lib/liblumal.a release
+
+#rule for re-evaluation after vcpkg_installed created
+.PHONY: vcpkg_installed_eval 
+vcpkg_installed_eval: vcpkg_installed
+	$(eval OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*)) )
+	$(eval INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS)) )
+	$(eval INCLUDE_LIST += $(addsuffix /include/vma, $(OTHER_DIRS)) )
+	$(eval INCLUDE_LIST += $(addsuffix /include/volk, $(OTHER_DIRS)) )
+	$(eval LIB_LIST := $(addsuffix /lib, $(OTHER_DIRS)) )
+	$(eval I += $(addprefix -I, $(INCLUDE_LIST)) )
+	$(eval L += $(addprefix -L, $(LIB_LIST)) )
+	$(eval GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc))) )
+	$(eval GLSLC := $(GLSLC_DIR)/glslc )
 
 #If someone knows a way to simplify this, please tell me 
-obj/%.o: common/%.cpp
+obj/%.o: common/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
 	c++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
 -include $(DEPS)
 
-obj/rel/%.o: src/%.cpp
+obj/rel/%.o: src/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
 	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
-obj/rel/%.o: src/renderer/%.cpp
+obj/rel/%.o: src/renderer/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
 	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(rel_objs:.o=.d)
 -include $(DEPS)
 
-obj/deb/%.o: src/%.cpp
+obj/deb/%.o: src/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
 	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
-obj/deb/%.o: src/renderer/%.cpp
+obj/deb/%.o: src/renderer/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
 	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(deb_objs:.o=.d)
 -include $(DEPS)
@@ -126,17 +140,17 @@ $(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT)
 $(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 
-shaders: $(ALL_SHADER_TARGETS)
+shaders: vcpkg_installed_eval $(ALL_SHADER_TARGETS)
 
 
-debug: init shaders $(com_objs) $(deb_objs) build_deb 
+debug: init vcpkg_installed_eval shaders $(com_objs) $(deb_objs) build_deb 
 ifeq ($(OS),Windows_NT)
 	.\client
 else
 	./client
 endif
 	
-release: init shaders $(com_objs) $(rel_objs) build_rel 
+release: init vcpkg_installed_eval shaders lum-al/lib/liblumal.a $(com_objs) $(rel_objs) build_rel 
 ifeq ($(OS),Windows_NT)
 	.\client
 else
@@ -151,7 +165,7 @@ release_p: release
 release_vfs: args = -DVSYNC_FULLSCREEN
 release_vfs: release
 
-lum-al/lib/liblumal.a:
+lum-al/lib/liblumal.a: vcpkg_installed
 	git submodule init
 	git submodule update
 	cd lum-al
@@ -161,18 +175,18 @@ lum-al/lib/liblumal.a:
 	cd ..
 
 #mostly for testing
-only_build: init shaders $(com_objs) $(rel_objs) lum-al/lib/liblumal.a build_rel
+only_build: init vcpkg_installed_eval shaders lum-al/lib/liblumal.a $(com_objs) $(rel_objs) build_rel
 
 #crazy fast
-crazy: init shaders
+crazy: init vcpkg_installed_eval shaders
 	c++ $(srcs) -o crazy_client $(crazy_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
-crazy_native: init shaders
+crazy_native: init vcpkg_installed_eval shaders
 	c++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 #i could not make it work without this
-build_deb: $(deb_objs) $(com_objs) lum-al/lib/liblumal.a
+build_deb: init vcpkg_installed_eval lum-al/lib/liblumal.a $(deb_objs) $(com_objs)
 	c++ -o client $(deb_objs) $(com_objs) $(debug_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
-build_rel: $(com_objs) $(rel_objs) lum-al/lib/liblumal.a
+build_rel: init vcpkg_installed_eval lum-al/lib/liblumal.a $(com_objs) $(rel_objs) 
 	c++ -o client $(com_objs) $(rel_objs) $(release_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 fun:
@@ -266,3 +280,7 @@ ifeq ($(OS),Windows_NT)
 else
 	mkdir -p shaders/compiled
 endif
+
+vcpkg_installed:
+	echo installind vcpkg dependencies. Please do not interrupt
+	vcpkg install
