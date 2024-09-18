@@ -116,13 +116,13 @@ GEOM_TARGETS = $(patsubst $(SHADER_SRC_DIR)/%$(GEOM_EXT), $(SHADER_OUT_DIR)/%Geo
 
 ALL_SHADER_TARGETS = $(COMP_TARGETS) $(VERT_TARGETS) $(FRAG_TARGETS) $(GEOM_TARGETS)
 
-$(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT)
+$(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT) vcpkg_installed_eval
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
-$(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT)
+$(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT) vcpkg_installed_eval
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
-$(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT)
+$(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT) vcpkg_installed_eval
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
-$(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT)
+$(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT) vcpkg_installed_eval
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 
 shaders: vcpkg_installed_eval $(ALL_SHADER_TARGETS)
