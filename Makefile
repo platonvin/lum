@@ -88,7 +88,7 @@ vcpkg_installed_eval: vcpkg_installed
 	$(eval I += $(addprefix -I, $(INCLUDE_LIST)) )
 	$(eval L += $(addprefix -L, $(LIB_LIST)) )
 	$(eval GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc))) )
-	$(eval GLSLC := $(GLSLC_DIR)/glslc )
+	$(eval GLSLC := $(strip $(GLSLC_DIR))/glslc )
 
 #If someone knows a way to simplify this, please tell me 
 obj/%.o: common/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
