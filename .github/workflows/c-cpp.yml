@@ -33,8 +33,6 @@ jobs:
         run: git clone https://github.com/microsoft/vcpkg.git
       - name: Bootstrap vcpkg
         run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-      - name: Install dependencies
-        run: ./vcpkg/vcpkg install
         
-      - name: Build the project
+      - name: Build Lum
         run: make only_build

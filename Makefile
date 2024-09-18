@@ -4,21 +4,6 @@
 I = -Isrc -Icommon -Ilum-al/src
 L = -Llum-al/lib
 
-# define EVAL_VARS
-    # OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*))
-    # INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS))
-    # INCLUDE_LIST += $(addsuffix /include/vma, $(OTHER_DIRS))
-    # INCLUDE_LIST += $(addsuffix /include/volk, $(OTHER_DIRS))
-    # LIB_LIST := $(addsuffix /lib, $(OTHER_DIRS))
-
-    # I := $(addprefix -I, $(INCLUDE_LIST))
-    # L := $(addprefix -L, $(LIB_LIST))
-
-    # GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc)))
-    # GLSLC := $(GLSLC_DIR)/glslc
-# endef
-
-
 STATIC_OR_DYNAMIC = 
 REQUIRED_LIBS = -llumal -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
 ifeq ($(OS),Windows_NT)
@@ -169,8 +154,6 @@ lum-al/lib/liblumal.a: vcpkg_installed
 	git submodule init
 	git submodule update
 	cd lum-al
-	vcpkg install
-# vcpkg install --triplet=x64-mingw-static --host-triplet=x64-mingw-static
 	make library
 	cd ..
 
@@ -282,5 +265,14 @@ else
 endif
 
 vcpkg_installed:
-	echo installind vcpkg dependencies. Please do not interrupt
+	echo installing vcpkg dependencies. Please do not interrupt
+	vcpkg install
+
+#use when big changes happen to lum 
+update: clean
+	echo updating vcpkg dependencies. Please do not interrupt
+	vcpkg install
+	git submodule init
+	git submodule update
+	cd lum-al
 	vcpkg install
