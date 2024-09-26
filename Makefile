@@ -60,7 +60,7 @@ srcs := \
 	common/meshopt.cpp\
 
 #default target
-all: init vcpkg_installed_eval lum-al/lib/liblumal.a release
+all: setup release
 
 #rule for re-evaluation after vcpkg_installed created
 .PHONY: vcpkg_installed_eval 
@@ -75,22 +75,26 @@ vcpkg_installed_eval: vcpkg_installed
 	$(eval GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc))) )
 	$(eval GLSLC := $(strip $(GLSLC_DIR))/glslc )
 
+setup: init vcpkg_installed_eval lum-al/lib/liblumal.a
 #If someone knows a way to simplify this, please tell me 
-obj/%.o: common/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
+obj/%.o: setup
+obj/%.o: common/%.cpp 
 	c++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
 -include $(DEPS)
 
-obj/rel/%.o: src/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
+obj/rel/%.o: setup
+obj/rel/%.o: src/%.cpp
 	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
-obj/rel/%.o: src/renderer/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
+obj/rel/%.o: src/renderer/%.cpp
 	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(rel_objs:.o=.d)
 -include $(DEPS)
 
-obj/deb/%.o: src/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
+obj/deb/%.o: setup
+obj/deb/%.o: src/%.cpp
 	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
-obj/deb/%.o: src/renderer/%.cpp init vcpkg_installed_eval lum-al/lib/liblumal.a
+obj/deb/%.o: src/renderer/%.cpp
 	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(deb_objs:.o=.d)
 -include $(DEPS)
@@ -116,16 +120,21 @@ GEOM_TARGETS = $(patsubst $(SHADER_SRC_DIR)/%$(GEOM_EXT), $(SHADER_OUT_DIR)/%Geo
 
 ALL_SHADER_TARGETS = $(COMP_TARGETS) $(VERT_TARGETS) $(FRAG_TARGETS) $(GEOM_TARGETS)
 
-$(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT) vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%.spv: vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/%$(COMP_EXT)
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
-$(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT) vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%Vert.spv: vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%Vert.spv: $(SHADER_SRC_DIR)/%$(VERT_EXT)
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
-$(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT) vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%Frag.spv: vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%Frag.spv: $(SHADER_SRC_DIR)/%$(FRAG_EXT)
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
-$(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT) vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%Geom.spv: vcpkg_installed_eval
+$(SHADER_OUT_DIR)/%Geom.spv: $(SHADER_SRC_DIR)/%$(GEOM_EXT) 
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 
-shaders: vcpkg_installed_eval $(ALL_SHADER_TARGETS)
+shaders: setup
+shaders: $(ALL_SHADER_TARGETS)
 
 
 debug: init vcpkg_installed_eval shaders $(com_objs) $(deb_objs) build_deb 
@@ -167,9 +176,9 @@ crazy_native: init vcpkg_installed_eval shaders
 	c++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 #i could not make it work without this
-build_deb: init vcpkg_installed_eval lum-al/lib/liblumal.a $(deb_objs) $(com_objs)
+build_deb: setup $(deb_objs) $(com_objs)
 	c++ -o client $(deb_objs) $(com_objs) $(debug_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
-build_rel: init vcpkg_installed_eval lum-al/lib/liblumal.a $(com_objs) $(rel_objs) 
+build_rel: setup $(com_objs) $(rel_objs) 
 	c++ -o client $(com_objs) $(rel_objs) $(release_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 fun:
