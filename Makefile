@@ -198,40 +198,40 @@ else
 endif
 
 # yeah windows wants quotes and backslashes so linux obviously wants no quotes and forward slashes. They have to be incompatible.
-cleans:
+cleans: init
 ifeq ($(OS),Windows_NT)
-	del "shaders\compiled\*.spv" 
+	-del "shaders\compiled\*.spv" 
 else
-	rm -R shaders/compiled/*.spv
+	-rm -R shaders/compiled/*.spv
 endif
 
-cleand:
+cleand: init
 ifeq ($(OS),Windows_NT)
-	del "obj\deb\*.o" 
+	-del "obj\deb\*.o" 
 else
-	rm -R obj/deb/*.o
+	-rm -R obj/deb/*.o
 endif
 
-cleanr:
+cleanr: init
 ifeq ($(OS),Windows_NT)
-	del "obj\rel\*.o"  
+	-del "obj\rel\*.o"  
 else
-	rm -R obj/rel/*.o
+	-rm -R obj/rel/*.o
 endif
 
-clean:
+clean: init
 ifeq ($(OS),Windows_NT)
-	del "obj\*.o"
-	del "obj\deb\*.o"
-	del "obj\rel\*.o"
-	del "shaders\compiled\*.spv"
-	del "lum-al\lib\*.a"
+	-del "obj\*.o"
+	-del "obj\deb\*.o"
+	-del "obj\rel\*.o"
+	-del "shaders\compiled\*.spv"
+	-del "lum-al\lib\*.a"
 else
-	rm -R obj/*.o
-	rm -R obj/deb/*.o 
-	rm -R obj/rel/*.o 
-	rm -R shaders/compiled/*.spv 
-	rm -R lum-al/lib/*.a
+	-rm -R obj/*.o
+	-rm -R obj/deb/*.o 
+	-rm -R obj/rel/*.o 
+	-rm -R shaders/compiled/*.spv 
+	-rm -R lum-al/lib/*.a
 endif
 
 # mkdir obj
@@ -269,7 +269,7 @@ vcpkg_installed:
 	vcpkg install
 
 #use when big changes happen to lum 
-update: clean
+update: init clean
 	echo updating vcpkg dependencies. Please do not interrupt
 	vcpkg install
 	git submodule init
