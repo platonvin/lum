@@ -53,7 +53,7 @@ all:
 
 #rule for re-evaluation after vcpkg_installed created. 
 #Eval needed because vcpkg_installed does not exist when they initially evaluated
-# .PHONY: vcpkg_installed_eval
+.PHONY: vcpkg_installed_eval
 vcpkg_installed_eval: vcpkg_installed
 	$(eval OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*)) )
 	$(eval INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS)) )
@@ -68,20 +68,19 @@ vcpkg_installed_eval: vcpkg_installed
 #If someone knows a way to simplify this, please tell me 
 setup: init vcpkg_installed_eval lum-al/lib/liblumal.a
 
-# obj/%.o: vcpkg_installed
-obj/%.o: common/%.cpp setup
+obj/%.o: common/%.cpp | setup
 	c++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
 -include $(DEPS)
 
-# obj/rel/%.o: vcpkg_installed
-obj/rel/%.o: src/%.cpp setup
+# obj/rel/%.o: setup
+obj/rel/%.o: src/%.cpp | setup
 	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(rel_objs:.o=.d)
 -include $(DEPS)
 
-# obj/deb/%.o: vcpkg_installed
-obj/deb/%.o: src/%.cpp setup
+# obj/deb/%.o: setup
+obj/deb/%.o: src/%.cpp | setup
 	c++ $(debug_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(deb_objs:.o=.d)
 -include $(DEPS)
