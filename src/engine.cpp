@@ -129,7 +129,7 @@ void Engine::setup_graphics(){
         settings.vsync = false; //every time deciding to which image to render, wait until monitor draws current. Icreases perfomance, but limits fps
         settings.fullscreen = false;
         settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
-        settings.timestampCount = 128;
+        settings.timestampCount = 0;
         settings.profile = false; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
         settings.fif = 2; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
 

@@ -1,3 +1,7 @@
+#ifdef __EMSCRIPTEN__
+#error Lum does not compile for web
+#endif
+
 #include "render.hpp"
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
@@ -368,7 +372,7 @@ void LumRenderer::createPipilines() {
 println
     lightmapBlocksPipe.subpassId = 0;
     render.createRasterPipeline (&lightmapBlocksPipe, 0, {
-        {"shaders/compiled/lightmapBlocksVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/lightmapBlocks.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
         //doesnt need fragment
     }, {
         {VK_FORMAT_R8G8B8_UINT, offsetof (PackedVoxelCircuit, pos)},
@@ -377,7 +381,7 @@ println
     lightmapExtent, {NO_BLEND}, (sizeof (i16vec4)), DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     lightmapModelsPipe.subpassId = 0;
     render.createRasterPipeline (&lightmapModelsPipe, 0, {
-        {"shaders/compiled/lightmapModelsVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/lightmapModels.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
         //doesnt need fragment
     }, {
         {VK_FORMAT_R8G8B8_UINT, offsetof (PackedVoxelCircuit, pos)},
@@ -386,8 +390,8 @@ println
     lightmapExtent, {NO_BLEND}, (sizeof (quat) + sizeof (vec4)), DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     raygenBlocksPipe.subpassId = 0;
     render.createRasterPipeline (&raygenBlocksPipe, 0, {
-        {"shaders/compiled/rayGenBlocksVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/rayGenBlocksFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/rayGenBlocks.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/rayGenBlocks.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {
         {VK_FORMAT_R8G8B8_UINT, offsetof (PackedVoxelCircuit, pos)},
         // {VK_FORMAT_R8G8B8_SINT, offsetof(VoxelVertex, norm)},
@@ -398,8 +402,8 @@ println
 println
     raygenModelsPipe.subpassId = 1;
     render.createRasterPipeline (&raygenModelsPipe, raygenModelsPushLayout, {
-        {"shaders/compiled/rayGenModelsVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/rayGenModelsFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/rayGenModels.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/rayGenModels.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {
         {VK_FORMAT_R8G8B8_UINT, offsetof (PackedVoxelCircuit, pos)},
     },
@@ -408,9 +412,9 @@ println
 println
     raygenParticlesPipe.subpassId = 2;
     render.createRasterPipeline (&raygenParticlesPipe, 0, {
-        {"shaders/compiled/rayGenParticlesVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/rayGenParticlesGeom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
-        {"shaders/compiled/rayGenParticlesFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/rayGenParticles.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/rayGenParticles.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+        {"shaders/compiled/rayGenParticles.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {
         {VK_FORMAT_R32G32B32_SFLOAT, offsetof (Particle, pos)},
         {VK_FORMAT_R32G32B32_SFLOAT, offsetof (Particle, vel)},
@@ -422,39 +426,39 @@ println
 println
     raygenGrassPipe.subpassId = 3;
     render.createRasterPipeline (&raygenGrassPipe, 0, {
-        {"shaders/compiled/grassVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/grassFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/grass.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/grass.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*empty*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     render.swapChainExtent, {NO_BLEND}, sizeof (vec4) + sizeof (int) * 2 + sizeof (int) * 2, DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 println
     raygenWaterPipe.subpassId = 4;
     render.createRasterPipeline (&raygenWaterPipe, 0, {
-        {"shaders/compiled/waterVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/waterFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/water.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/water.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*empty*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     render.swapChainExtent, {NO_BLEND}, sizeof (vec4) + sizeof (int) * 2, DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 println
     diffusePipe.subpassId = 0;
     render.createRasterPipeline (&diffusePipe, 0, {
-        {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/diffuseFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/diffuse.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {NO_BLEND}, sizeof (ivec4) + sizeof (vec4) * 4 + sizeof (mat4), DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
     aoPipe.subpassId = 1;
     render.createRasterPipeline (&aoPipe, 0, {
-        {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/hbaoFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/hbao.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_MIX}, 0, DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 println
     fillStencilGlossyPipe.subpassId = 2;
     render.createRasterPipeline (&fillStencilGlossyPipe, 0, {
-        {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/fillStencilGlossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/fillStencilGlossy.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {NO_BLEND}, 0, DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, {
@@ -470,8 +474,8 @@ println
 println
     fillStencilSmokePipe.subpassId = 3;
     render.createRasterPipeline (&fillStencilSmokePipe, 0, {
-        {"shaders/compiled/fillStencilSmokeVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/fillStencilSmokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fillStencilSmoke.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/fillStencilSmoke.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*passed as push constants lol*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_REPLACE_IF_GREATER, BLEND_REPLACE_IF_LESS}, sizeof (vec3) + sizeof (int) + sizeof (vec4), DEPTH_TEST_READ_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, {
@@ -487,8 +491,8 @@ println
 println
     glossyPipe.subpassId = 4;
     render.createRasterPipeline (&glossyPipe, 0, {
-        {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/glossyFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/glossy.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_MIX}, sizeof (vec4) + sizeof (vec4), DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, {
@@ -504,8 +508,8 @@ println
 println
     smokePipe.subpassId = 5;
     render.createRasterPipeline (&smokePipe, 0, {
-        {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/smokeFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/smoke.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_MIX}, 0, DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, {
@@ -521,16 +525,16 @@ println
 println
     tonemapPipe.subpassId = 6;
     render.createRasterPipeline (&tonemapPipe, 0, {
-        {"shaders/compiled/fullscreenTriagVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/tonemapFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/tonemap.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {NO_BLEND}, 0, DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 println
     overlayPipe.subpassId = 7;
     render.createRasterPipeline (&overlayPipe, 0, {
-        {"shaders/compiled/overlayVert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-        {"shaders/compiled/overlayFrag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
+        {"shaders/compiled/overlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+        {"shaders/compiled/overlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT},
     }, {
         {VK_FORMAT_R32G32_SFLOAT, offsetof (Rml::Vertex, position)},
         {VK_FORMAT_R8G8B8A8_UNORM, offsetof (Rml::Vertex, colour)},
@@ -539,21 +543,21 @@ println
     sizeof (Rml::Vertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_MIX}, sizeof (vec4) + sizeof (mat4), DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
 println
-    render.createComputePipeline (&radiancePipe, 0, "shaders/compiled/radiance.spv", sizeof (int) * 4, VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
+    render.createComputePipeline (&radiancePipe, 0, "shaders/compiled/radiance.comp.spv", sizeof (int) * 4, VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
 println
-    render.createComputePipeline (&updateGrassPipe, 0, "shaders/compiled/updateGrass.spv", sizeof (vec2) * 2 + sizeof (float), 0);
+    render.createComputePipeline (&updateGrassPipe, 0, "shaders/compiled/updateGrass.comp.spv", sizeof (vec2) * 2 + sizeof (float), 0);
 println
-    render.createComputePipeline (&updateWaterPipe, 0, "shaders/compiled/updateWater.spv", sizeof (float) + sizeof (vec2) * 2, 0);
+    render.createComputePipeline (&updateWaterPipe, 0, "shaders/compiled/updateWater.comp.spv", sizeof (float) + sizeof (vec2) * 2, 0);
 println
-    render.createComputePipeline (&genPerlin2dPipe, 0, "shaders/compiled/perlin2.spv", 0, 0);
+    render.createComputePipeline (&genPerlin2dPipe, 0, "shaders/compiled/perlin2.comp.spv", 0, 0);
 println
-    render.createComputePipeline (&genPerlin3dPipe, 0, "shaders/compiled/perlin3.spv", 0, 0);
+    render.createComputePipeline (&genPerlin3dPipe, 0, "shaders/compiled/perlin3.comp.spv", 0, 0);
 println
-    // render.createComputePipeline(&dfxPipe,0, "shaders/compiled/dfx.spv", 0, 0);
-    // render.createComputePipeline(&dfyPipe,0, "shaders/compiled/dfy.spv", 0, 0);
-    // render.createComputePipeline(&dfzPipe,0, "shaders/compiled/dfz.spv", 0, 0);
-    // render.createComputePipeline(&bitmaskPipe,0, "shaders/compiled/bitmask.spv", 0, 0);
-    render.createComputePipeline (&mapPipe, mapPushLayout, "shaders/compiled/map.spv", sizeof (mat4) + sizeof (ivec4), 0);
+    // render.createComputePipeline(&dfxPipe,0, "shaders/compiled./dfx.spv", 0, 0);
+    // render.createComputePipeline(&dfyPipe,0, "shaders/compiled./dfy.spv", 0, 0);
+    // render.createComputePipeline(&dfzPipe,0, "shaders/compiled./dfz.spv", 0, 0);
+    // render.createComputePipeline(&bitmaskPipe,0, "shaders/compiled/bit.mask.spv", 0, 0);
+    render.createComputePipeline (&mapPipe, mapPushLayout, "shaders/compiled/map.comp.spv", sizeof (mat4) + sizeof (ivec4), 0);
 println
 }
 
