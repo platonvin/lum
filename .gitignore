@@ -34,3 +34,4 @@ diag.mmd
 build_wrapper_output_directory
 vcpkg_installed
 *.tar
+/bin

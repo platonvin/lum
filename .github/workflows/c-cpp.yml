@@ -35,4 +35,4 @@ jobs:
         run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
         
       - name: Build Lum
-        run: make only_build
+        run: make only_build_unity

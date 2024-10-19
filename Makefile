@@ -6,18 +6,29 @@ L = -Llum-al/lib
 
 #linux is so good that static doesn't work
 STATIC_OR_DYNAMIC = 
-REQUIRED_LIBS = -llumal -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
+#libs that i do not include in internal-unity-build
+EXTERNAL_LIBS = -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
 ifeq ($(OS),Windows_NT)
-	REQUIRED_LIBS += -lgdi32       
+	EXTERNAL_LIBS += -lgdi32       
 	STATIC_OR_DYNAMIC += -static
+	RUN_PREFIX = .\\
+
 else
-	REQUIRED_LIBS += -lpthread -ldl
+	EXTERNAL_LIBS += -lpthread -ldl
+	RUN_PREFIX = ./
 endif
+REQUIRED_LIBS += $(EXTERNAL_LIBS)
+REQUIRED_LIBS += -llumal
 	
-always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20
-debug_flags   = -O0 -g $(always_enabled_flags)
-release_flags = -Ofast -DVKNDEBUG -mmmx -msse4.2 -mavx -mpclmul -fdata-sections -ffunction-sections -s -mfancy-math-387 -fno-math-errno -Wl,--gc-sections $(always_enabled_flags)
-crazy_flags   = -flto -fopenmp -floop-parallelize-all -ftree-parallelize-loops=8 -D_GLIBCXX_PARALLEL -funroll-loops -w $(release_flags)
+always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++23
+# debug build
+debug_flags   = $(always_enabled_flags) -O0 -g 
+# common_instructions := -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul
+common_instructions := -march=native
+# incremental development build
+dev_flags = $(always_enabled_flags) -O2 -DVKNDEBUG $(common_instructions) 
+# unity build
+rel_flags = $(always_enabled_flags) -Ofast $(common_instructions) -s -Wl,--gc-sections 
 
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 
@@ -35,20 +46,23 @@ srcs := \
 	common/ogt_voxel_meshify.cpp\
 	common/meshopt.cpp\
 
+#all src files included
+UNITY_FILE := src/unity.cpp
+
 #only debug objects
 deb_objs := $(patsubst src/%.cpp,obj/deb/%.o,$(filter src/%.cpp,$(srcs)))
 
-#only release objects
-rel_objs := $(patsubst src/%.cpp,obj/rel/%.o,$(filter src/%.cpp,$(srcs)))
+#only dev objects
+dev_objs := $(patsubst src/%.cpp,obj/rel/%.o,$(filter src/%.cpp,$(srcs)))
 
 com_objs := $(patsubst common/%.cpp,obj/%.o,$(filter common/%.cpp,$(srcs)))
 
 #default target
-all: init release
+all: init dev
 #for testing.
 all: 
 	@echo $(deb_objs)
-	@echo $(rel_objs)
+	@echo $(dev_objs)
 	@echo $(com_objs)
 
 #rule for re-evaluation after vcpkg_installed created. 
@@ -69,14 +83,14 @@ vcpkg_installed_eval: vcpkg_installed
 setup: init vcpkg_installed_eval lum-al/lib/liblumal.a
 
 obj/%.o: common/%.cpp | setup
-	c++ $(special_otp_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
+	c++ $(dev_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
 -include $(DEPS)
 
 # obj/rel/%.o: setup
 obj/rel/%.o: src/%.cpp | setup
-	c++ $(release_specific_flags) $(always_enabled_flags) $(I) $(args) -MMD -MP -c $< -o $@
-DEPS = $(rel_objs:.o=.d)
+	c++ $(dev_flags) $(I) $(args) -MMD -MP -c $< -o $@
+DEPS = $(dev_objs:.o=.d)
 -include $(DEPS)
 
 # obj/deb/%.o: setup
@@ -103,26 +117,26 @@ shaders: init $(SHADERS_EXTRA_DEPEND) $(_TARGETS)
 
 
 debug: init shaders $(com_objs) $(deb_objs) build_deb 
-ifeq ($(OS),Windows_NT)
-	.\client
-else
-	./client
-endif
-	
-release: setup shaders lum-al/lib/liblumal.a $(com_objs) $(rel_objs) build_rel 
-ifeq ($(OS),Windows_NT)
-	.\client
-else
-	./client
-endif
+	$(RUN_PREFIX)bin/client_deb
+
+dev: setup shaders lum-al/lib/liblumal.a $(com_objs) $(dev_objs) build_dev 
+	$(RUN_PREFIX)bin/client_dev
+
+rel: setup shaders build_unity 
+	$(RUN_PREFIX)bin/client_rel
 
 #not separate on purpose. make cleanr before usage
-release_p: args = -D_PRINTLINE
-release_p: release
+dev_p: args = -D_PRINTLINE
+dev_p: dev
 
 #not separate on purpose. make cleanr before usage
-release_vfs: args = -DVSYNC_FULLSCREEN
-release_vfs: release
+dev_vfs: args = -DVSYNC_FULLSCREEN
+dev_vfs: dev
+
+lumal:
+	cd lum-al
+	make library
+	cd ..
 
 lum-al/lib/liblumal.a: vcpkg_installed
 	git submodule init
@@ -132,21 +146,17 @@ lum-al/lib/liblumal.a: vcpkg_installed
 	cd ..
 
 #mostly for testing
-only_build: init shaders lum-al/lib/liblumal.a $(com_objs) $(rel_objs) build_rel
+only_build: init shaders lum-al/lib/liblumal.a $(com_objs) $(dev_objs) build_dev
 
-only_build_unity:
-
-#crazy fast
-crazy: init shaders
-	c++ $(srcs) -o crazy_client $(crazy_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
-crazy_native: init shaders
-	c++ $(srcs) -o crazy_client $(crazy_flags) -march=native $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+only_build_unity: init shaders build_unity
 
 #i could not make it work without this. Maybe posssible with eval
 build_deb: setup $(deb_objs) $(com_objs)
-	c++ -o client $(deb_objs) $(com_objs) $(debug_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
-build_rel: setup $(com_objs) $(rel_objs) 
-	c++ -o client $(com_objs) $(rel_objs) $(release_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	c++ -o bin/client_deb $(deb_objs) $(com_objs) $(debug_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+build_dev: setup $(com_objs) $(dev_objs) 
+	c++ -o bin/client_dev $(com_objs) $(dev_objs) $(dev_flags) $(I) $(L) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+build_unity: setup
+	c++ -o bin/client_rel $(UNITY_FILE) $(rel_flags) $(I) $(L) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 
 fun:
 	@echo -e '\033[0;36m' fun was never an option '\033[0m'
@@ -184,15 +194,19 @@ endif
 cleand: init
 ifeq ($(OS),Windows_NT)
 	-del "obj\deb\*.o" 
+	-del "obj\deb\render\*.o"  
 else
 	-rm -R obj/deb/*.o
+	-rm -R obj/deb/render/*.o
 endif
 
 cleanr: init
 ifeq ($(OS),Windows_NT)
 	-del "obj\rel\*.o"  
+	-del "obj\rel\render\*.o"  
 else
 	-rm -R obj/rel/*.o
+	-rm -R obj/rel/render/*.o
 endif
 
 clean: init
@@ -200,18 +214,22 @@ ifeq ($(OS),Windows_NT)
 	-del "obj\*.o"
 	-del "obj\deb\*.o"
 	-del "obj\rel\*.o"
+	-del "obj\deb\render\*.o"  
+	-del "obj\rel\render\*.o"  
 	-del "shaders\compiled\*.spv"
 	-del "lum-al\lib\*.a"
 else
 	-rm -R obj/*.o
 	-rm -R obj/deb/*.o 
 	-rm -R obj/rel/*.o 
+	-rm -R obj/deb/render/*.o
+	-rm -R obj/rel/render/*.o
 	-rm -R shaders/compiled/*.spv 
 	-rm -R lum-al/lib/*.a
 endif
 
 init: folders vcpkg_installed vcpkg_installed_eval lum-al/lib/liblumal.a
-folders: obj/ obj/deb/ obj/rel/ shaders/compiled/ obj/deb/renderer/ obj/rel/renderer/
+folders: obj/ obj/deb/ obj/rel/ shaders/compiled/ obj/deb/renderer/ obj/rel/renderer/ bin/
 %/: #pattern rule to make all folders
 ifeq ($(OS),Windows_NT)
 	mkdir "$@"

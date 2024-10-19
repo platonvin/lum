@@ -6,8 +6,8 @@
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #include "defines/macros.hpp"
-// #include <stdfloat>
-// #include <BS_thread_pool.hpp> //TODO: howto depend
+
+#include <glm/gtx/quaternion.hpp>
 #include "ao_lut.hpp"
 
 using std::array;
@@ -36,6 +36,8 @@ tuple<int, int> get_block_xy (int N);
 
 vector<char> readFile (const char* filename);
 
+
+
 void LumRenderer::init (Settings settings) {
     world_size = ivec3(48, 48, 16);
     static_block_palette_size = 15;
@@ -60,52 +62,20 @@ void LumRenderer::init (Settings settings) {
                                         VK_IMAGE_USAGE_SAMPLED_BIT | 
                                         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | 
                                         VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
-    createImages();
-    createSwapchainDependentImages();
     createSamplers();
-    render.createCommandBuffers(&computeCommandBuffers, render.settings.fif);
-    render.createCommandBuffers(&graphicsCommandBuffers, render.settings.fif);
-    render.createCommandBuffers(&copyCommandBuffers, render.settings.fif);
-    render.createCommandBuffers(&lightmapCommandBuffers, render.settings.fif);
+    createImages();
+    createSwapchainDependent();
 
-    render.createRenderPass({
-            {&lightmap, Clear, Store, DontCare, DontCare}
-        }, {
-            {{&lightmapBlocksPipe, &lightmapModelsPipe}, {}, {}, &lightmap}
-        }, &lightmapRpass);
-println
-    render.createRenderPass({
-            {&highresMatNorm, DontCare, Store, DontCare, DontCare},
-            {&highresDepthStencil, Clear, Store, Clear, Store, {.depthStencil = {.depth = 1}}},
-        }, {
-            {{&raygenBlocksPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenModelsPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenParticlesPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenGrassPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenWaterPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-        }, &gbufferRpass);
-println
-    render.createRenderPass({
-            {&highresMatNorm,      Load    , DontCare, DontCare, DontCare},
-            {&highresFrame,        DontCare, DontCare, DontCare, DontCare},
-            {&render.swapchainImages,  DontCare, Store   , DontCare, DontCare, {}, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
-            {&highresDepthStencil, Load    , DontCare, Load    , DontCare, {.depthStencil = {.depth = 1}}},
-            {&farDepth,           Clear   , DontCare, DontCare, DontCare, {.color = {.float32 = {-1000.0,-1000.0,-1000.0,-1000.0}}}},
-            {&nearDepth,            Clear   , DontCare, DontCare, DontCare, {.color = {.float32 = {+1000.0,+1000.0,+1000.0,+1000.0}}}},
-        }, {
-            {{&diffusePipe},           {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
-            {{&aoPipe},                {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
-            {{&fillStencilGlossyPipe}, {&highresMatNorm},                       {/*empty*/},             &highresDepthStencil},
-            {{&fillStencilSmokePipe }, {/*empty*/},                             {&farDepth, &nearDepth}, &highresDepthStencil},
-            {{&glossyPipe},            {/*empty*/},                             {&highresFrame},         &highresDepthStencil},
-            {{&smokePipe},             {&nearDepth, &farDepth},                 {&highresFrame},         &highresDepthStencil},
-            {{&tonemapPipe},           {&highresFrame},                         {&render.swapchainImages},   NULL},
-            {{&overlayPipe},           {/*empty*/},                             {&render.swapchainImages},   NULL},
-        }, &shadeRpass);
-println
-    setupDescriptors();
-println
-    createPipilines();
+    // render.createCommandBuffers(&computeCommandBuffers, render.settings.fif);
+    // render.createCommandBuffers(&graphicsCommandBuffers, render.settings.fif);
+    // render.createCommandBuffers(&copyCommandBuffers, render.settings.fif);
+    // render.createCommandBuffers(&lightmapCommandBuffers, render.settings.fif);
+
+    render.mainCommandBuffers = &computeCommandBuffers;
+    render.extraCommandBuffers = &copyCommandBuffers;
+    render.createSwapchainDependent = [this]() -> VkResult {return LumRenderer::createSwapchainDependent();};
+    render.cleanupSwapchainDependent = [this]() -> VkResult {return LumRenderer::cleanupSwapchainDependent();};
+
 println
     gen_perlin_2d();
 println
@@ -210,17 +180,10 @@ println
     render.createBufferStorages (&stagingRadianceUpdates,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         sizeof (ivec4)*world_size.x* world_size.y* world_size.z, true); //TODO test extra mem
-    stagingWorldMapped.allocate (MAX_FRAMES_IN_FLIGHT);
-    gpuParticlesMapped.allocate (MAX_FRAMES_IN_FLIGHT);
-    stagingRadianceUpdatesMapped.allocate (MAX_FRAMES_IN_FLIGHT);
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vmaMapMemory (render.VMAllocator, gpuParticles[i].alloc, &gpuParticlesMapped[i]);
-            gpuParticles[i].is_mapped = true;
-        vmaMapMemory (render.VMAllocator, stagingWorld[i].alloc, &stagingWorldMapped[i]);
-            stagingWorld[i].is_mapped = true;
-        vmaMapMemory (render.VMAllocator, stagingRadianceUpdates[i].alloc, &stagingRadianceUpdatesMapped[i]);
-            stagingRadianceUpdates[i].is_mapped = true;
-    }
+        
+    render.mapBufferStorages (&gpuParticles);
+    render.mapBufferStorages (&stagingWorld);
+    render.mapBufferStorages (&stagingRadianceUpdates);
 println
 }
 
@@ -230,67 +193,67 @@ void LumRenderer::setupDescriptors() {
     }, &overlayPipe.setLayout,
     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     render.deferDescriptorSetup (&lightmapBlocksPipe.setLayout, &lightmapBlocksPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
     render.deferDescriptorSetup (&lightmapModelsPipe.setLayout, &lightmapModelsPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
 println
     render.deferDescriptorSetup (&radiancePipe.setLayout, &radiancePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {world}, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache}, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {radianceCache}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RD_FIRST, {gpuRadianceUpdates}, {}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RD_FIRST, &gpuRadianceUpdates, {}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 println
     render.deferDescriptorSetup (&diffusePipe.setLayout, &diffusePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorm}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresDepthStencil}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {materialPalette}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache}, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresDepthStencil, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &materialPalette, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &lightmap, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     render.deferDescriptorSetup (&aoPipe.setLayout, &aoPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorm}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     render.deferDescriptorSetup (&tonemapPipe.setLayout, &tonemapPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresFrame}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresFrame, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     render.deferDescriptorSetup (&fillStencilGlossyPipe.setLayout, &fillStencilGlossyPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {highresMatNorm}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     render.deferDescriptorSetup (&fillStencilSmokePipe.setLayout, &fillStencilSmokePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
 println
     render.deferDescriptorSetup (&glossyPipe.setLayout, &glossyPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresMatNorm}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {highresDepthStencil}, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {world}, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {radianceCache}, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &highresMatNorm, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     render.deferDescriptorSetup (&smokePipe.setLayout, &smokePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {farDepth}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, {nearDepth}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {radianceCache}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {perlinNoise3d}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &farDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &nearDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &perlinNoise3d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     // create_DescriptorSetLayout({
@@ -299,8 +262,8 @@ println
     // VK_SHADER_STAGE_VERTEX_BIT, &blocksPushLayout,
     // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     render.deferDescriptorSetup (&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {}, {originBlockPalette}, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {}, &originBlockPalette, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // setup_RayGen_Particles_Descriptors();
     render.createDescriptorSetLayout ({
@@ -309,34 +272,34 @@ println
     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     // 0);
     render.deferDescriptorSetup (&raygenModelsPipe.setLayout, &raygenModelsPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 println
     render.deferDescriptorSetup (&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, {world}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {/*empty*/}, (&originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
     render.deferDescriptorSetup (&updateGrassPipe.setLayout, &updateGrassPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {grassState}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, {perlinNoise2d}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, &grassState, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, &perlinNoise2d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     render.deferDescriptorSetup (&updateWaterPipe.setLayout, &updateWaterPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {waterState}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, &waterState, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     render.deferDescriptorSetup (&raygenGrassPipe.setLayout, &raygenGrassPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, {grassState}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, &grassState, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
     render.deferDescriptorSetup (&raygenWaterPipe.setLayout, &raygenWaterPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, {waterState}, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {}, &waterState, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
     render.deferDescriptorSetup (&genPerlin2dPipe.setLayout, &genPerlin2dPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {perlinNoise2d}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, &perlinNoise2d, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     render.deferDescriptorSetup (&genPerlin3dPipe.setLayout, &genPerlin3dPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {perlinNoise3d}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, &perlinNoise3d, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     render.createDescriptorSetLayout ({
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,VK_SHADER_STAGE_COMPUTE_BIT} // model voxels
@@ -344,8 +307,8 @@ println
     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     // 0);
     render.deferDescriptorSetup (&mapPipe.setLayout, &mapPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {world}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {}, originBlockPalette, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_CURRENT, {}, &originBlockPalette, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     // render.deferDescriptorsetup(&dfxPipe.setLayout, &dfxPipe.sets, {
     // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -561,6 +524,65 @@ println
 println
 }
 
+VkResult LumRenderer::createSwapchainDependent() {
+    render.deviceWaitIdle();
+
+    // render.createCommandPool();
+    vkResetCommandPool(render.device, render.commandPool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
+    // vkResetCommandPool(render.device, render.commandPool, 0);
+
+    render.createCommandBuffers(&computeCommandBuffers, render.settings.fif);
+    render.createCommandBuffers(&graphicsCommandBuffers, render.settings.fif);
+    render.createCommandBuffers(&lightmapCommandBuffers, render.settings.fif);
+    render.createCommandBuffers(&copyCommandBuffers, render.settings.fif);
+
+    render.mainCommandBuffers = &computeCommandBuffers;
+    render.extraCommandBuffers = &copyCommandBuffers;
+
+    createSwapchainDependentImages();
+
+        render.createRenderPass({
+            {&lightmap, Clear, Store, DontCare, DontCare}
+        }, {
+            {{&lightmapBlocksPipe, &lightmapModelsPipe}, {}, {}, &lightmap}
+        }, &lightmapRpass);
+println
+    render.createRenderPass({
+            {&highresMatNorm, DontCare, Store, DontCare, DontCare},
+            {&highresDepthStencil, Clear, Store, Clear, Store, {.depthStencil = {.depth = 1}}},
+        }, {
+            {{&raygenBlocksPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
+            {{&raygenModelsPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
+            {{&raygenParticlesPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
+            {{&raygenGrassPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
+            {{&raygenWaterPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
+        }, &gbufferRpass);
+println
+    render.createRenderPass({
+            {&highresMatNorm,      Load    , DontCare, DontCare, DontCare},
+            {&highresFrame,        DontCare, DontCare, DontCare, DontCare},
+            {&render.swapchainImages,  DontCare, Store   , DontCare, DontCare, {}, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            {&highresDepthStencil, Load    , DontCare, Load    , DontCare, {.depthStencil = {.depth = 1}}},
+            {&farDepth,           Clear   , DontCare, DontCare, DontCare, {.color = {.float32 = {-1000.0,-1000.0,-1000.0,-1000.0}}}},
+            {&nearDepth,            Clear   , DontCare, DontCare, DontCare, {.color = {.float32 = {+1000.0,+1000.0,+1000.0,+1000.0}}}},
+        }, {
+            {{&diffusePipe},           {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
+            {{&aoPipe},                {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
+            {{&fillStencilGlossyPipe}, {&highresMatNorm},                       {/*empty*/},             &highresDepthStencil},
+            {{&fillStencilSmokePipe }, {/*empty*/},                             {&farDepth, &nearDepth}, &highresDepthStencil},
+            {{&glossyPipe},            {/*empty*/},                             {&highresFrame},         &highresDepthStencil},
+            {{&smokePipe},             {&nearDepth, &farDepth},                 {&highresFrame},         &highresDepthStencil},
+            {{&tonemapPipe},           {&highresFrame},                         {&render.swapchainImages},   NULL},
+            {{&overlayPipe},           {/*empty*/},                             {&render.swapchainImages},   NULL},
+        }, &shadeRpass);
+println
+    setupDescriptors();
+println
+    createPipilines();
+    
+    return VK_SUCCESS;
+}
+
 void LumRenderer::createSwapchainDependentImages() {
     // int mipmaps;
 println
@@ -592,6 +614,7 @@ println
     // lowresMatNorm = highresMatNorm;
     // highresDepthStencil = highresDepthStencil;
 
+    stencilViewForDS.allocate(render.settings.fif);
     for(int i=0; i<render.settings.fif; i++){
         VkImageViewCreateInfo 
             viewInfo = {};
@@ -604,7 +627,6 @@ println
             viewInfo.subresourceRange.baseArrayLayer = 0;
             viewInfo.subresourceRange.levelCount = 1;
             viewInfo.subresourceRange.layerCount = 1;
-        stencilViewForDS.allocate(render.settings.fif);
         VK_CHECK (vkCreateImageView (render.device, &viewInfo, NULL, &stencilViewForDS[i]));
     }
     //required anyways
@@ -624,21 +646,22 @@ println
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
     {render.swapChainExtent.width, render.swapChainExtent.height, 1});
+    // render.transitionImageLayoutSingletime(&farDepth[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void LumRenderer::cleanup() {
     delete ui_render_interface;
-    render.deleteImages (&radianceCache);
-    render.deleteImages (&world);
-    render.deleteImages (&originBlockPalette);
+    render.destroyImages (&radianceCache);
+    render.destroyImages (&world);
+    render.destroyImages (&originBlockPalette);
     // render.deleteImages(&distancePalette);
     // render.deleteImages(&bitPalette);
-    render.deleteImages (&materialPalette);
-    render.deleteImages (&perlinNoise2d);
-    render.deleteImages (&perlinNoise3d);
-    render.deleteImages (&grassState);
-    render.deleteImages (&waterState);
-    render.deleteImages (&lightmap);
+    render.destroyImages (&materialPalette);
+    render.destroyImages (&perlinNoise2d);
+    render.destroyImages (&perlinNoise3d);
+    render.destroyImages (&grassState);
+    render.destroyImages (&waterState);
+    render.destroyImages (&lightmap);
     render.destroySampler (nearestSampler);
     render.destroySampler (linearSampler);
     render.destroySampler (linearSampler_tiled);
@@ -660,6 +683,14 @@ void LumRenderer::cleanup() {
         // render.deleteBuffers()
         vmaDestroyBuffer (render.VMAllocator, gpuRadianceUpdates[i].buffer, gpuRadianceUpdates[i].alloc);
     }
+    cleanupSwapchainDependent();
+
+    render.cleanup();
+}
+
+VkResult LumRenderer::cleanupSwapchainDependent() {
+    render.deviceWaitIdle();
+    vkResetCommandPool(render.device, render.commandPool, 0);
 
     render.destroyRenderPass (&lightmapRpass);
     render.destroyRenderPass (&gbufferRpass);
@@ -693,20 +724,24 @@ println
     render.destroyRasterPipeline (&smokePipe);
     render.destroyRasterPipeline (&tonemapPipe);
     render.destroyRasterPipeline (&overlayPipe);
-    cleanupSwapchainDependent();
-
-    render.cleanup();
-}
-
-void LumRenderer::cleanupSwapchainDependent() {
-    render.deleteImages (&highresFrame);
-    render.deleteImages (&highresDepthStencil);
+    
+println
+    render.destroyImages (&highresFrame);
+println
+    render.destroyImages (&highresDepthStencil);
+println
     for(auto v : stencilViewForDS){
         vkDestroyImageView (render.device, v, NULL);
     }
-    render.deleteImages (&highresMatNorm);
-    render.deleteImages (&farDepth);
-    render.deleteImages (&nearDepth);
+println
+    render.destroyImages (&highresMatNorm);
+println
+    render.destroyImages (&farDepth);
+println
+    render.destroyImages (&nearDepth);
+println
+
+    return VK_SUCCESS;
 }
 
 void LumRenderer::gen_perlin_2d() {
@@ -772,7 +807,9 @@ void LumRenderer::update_light_transform() {
 
 // #include <glm/gtx/string_cast.hpp>
 void LumRenderer::start_frame() {
+    println
     camera.updateCamera();
+    println
     update_light_transform();
     println
     assert(computeCommandBuffers.current());
@@ -786,6 +823,7 @@ void LumRenderer::start_frame() {
         copyCommandBuffers.current(),
         lightmapCommandBuffers.current(),
     });
+    println
 }
 
 void LumRenderer::start_blockify() {
@@ -876,13 +914,13 @@ void LumRenderer::blockify_mesh (Mesh* mesh) {
 void LumRenderer::end_blockify() {
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof (BlockID_t);
     assert (size_to_copy != 0);
-    memcpy (stagingWorldMapped.current(), current_world.data(), size_to_copy);
+    memcpy (stagingWorld.current().mapped, current_world.data(), size_to_copy);
     vmaFlushAllocation (render.VMAllocator, stagingWorld.current().alloc, 0, size_to_copy);
 }
 
 void LumRenderer::blockify_custom (void* ptr) {
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof (BlockID_t);
-    memcpy (stagingWorldMapped.current(), ptr, size_to_copy);
+    memcpy (stagingWorld.current().mapped, ptr, size_to_copy);
     vmaFlushAllocation (render.VMAllocator, stagingWorld.current().alloc, 0, size_to_copy);
 }
 
@@ -920,7 +958,7 @@ void LumRenderer::update_radiance() {
         }
     } specialRadianceUpdates.clear();
     VkDeviceSize bufferSize = sizeof (radianceUpdates[0]) * radianceUpdates.size();
-    memcpy (stagingRadianceUpdatesMapped.current(), radianceUpdates.data(), bufferSize);
+    memcpy (stagingRadianceUpdates.current().mapped, radianceUpdates.data(), bufferSize);
 
     VkBufferCopy
         copyRegion = {};
@@ -945,9 +983,9 @@ void LumRenderer::update_radiance() {
     struct rtpc {int time, iters, size, shift;} pushconstant = {render.iFrame, 0, magicSize, render.iFrame % magicSize};
     vkCmdPushConstants (commandBuffer, radiancePipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
     int wg_count = radianceUpdates.size() / magicSize;
-    // PLACE_TIMESTAMP_ALWAYS();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDispatch (commandBuffer, wg_count, 1, 1);
-    // PLACE_TIMESTAMP_ALWAYS();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     render.cmdPipelineBarrier (commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
@@ -1008,9 +1046,9 @@ void LumRenderer::exec_copies() {
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
             &originBlockPalette.current());
-        // PLACE_TIMESTAMP();
+        PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
         vkCmdCopyImage (commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, blockCopyQueue.size(), blockCopyQueue.data());
-        // PLACE_TIMESTAMP();
+        PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
         render.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
@@ -1041,7 +1079,7 @@ void LumRenderer::start_map() {
     VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
     render.cmdBindPipe(commandBuffer, mapPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 0, 1, &mapPipe.sets.current(), 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::map_mesh (Mesh* mesh) {
@@ -1081,7 +1119,7 @@ void LumRenderer::end_map() {
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         &originBlockPalette.current());
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::end_compute() {
@@ -1090,7 +1128,7 @@ void LumRenderer::end_compute() {
 
 void LumRenderer::start_lightmap() {
     VkCommandBuffer& commandBuffer = lightmapCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     struct unicopy {mat4 trans;} unicopy = {lightTransform};
     vkCmdUpdateBuffer (commandBuffer, lightUniform.current().buffer, 0, sizeof (unicopy), &unicopy);
     render.cmdPipelineBarrier (commandBuffer,
@@ -1114,13 +1152,13 @@ void LumRenderer::lightmap_start_models() {
 
 void LumRenderer::end_lightmap() {
     VkCommandBuffer& commandBuffer = lightmapCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     render.cmdEndRenderPass (commandBuffer, &lightmapRpass);
 }
 
 void LumRenderer::start_raygen() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     
     struct unicopy {
         mat4 trans_w2s; vec4 campos; vec4 camdir;
@@ -1145,7 +1183,7 @@ void LumRenderer::start_raygen() {
 
 void LumRenderer::raygen_start_blocks() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     render.cmdBindPipe(commandBuffer, raygenBlocksPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.lineLayout, 0, 1, &raygenBlocksPipe.sets.current(), 0, 0);
 }
@@ -1335,7 +1373,7 @@ void LumRenderer::update_particles() {
     }
     particles.resize (write_index);
     int capped_particle_count = glm::clamp (int (particles.size()), 0, maxParticleCount);
-    memcpy (gpuParticlesMapped.current(), particles.data(), sizeof (Particle)*capped_particle_count);
+    memcpy (gpuParticles.current().mapped, particles.data(), sizeof (Particle)*capped_particle_count);
     vmaFlushAllocation (render.VMAllocator, gpuParticles.current().alloc, 0, sizeof (Particle)*capped_particle_count);
 }
 
@@ -1343,7 +1381,7 @@ void LumRenderer::raygen_map_particles() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     //go to next no matter what
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     if (!particles.empty()) { //just for safity
         render.cmdBindPipe(commandBuffer, raygenParticlesPipe);
         vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.lineLayout, 0, 1, &raygenParticlesPipe.sets.current(), 0, 0);
@@ -1351,12 +1389,12 @@ void LumRenderer::raygen_map_particles() {
         vkCmdBindVertexBuffers (commandBuffer, 0, 1, &gpuParticles.current().buffer, offsets);
         vkCmdDraw (commandBuffer, particles.size(), 1, 0, 0);
     }
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::raygen_start_grass() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, raygenGrassPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.lineLayout, 0, 1, &raygenGrassPipe.sets.current(), 0, 0);
@@ -1377,9 +1415,9 @@ void LumRenderer::updade_grass (vec2 windDirection) {
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         grassState.current());
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDispatch (commandBuffer, (world_size.x * 2 + 7) / 8, (world_size.y * 2 + 7) / 8, 1); //2x8 2x8 1x1
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::updade_water() {
@@ -1396,9 +1434,9 @@ void LumRenderer::updade_water() {
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         waterState.current());
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDispatch (commandBuffer, (world_size.x * 2 + 7) / 8, (world_size.y * 2 + 7) / 8, 1); //2x8 2x8 1x1
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 //blade is hardcoded but it does not really increase perfomance
@@ -1419,8 +1457,8 @@ void LumRenderer::raygen_map_grass (vec4 shift, int size) {
 
 void LumRenderer::raygen_start_water() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    // PLACE_TIMESTAMP();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, raygenWaterPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.lineLayout, 0, 1, &raygenWaterPipe.sets.current(), 0, 0);
@@ -1493,14 +1531,14 @@ void LumRenderer::start_2nd_spass() {
 
 void LumRenderer::diffuse() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     render.cmdBindPipe(commandBuffer, diffusePipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, diffusePipe.lineLayout, 0, 1, &diffusePipe.sets.current(), 0, 0);
     struct rtpc {vec4 v1, v2; mat4 lp;} pushconstant = {vec4 (camera.cameraPos, intBitsToFloat (render.iFrame)), vec4 (camera.cameraDir, 0), lightTransform};
     vkCmdPushConstants (commandBuffer, diffusePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::ambient_occlusion() {
@@ -1508,9 +1546,9 @@ void LumRenderer::ambient_occlusion() {
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, aoPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, aoPipe.lineLayout, 0, 1, &aoPipe.sets.current(), 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::glossy_raygen() {
@@ -1518,9 +1556,9 @@ void LumRenderer::glossy_raygen() {
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, fillStencilGlossyPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilGlossyPipe.lineLayout, 0, 1, &fillStencilGlossyPipe.sets.current(), 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::smoke_raygen() {
@@ -1531,9 +1569,9 @@ void LumRenderer::smoke_raygen() {
     struct rtpc {vec4 centerSize;} pushconstant = {vec4 (vec3 (11, 11, 1.5) * 16.f, 32)};
     specialRadianceUpdates.push_back (ivec4 (11, 11, 1, 0));
     vkCmdPushConstants (commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 36, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::smoke() {
@@ -1541,9 +1579,9 @@ void LumRenderer::smoke() {
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, smokePipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, smokePipe.lineLayout, 0, 1, &smokePipe.sets.current(), 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::glossy() {
@@ -1553,9 +1591,9 @@ void LumRenderer::glossy() {
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, glossyPipe.lineLayout, 0, 1, &glossyPipe.sets.current(), 0, 0);
     struct rtpc {vec4 v1, v2;} pushconstant = {vec4 (camera.cameraPos, 0), vec4 (camera.cameraDir, 0)};
     vkCmdPushConstants (commandBuffer, glossyPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::tonemap() {
@@ -1563,9 +1601,9 @@ void LumRenderer::tonemap() {
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, tonemapPipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipe.lineLayout, 0, 1, &tonemapPipe.sets.current(), 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::end_2nd_spass() {
@@ -1575,7 +1613,7 @@ void LumRenderer::end_2nd_spass() {
 
 void LumRenderer::start_ui() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     //no dset
     vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipe.line);
@@ -1596,15 +1634,16 @@ void LumRenderer::start_ui() {
 void LumRenderer::end_ui() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     render.cmdEndRenderPass (commandBuffer, &shadeRpass); //end of blur2present rpass
-    // PLACE_TIMESTAMP();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
 void LumRenderer::end_frame() {
-    // printl(currentTimestamp)
     render.end_frame({
+        // "Special" cmb used by UI copies & layout transitions HAS to be first
+        // Otherwise image state is LAYOUT_UNDEFINED
+        copyCommandBuffers.current(),
         computeCommandBuffers.current(),
         graphicsCommandBuffers.current(),
-        copyCommandBuffers.current(),
         lightmapCommandBuffers.current(),
     });
 
@@ -1669,9 +1708,9 @@ println
     perlinNoise3d.move(); //4 channels of different tileable noise for volumetrics
 println
 
-    stagingWorldMapped.move();
-    stagingRadianceUpdatesMapped.move();
-    gpuParticlesMapped.move(); //multiple because cpu-related work
+    // stagingWorldMapped.move();
+    // stagingRadianceUpdatesMapped.move();
+    // gpuParticlesMapped.move(); //multiple because cpu-related work
     // double timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
     // timeTakenByRadiance = float (timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
 

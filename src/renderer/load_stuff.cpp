@@ -1,6 +1,7 @@
 #include "render.hpp"
 #include "defines/macros.hpp"
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 using std::array;
 using std::vector;

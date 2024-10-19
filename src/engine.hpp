@@ -2,6 +2,7 @@
 #include <renderer/render.hpp>
 #include <renderer/ui.hpp>
 #include <defines/macros.hpp>
+#include "input/input.hpp"
 
 struct block_render_request{
     ivec3 pos;
@@ -28,9 +29,12 @@ public:
     vector<grass_render_request> grass_que = {};
     vector<grass_render_request> water_que = {};
     bool should_close = false;
+
+    Input input;
     
     void setup_graphics();
     void setup_ui();
+    void setup_input();
 
     // void update();
     void update_system();
@@ -44,6 +48,14 @@ public:
     void setup();
     void update();
     void cleanup();
+
+    void update_tank_joints(const Mesh& body, Mesh& head);
+
+    void update_tank_leg_ik(
+        const Mesh& body, Mesh& leg, const Mesh& body_leg_joint, 
+        const vec3& tank_direction, vec2& target_leg_point, 
+        vec2& physical_point, vec2& interpolated_leg_point
+    );
 };
 
 

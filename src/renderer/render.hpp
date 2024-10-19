@@ -190,8 +190,9 @@ struct LumRenderer {
     void init (Settings settings);
     void setupDescriptors();
     void createImages();
+    VkResult createSwapchainDependent();
     void createSwapchainDependentImages();
-    void cleanupSwapchainDependent();
+    VkResult cleanupSwapchainDependent();
     void createPipilines();
     void cleanup();
     void createSamplers();
@@ -351,7 +352,7 @@ struct LumRenderer {
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
     ring<Buffer> stagingWorld;
-    ring<void*> stagingWorldMapped;
+    // ring<void*> stagingWorldMapped;
     ring<Image> world; //can i really use just one?
 
     ring<Image> radianceCache;
@@ -367,12 +368,12 @@ struct LumRenderer {
     vector<i8vec4> radianceUpdates;
     vector<i8vec4> specialRadianceUpdates;
     ring<Buffer> gpuRadianceUpdates;
-    ring<void*> stagingRadianceUpdatesMapped;
+    // ring<void*> stagingRadianceUpdatesMapped;
     ring<Buffer> stagingRadianceUpdates;
 
     vector<Particle> particles;
     ring<Buffer> gpuParticles; //multiple because cpu-related work
-    ring<void* > gpuParticlesMapped; //multiple because cpu-related work
+    // ring<void* > gpuParticlesMapped; //multiple because cpu-related work
 
     ring<Image> perlinNoise2d; //full-world grass shift (~direction) texture sampled in grass
     ring<Image> grassState; //full-world grass shift (~direction) texture sampled in grass
