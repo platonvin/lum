@@ -217,6 +217,9 @@ void Engine::setup_input() {
     input.rebindKey(GameAction::TURN_CAMERA_LEFT, GLFW_KEY_COMMA);
     input.rebindKey(GameAction::TURN_CAMERA_RIGHT, GLFW_KEY_PERIOD);
 
+    input.rebindKey(GameAction::INCREASE_ZOOM, GLFW_KEY_PAGE_UP);
+    input.rebindKey(GameAction::DECREASE_ZOOM, GLFW_KEY_PAGE_DOWN);
+
     input.rebindKey(GameAction::SHOOT, GLFW_KEY_ENTER);
     input.rebindKey(GameAction::MOVE_TANK_FORWARD, GLFW_KEY_UP);
     input.rebindKey(GameAction::MOVE_TANK_BACKWARD, GLFW_KEY_DOWN);

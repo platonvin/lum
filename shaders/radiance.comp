@@ -119,12 +119,26 @@ ivec3 voxel_in_bit_palette(ivec3 relative_voxel_pos, int block_id) {
     return relative_voxel_pos + ivec3(0+2*block_x, 0+16*block_y,0);
 }
 
+// ivec3 cached_iblock_pos = ivec3(-1);
+// int cached_block_id = 0;
 ivec2 GetVoxel(in vec3 pos){    
     int voxel;
     ivec3 ipos = ivec3(pos);
     ivec3 iblock_pos = ipos / 16;
     ivec3 relative_voxel_pos = ipos % 16;
+
+    //version with cache. Might be faster in some cases
+    // [[branch]]
+    // if(cached_iblock_pos != iblock_pos){
+    //     cached_iblock_pos = iblock_pos;
+    //     cached_block_id = GetBlock(iblock_pos);
+    // } else {
+    //     //keep the same
+    // }
+    // int block_id = cached_block_id;
+
     int block_id = GetBlock(iblock_pos);
+
     ivec3 voxel_pos = voxel_in_palette(relative_voxel_pos, block_id);
     voxel = int(texelFetch(blockPalette, (voxel_pos), 0).r);
 
@@ -339,6 +353,7 @@ void store_probe(ivec3 probe_pos, vec3 accumulated_light){
 }
 
 //im tired of naming things, no one is gonna read this anyways
+//TODO: does AMD allocate for unused?
 shared vec3 _light[RAYS_PER_PROBE / 32]; //maximum possible requires size
 
 layout(local_size_x = RAYS_PER_PROBE, local_size_y = 1, local_size_z = 1) in;

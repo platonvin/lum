@@ -527,9 +527,8 @@ println
 VkResult LumRenderer::createSwapchainDependent() {
     render.deviceWaitIdle();
 
-    // render.createCommandPool();
-    vkResetCommandPool(render.device, render.commandPool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
-    // vkResetCommandPool(render.device, render.commandPool, 0);
+    // vkResetCommandPool(render.device, render.commandPool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
+    vkResetCommandPool(render.device, render.commandPool, 0);
 
     render.createCommandBuffers(&computeCommandBuffers, render.settings.fif);
     render.createCommandBuffers(&graphicsCommandBuffers, render.settings.fif);
@@ -542,7 +541,7 @@ VkResult LumRenderer::createSwapchainDependent() {
     createSwapchainDependentImages();
 
         render.createRenderPass({
-            {&lightmap, Clear, Store, DontCare, DontCare}
+            {&lightmap, Clear, Store, DontCare, DontCare, {.depthStencil = {.depth = 1}}}
         }, {
             {{&lightmapBlocksPipe, &lightmapModelsPipe}, {}, {}, &lightmap}
         }, &lightmapRpass);
@@ -1643,18 +1642,18 @@ void LumRenderer::end_frame() {
         // Otherwise image state is LAYOUT_UNDEFINED
         copyCommandBuffers.current(),
         computeCommandBuffers.current(),
-        graphicsCommandBuffers.current(),
         lightmapCommandBuffers.current(),
+        graphicsCommandBuffers.current(),
     });
 
+println
+    copyCommandBuffers.move(); //runtime copies for ui. Also does first frame resources
 println
     computeCommandBuffers.move();
 println
     lightmapCommandBuffers.move();
 println
     graphicsCommandBuffers.move();
-println
-    copyCommandBuffers.move(); //runtime copies for ui. Also does first frame resources
 println
     lightmap.move();
 println
