@@ -58,7 +58,7 @@ dev_objs := $(patsubst src/%.cpp,obj/rel/%.o,$(filter src/%.cpp,$(srcs)))
 com_objs := $(patsubst common/%.cpp,obj/%.o,$(filter common/%.cpp,$(srcs)))
 
 #default target
-all: init dev
+all: init rel
 #for testing.
 all: 
 	@echo $(deb_objs)
@@ -249,3 +249,5 @@ update: init clean
 	git submodule update
 	cd lum-al
 	vcpkg install
+	make library
+	cd ..

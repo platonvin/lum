@@ -372,7 +372,12 @@ void Engine::setup_input() {
         }
     });
 
-    
+    input.setActionCallback(GameAction::INCREASE_ZOOM, [this](GameAction action){
+            render.camera.pixelsInVoxel *= 1.0 + delt_time;
+    });
+    input.setActionCallback(GameAction::DECREASE_ZOOM, [this](GameAction action){
+            render.camera.pixelsInVoxel /= 1.0 + delt_time;
+    });
 }
 
 void Engine::handle_input(){
