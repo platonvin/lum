@@ -105,7 +105,8 @@ void main() {
         
         float current_depth = load_depth(initial_pix + screen_shift);
         float depth_shift = current_depth - initial_depth;
-
+        assumeEXT(depth_shift <  1.0);
+        assumeEXT(depth_shift > -1.0);
         // vec2 clip_shift = (screen_shift)*2.0;
         // vec3 relative_pos = get_shift_from_depth(depth_shift, clip_shift);        
         vec3 relative_pos = 

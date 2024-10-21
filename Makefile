@@ -109,6 +109,12 @@ _SHADERS += $(wildcard $(SHADER_SRC_DIR)/*.comp)
 _SHADERS += $(wildcard $(SHADER_SRC_DIR)/*.geom)
 _TARGETS = $(patsubst $(SHADER_SRC_DIR)/%, $(SHADER_OUT_DIR)/%.spv, $(_SHADERS))
 
+# spirv-opt optimized version. It is ~0.002% faster
+# $(SHADER_OUT_DIR)/%.spv.temp: $(SHADER_SRC_DIR)/% $(SHADERS_EXTRA_DEPEND)
+# 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
+# $(SHADER_OUT_DIR)/%.spv: $(SHADER_OUT_DIR)/%.spv.temp
+# 	spirv-opt $< -o $@ -O
+
 $(SHADER_OUT_DIR)/%.spv: setup
 $(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/% $(SHADERS_EXTRA_DEPEND)
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)

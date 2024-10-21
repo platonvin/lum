@@ -212,6 +212,7 @@ void main() {
     
     float fraction = near;
     // [[loop]] 
+    float time = ubo.timeseed;
     for(int i=0; i<max_steps; i++){
         fraction += step_size;
             vec2 clip_pos = gl_FragCoord.xy / ubo.frame_size * 2.0 - 1.0;
@@ -220,15 +221,15 @@ void main() {
             vec3 noise_clip_pos = voxel_pos / 32.0;
         vec4 noises;
                 vec3 wind_direction = vec3(1,0,0);
-                mat2 wind_rotate = rotatem(1.6);
+                const mat2 wind_rotate = rotatem(1.6);
             //TODO: derivatives? dFxy possibly solves mem access 
-            noises.x = texture(noise, noise_clip_pos/1.0 + wind_direction*ubo.timeseed/3500.0).x;
+            noises.x = texture(noise, noise_clip_pos/1.0 + wind_direction*time/3500.0).x;
                 wind_direction.xy *= wind_rotate;
-            noises.y = texture(noise, noise_clip_pos/2.1 + wind_direction*ubo.timeseed/3000.0).y;
+            noises.y = texture(noise, noise_clip_pos/2.1 + wind_direction*time/3000.0).y;
                 wind_direction.xy *= wind_rotate;
-            noises.z = texture(noise, noise_clip_pos/3.2 + wind_direction*ubo.timeseed/2500.0).z;
+            noises.z = texture(noise, noise_clip_pos/3.2 + wind_direction*time/2500.0).z;
                 wind_direction.xy *= wind_rotate;
-            noises.w = texture(noise, noise_clip_pos/4.3 + wind_direction*ubo.timeseed/2000.0).w;
+            noises.w = texture(noise, noise_clip_pos/4.3 + wind_direction*time/2000.0).w;
 
         float close_to_border = clamp(diff,0.1,16.0)/16.0;
 

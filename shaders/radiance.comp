@@ -149,6 +149,8 @@ Material GetMat(in int voxel){
     // mat.transparancy = 1.0 - texelFetch(voxelPalette, ivec2(3,voxel), 0).r;
     mat.emmitance    =       texelFetch(voxelPalette, ivec2(4,voxel), 0).r;
     mat.roughness    =       texelFetch(voxelPalette, ivec2(5,voxel), 0).r;
+    assumeEXT((mat.emmitance >= 0));
+    assumeEXT((mat.roughness >= 0));
     return mat;
 }
 
@@ -199,6 +201,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
     fraction = 0;
     // [[loop]]
     while (true) {
+        assumeEXT(fraction < max_dist);
         fraction += 0.5;
 
         vec3 pos = origin + direction*fraction;
@@ -213,6 +216,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
                 vec3 block_corner = box_precomp*one_div_dir + temp;
                 
                 float _f = min(block_corner.x, min(block_corner.y, block_corner.z));
+                assumeEXT(_f <= 16.0*sqrt(3.0));
                 float f = max(_f,0.01); //safity
                 // float f = clamp(_f,0,16.0*sqrt(3.0)); //safity
 
