@@ -11,23 +11,10 @@ precision highp float;
 precision highp int;
 //highp
 
-// #extension GL_EXT_shader_explicit_arithmetic_types : enable
-// #extension GL_EXT_control_flow_attributes : enable
+// #include "../common/ext.glsl"
+#include "../common/ubo.glsl"
 
 layout(location = 0) out vec4 frame_color;
-
-
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj; 
-    vec2 frame_size;
-    int timeseed;
-} ubo;
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput matNorm;
 layout(set = 0, binding = 2) uniform sampler2D depthBuffer;
 

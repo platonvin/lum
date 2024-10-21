@@ -5,9 +5,6 @@
 precision highp int;
 precision highp float;
 
-// #extension GL_EXT_shader_8bit_storage : enable
-// #extension GL_EXT_shader_16bit_storage : enable
-
 layout(location = 0) in lowp uvec3 posIn;
 
 //no reason to move up in pipeline cause sm load is like ~ 6% in vs

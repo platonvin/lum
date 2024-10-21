@@ -3,17 +3,8 @@
 // layout (location = 0) out vec2 outUV;
 layout (location = 0) out float end_depth;
 
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
 
 layout(push_constant) uniform restrict readonly constants{
     vec4 originSize;

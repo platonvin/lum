@@ -7,15 +7,13 @@ it is basically cascade heightmap sampling
 rendered via instanced triangle strips that represent long thin rectangles
 can probably be optimized by few times
 */
+#include "common/ubo.glsl"
 
 layout(push_constant) uniform readonly restrict constants{
     vec4 shift;
     int size;
     int time; //that thing that no one can define 
 } pco;
-layout(binding = 0, set = 0) uniform readonly restrict UniformBufferObject {
-    mat4 trans_w2s;
-} ubo;
 layout(set = 0, binding = 1) uniform sampler2D state;
 
 layout(location = 0) out vec3 orig;

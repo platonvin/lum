@@ -4,27 +4,13 @@
 precision varp int;
 precision varp float;
 
-#extension GL_EXT_shader_8bit_storage : enable
-#extension GL_EXT_shader_16bit_storage : enable
-#extension GL_EXT_shader_explicit_arithmetic_types : enable
-#extension GL_EXT_scalar_block_layout : enable
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
 
 layout(location = 0) in lowp uvec3 posIn;
 layout(location = 0) out vec3 sample_point;
 layout(location = 1) out flat uint normal_encoded_packed;
 // layout(location = 2) out vec3 n;
-
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
 
 layout(scalar, push_constant) uniform restrict readonly constants{
     vec4 rot;

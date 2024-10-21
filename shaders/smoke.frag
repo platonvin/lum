@@ -1,27 +1,15 @@
 #version 450
 
-#extension GL_EXT_shader_8bit_storage : enable
-#extension GL_EXT_control_flow_attributes : enable
-
-// layout(location = 0) in vec3 zero_origin;
-// layout(location = 0) in vec2 clip_pos;
-layout(location = 0) out vec4 smoke_color;
-
 precision highp float;
 precision highp int;
 
 //dont swap
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
+
+// layout(location = 0) in vec3 zero_origin;
+// layout(location = 0) in vec2 clip_pos;
+layout(location = 0) out vec4 smoke_color;
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput smoke_depth_far;
 layout(input_attachment_index = 0, set = 0, binding = 2) uniform subpassInput smoke_depth_near;
 layout(set = 0, binding = 3, rgba16) uniform restrict readonly image3D radianceCache;

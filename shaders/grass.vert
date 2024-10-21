@@ -13,17 +13,9 @@ but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 *1) Measurements showed that i clearly was wrong. But strip still faster
 */
 
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
+
 layout(set = 0, binding = 1) uniform sampler2D state;
 
 layout(push_constant) uniform restrict readonly PushConstants{

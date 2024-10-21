@@ -3,24 +3,13 @@
 /*
 this is basically ray tracing shader
 */
-#extension GL_EXT_control_flow_attributes : enable
-
-
 precision highp int;
 precision highp float;
-// #define highp highp
 
-layout(binding = 0, set = 0) restrict readonly uniform UniformBufferObject  {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
+
 layout(set = 0, binding = 1) uniform usampler2D matNorm;
 layout(set = 0, binding = 2) uniform sampler2D depthBuffer;
 layout(set = 0, binding = 3) uniform isampler3D blocks;

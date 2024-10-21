@@ -5,16 +5,10 @@
 precision highp int;
 precision highp float;
 
-#extension GL_EXT_shader_8bit_storage : enable
-#extension GL_EXT_shader_16bit_storage : enable
-#extension GL_EXT_shader_explicit_arithmetic_types : enable
-#extension GL_EXT_scalar_block_layout : enable
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
 
 layout(location = 0) in lowp uvec3 posIn;
-
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-} ubo;
 
 layout(push_constant) uniform restrict readonly constants{
     i16vec4 shift;

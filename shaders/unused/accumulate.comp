@@ -5,9 +5,6 @@
 precision highp float;
 precision highp int;
 
-// #extension GL_KHR_shader_subgroup_arithmetic : enable
-// #extension GL_KHR_shader_subgroup_shuffle : enable
-
 layout(set = 0, binding = 0, rgba16) uniform image2D  new_frame; //out
 layout(set = 0, binding = 1, rgba16) uniform image2D  old_frame; //in
 layout(set = 0, binding = 2, rgba8_snorm) uniform image2D  new_matNorm;

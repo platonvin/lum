@@ -1,8 +1,8 @@
 #version 450
 
-// #extension vertexPipelineStoresAndAtomics : enable
-
 precision highp float;
+// #include "common/ext.glsl"
+#include "common/ubo.glsl"
 
 layout(location = 0) in  vec3 posIn;
 layout(location = 1) in  vec3 velIn; //why not maybe effects
@@ -16,17 +16,7 @@ layout(location = 0) out VS_OUT {
     flat uint mat;
 } vs_out;
 
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+
 layout(set = 0, binding = 1, r16i) uniform restrict  readonly iimage3D blocks;
 layout(set = 0, binding = 2, r8ui) uniform restrict writeonly uimage3D blockPalette;
 

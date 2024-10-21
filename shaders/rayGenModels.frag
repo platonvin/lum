@@ -5,22 +5,8 @@ layout(early_fragment_tests) in;
 precision varp int;
 precision varp float;
 
-#extension GL_EXT_shader_8bit_storage : enable
-#extension GL_EXT_shader_16bit_storage : enable
-#extension GL_EXT_shader_explicit_arithmetic_types : enable
-#extension GL_EXT_scalar_block_layout : enable
-
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
 
 layout(binding = 0, set = 1) uniform usampler3D modelVoxels;
 

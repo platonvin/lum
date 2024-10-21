@@ -4,12 +4,7 @@
 precision highp int;
 precision highp float;
 
-#extension GL_KHR_shader_subgroup_arithmetic : enable
-// #extension GL_EXT_control_flow_attributes : enable
-#extension GL_EXT_shader_8bit_storage : enable
-// #extension GL_EXT_shader_16bit_storage : enable
-#extension GL_EXT_shader_explicit_arithmetic_types : enable
-// #extension GL_EXT_scalar_block_layout : enable
+#include "common/ext.glsl"
 
 //well, its not really radiance. Its more of a minecraft lighting but raytraced
 //its not that realistic but imho looks good
@@ -383,7 +378,7 @@ void main(){
     vec3 ray_light = trace_ray(ray_pos, ray_dir);
     // subgroupBarrier();
     ray_light = subgroupAdd(ray_light) / float(clamp(RAYS_PER_PROBE, 0, gl_SubgroupSize));
-    // subgroupBarrier();
+    // subgroupBarrier(); 
 
     //version that syncs globally via VkBarriers
     //ATTENTION: limited to 50% perfomance

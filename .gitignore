@@ -36,3 +36,4 @@ vcpkg_installed
 *.tar
 /bin
 /VGD.md
+/VGD_PR.md

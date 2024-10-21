@@ -7,20 +7,8 @@ ambient + "radiant" diffuse + lightmaps
 
 precision highp int;
 precision highp float;
-// #extension GL_KHR_shader_subgroup_arithmetic : enable
-#extension GL_EXT_control_flow_attributes : enable
-
-layout(binding = 0, set = 0) uniform restrict readonly UniformBufferObject {
-    mat4 trans_w2s;
-    vec4 campos;
-    vec4 camdir;
-    vec4 horizline_scaled;
-    vec4 vertiline_scaled;
-    vec4 globalLightDir;
-    mat4 lightmap_proj;
-    vec2 frame_size;
-    int timeseed;
-} ubo;
+#include "common/ext.glsl"
+#include "common/ubo.glsl"
 
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput matNorm;
 layout(input_attachment_index = 1, set = 0, binding = 2) uniform  subpassInput depthBuffer;
