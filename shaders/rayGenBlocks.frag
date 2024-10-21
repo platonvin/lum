@@ -40,18 +40,16 @@ int GetVoxel(in int block_id, ivec3 relative_voxel_pos){
 
 void main() {
     uint sample_block = unpackUint2x16(bunorm.x).x;
-
     uint normal_encoded = unpackUint2x16(bunorm.x).y;
-    uint s = (normal_encoded & (1<<7))>>7; //0 if positive 1 if negative
-    uvec3 axis = uvec3(
-        ((normal_encoded & (1<<0))>>0),
-        ((normal_encoded & (1<<1))>>1),
-        ((normal_encoded & (1<<2))>>2)
-    );
-    ivec3 inorm = ivec3(axis) * (1 - int(s)*2);
 
-    uvec3 _normal_encoded = uvec3(((ivec3(inorm) + 1)*255)/2);
-    outMatNorm.yzw = uvec3(_normal_encoded);
+    uvec3 axis = uvec3(
+        normal_encoded        & 01,
+        (normal_encoded >> 1) & 01,
+        (normal_encoded >> 2) & 01
+    );
+    int _sign = 1 - 2 * int((normal_encoded >> 7) & 01);
+    ivec3 inorm = ivec3(axis) * _sign;
+    outMatNorm.yzw = uvec3((ivec3(inorm + 1) * 255) / 2);
     // outMatNorm.x = 9;
 
     ivec3 ipos = ivec3(sample_point);

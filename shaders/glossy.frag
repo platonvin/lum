@@ -80,23 +80,6 @@ ivec2 GetVoxel(in vec3 pos){
     return ivec2(voxel, block_id);
 }
 
-// bool checkVoxel(in ivec3 pos){    
-//     ivec3 block_pos = pos / 16;
-//     int block_id = GetBlock(block_pos);
-
-//     ivec3 relative_voxel_pos = pos % 16;
-//     ivec3 bit_pos = relative_voxel_pos;
-//           bit_pos.x /= 8;
-//     int bit_num = relative_voxel_pos.x%8;
-
-//     ivec3 voxel_pos = voxel_in_bit_palette(bit_pos, block_id);
-//     uint voxel = (imageLoad(bitPalette, voxel_pos).x);
-
-//     bool has_voxel = ((voxel & (1 << bit_num))!=0);
-    
-//     return has_voxel;
-// }
-
 Material GetMat(in int voxel){
     Material mat;
 
@@ -154,6 +137,7 @@ bool CastRay_fast(in vec3 origin, in vec3 direction,
     fraction = 0;
     // [[loop]]
     while (true) {
+
         fraction += 0.5;
 
         vec3 pos = origin + direction*fraction;
@@ -378,20 +362,13 @@ vec3 rotateAxis(vec3 p, vec3 axis, float angle) {
     return mix(dot(axis, p) * axis, p, cos(angle)) + cross(axis, p) * sin(angle);
 }
 
-
-// vec3 load_norm(){
-//     vec3 norm = ((subpassLoad(matNorm).gba)/255.0)*2.0 - 1.0;
-//     return norm;
-// }
-// int load_mat(){
-//     int mat = int(round(subpassLoad(matNorm).x));
-//     return mat;
-// }
 vec3 load_norm(ivec2 pixel){
+//     vec3 norm = ((subpassLoad(matNorm).gba)/255.0)*2.0 - 1.0;
     vec3 norm = (((texelFetch(matNorm, pixel, 0).gba)/255.0)*2.0 - 1.0);
     return norm;
 }
 int load_mat(ivec2 pixel){
+//     int mat = int(round(subpassLoad(matNorm).x));
     int mat = int((texelFetch(matNorm, pixel, 0).x));
     return mat;
 }

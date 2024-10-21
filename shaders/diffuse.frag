@@ -58,7 +58,6 @@ vec3 sample_radiance(vec3 position, vec3 normal){
 
         vec3 trilinear = mix(1.0-alpha, alpha, vec3(offset));
         probe_weight = trilinear.x * trilinear.y * trilinear.z;
-
         
         /*
         actually, not using directional weight **might** increase quality 

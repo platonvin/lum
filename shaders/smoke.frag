@@ -185,13 +185,13 @@ vec3 encode_color(vec3 color){
 void main() {
     vec3 direction = (ubo.camdir.xyz);
 
-    float near = (load_depth_near());
-    float  far = (load_depth_far());
+    const float near = (load_depth_near());
+    const float  far = (load_depth_far());
 
-    float diff = (far-near);
+    const float diff = (far-near);
 
-    int max_steps = 8; //does not really matter
-    float step_size = diff/float(max_steps);
+    const int max_steps = 8; //does not really matter
+    const float step_size = diff/float(max_steps);
 
     //https://en.wikipedia.org/wiki/Beer%E2%80%93Lambert_law
     //I = I0 * exp(-K * L)

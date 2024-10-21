@@ -8,3 +8,5 @@
 #extension GL_EXT_scalar_block_layout : enable
 
 #extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_EXT_shader_explicit_arithmetic_types : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : enable
