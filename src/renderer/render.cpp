@@ -9,6 +9,7 @@
 
 #include <glm/gtx/quaternion.hpp>
 #include "ao_lut.hpp"
+#include "defines/cache.hpp"
 
 using std::array;
 using std::vector;
@@ -76,11 +77,11 @@ void LumRenderer::init (Settings settings) {
     render.createSwapchainDependent = [this]() -> VkResult {return LumRenderer::createSwapchainDependent();};
     render.cleanupSwapchainDependent = [this]() -> VkResult {return LumRenderer::cleanupSwapchainDependent();};
 
-println
+TRACE();
     gen_perlin_2d();
-println
+TRACE();
     gen_perlin_3d();
-println
+TRACE();
 }
 
 void LumRenderer::createImages() {
@@ -103,7 +104,7 @@ void LumRenderer::createImages() {
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_DEPTH_BIT,
     {lightmapExtent.width, lightmapExtent.height, 1});
-println
+TRACE();
     render.createImageStorages (&radianceCache,
         VK_IMAGE_TYPE_3D,
         RADIANCE_FORMAT,
@@ -112,7 +113,7 @@ println
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
     extent3d(world_size)); //TODO: dynamic
-println
+TRACE();
     render.createImageStorages (&originBlockPalette,
         VK_IMAGE_TYPE_3D,
         VK_FORMAT_R8_UINT,
@@ -184,7 +185,7 @@ println
     render.mapBufferStorages (&gpuParticles);
     render.mapBufferStorages (&stagingWorld);
     render.mapBufferStorages (&stagingRadianceUpdates);
-println
+TRACE();
 }
 
 void LumRenderer::setupDescriptors() {
@@ -198,7 +199,7 @@ void LumRenderer::setupDescriptors() {
     render.deferDescriptorSetup (&lightmapModelsPipe.setLayout, &lightmapModelsPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&radiancePipe.setLayout, &radiancePipe.sets, {
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
@@ -207,7 +208,7 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RD_FIRST, &gpuRadianceUpdates, {}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&diffusePipe.setLayout, &diffusePipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -217,27 +218,27 @@ println
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &lightmap, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
         // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&aoPipe.setLayout, &aoPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&tonemapPipe.setLayout, &tonemapPipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresFrame, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&fillStencilGlossyPipe.setLayout, &fillStencilGlossyPipe.sets, {
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&fillStencilSmokePipe.setLayout, &fillStencilSmokePipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&glossyPipe.setLayout, &glossyPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &highresMatNorm, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
@@ -247,7 +248,7 @@ println
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&smokePipe.setLayout, &smokePipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RD_FIRST, {/*empty*/}, &farDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -255,7 +256,7 @@ println
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, &perlinNoise3d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     // create_DescriptorSetLayout({
     // VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // per-quad attributes
     // },
@@ -274,7 +275,7 @@ println
     render.deferDescriptorSetup (&raygenModelsPipe.setLayout, &raygenModelsPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-println
+TRACE();
     render.deferDescriptorSetup (&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {/*empty*/}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
@@ -332,7 +333,7 @@ println
 void LumRenderer::createPipilines() {
     //that is why NOT abstracting vulkan is also an option
     //if you cannot guess what things mean by just looking at them maybe read old (0.0.3) release src
-println
+TRACE();
     lightmapBlocksPipe.subpassId = 0;
     render.createRasterPipeline (&lightmapBlocksPipe, 0, {
         {"shaders/compiled/lightmapBlocks.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -362,7 +363,7 @@ println
     },
     sizeof (PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {NO_BLEND}, (12), DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     raygenModelsPipe.subpassId = 1;
     render.createRasterPipeline (&raygenModelsPipe, raygenModelsPushLayout, {
         {"shaders/compiled/rayGenModels.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -372,7 +373,7 @@ println
     },
     sizeof (PackedVoxelCircuit), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {NO_BLEND}, (sizeof (vec4) * 3), DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     raygenParticlesPipe.subpassId = 2;
     render.createRasterPipeline (&raygenParticlesPipe, 0, {
         {"shaders/compiled/rayGenParticles.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -386,7 +387,7 @@ println
     },
     sizeof (Particle), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
     render.swapChainExtent, {NO_BLEND}, 0, DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     raygenGrassPipe.subpassId = 3;
     render.createRasterPipeline (&raygenGrassPipe, 0, {
         {"shaders/compiled/grass.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -394,7 +395,7 @@ println
     }, {/*empty*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     render.swapChainExtent, {NO_BLEND}, sizeof (vec4) + sizeof (int) * 2 + sizeof (int) * 2, DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     raygenWaterPipe.subpassId = 4;
     render.createRasterPipeline (&raygenWaterPipe, 0, {
         {"shaders/compiled/water.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -402,7 +403,7 @@ println
     }, {/*empty*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
     render.swapChainExtent, {NO_BLEND}, sizeof (vec4) + sizeof (int) * 2, DEPTH_TEST_READ_BIT|DEPTH_TEST_WRITE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     diffusePipe.subpassId = 0;
     render.createRasterPipeline (&diffusePipe, 0, {
         {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -417,7 +418,7 @@ println
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_MIX}, 0, DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     fillStencilGlossyPipe.subpassId = 2;
     render.createRasterPipeline (&fillStencilGlossyPipe, 0, {
         {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -434,7 +435,7 @@ println
         .writeMask = 0b01, //01 for reflection
         .reference = 0b01,
     });
-println
+TRACE();
     fillStencilSmokePipe.subpassId = 3;
     render.createRasterPipeline (&fillStencilSmokePipe, 0, {
         {"shaders/compiled/fillStencilSmoke.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -451,7 +452,7 @@ println
         .writeMask = 0b10, //10 for smoke
         .reference = 0b10,
     });
-println
+TRACE();
     glossyPipe.subpassId = 4;
     render.createRasterPipeline (&glossyPipe, 0, {
         {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -468,7 +469,7 @@ println
         .writeMask = 0b00, //01 for glossy
         .reference = 0b01,
     });
-println
+TRACE();
     smokePipe.subpassId = 5;
     render.createRasterPipeline (&smokePipe, 0, {
         {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -485,7 +486,7 @@ println
         .writeMask = 0b00, //10 for smoke
         .reference = 0b10,
     });
-println
+TRACE();
     tonemapPipe.subpassId = 6;
     render.createRasterPipeline (&tonemapPipe, 0, {
         {"shaders/compiled/fullscreenTriag.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -493,7 +494,7 @@ println
     }, {/*fullscreen pass*/},
     0, VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {NO_BLEND}, 0, DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     overlayPipe.subpassId = 7;
     render.createRasterPipeline (&overlayPipe, 0, {
         {"shaders/compiled/overlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -505,23 +506,23 @@ println
     },
     sizeof (Rml::Vertex), VK_VERTEX_INPUT_RATE_VERTEX, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     render.swapChainExtent, {BLEND_MIX}, sizeof (vec4) + sizeof (mat4), DEPTH_TEST_NONE_BIT, VK_COMPARE_OP_LESS, VK_CULL_MODE_NONE, NO_DISCARD, NO_STENCIL);
-println
+TRACE();
     render.createComputePipeline (&radiancePipe, 0, "shaders/compiled/radiance.comp.spv", sizeof (int) * 4, VK_PIPELINE_CREATE_DISPATCH_BASE_BIT);
-println
+TRACE();
     render.createComputePipeline (&updateGrassPipe, 0, "shaders/compiled/updateGrass.comp.spv", sizeof (vec2) * 2 + sizeof (float), 0);
-println
+TRACE();
     render.createComputePipeline (&updateWaterPipe, 0, "shaders/compiled/updateWater.comp.spv", sizeof (float) + sizeof (vec2) * 2, 0);
-println
+TRACE();
     render.createComputePipeline (&genPerlin2dPipe, 0, "shaders/compiled/perlin2.comp.spv", 0, 0);
-println
+TRACE();
     render.createComputePipeline (&genPerlin3dPipe, 0, "shaders/compiled/perlin3.comp.spv", 0, 0);
-println
+TRACE();
     // render.createComputePipeline(&dfxPipe,0, "shaders/compiled./dfx.spv", 0, 0);
     // render.createComputePipeline(&dfyPipe,0, "shaders/compiled./dfy.spv", 0, 0);
     // render.createComputePipeline(&dfzPipe,0, "shaders/compiled./dfz.spv", 0, 0);
     // render.createComputePipeline(&bitmaskPipe,0, "shaders/compiled/bit.mask.spv", 0, 0);
     render.createComputePipeline (&mapPipe, mapPushLayout, "shaders/compiled/map.comp.spv", sizeof (mat4) + sizeof (ivec4), 0);
-println
+TRACE();
 }
 
 VkResult LumRenderer::createSwapchainDependent() {
@@ -545,7 +546,7 @@ VkResult LumRenderer::createSwapchainDependent() {
         }, {
             {{&lightmapBlocksPipe, &lightmapModelsPipe}, {}, {}, &lightmap}
         }, &lightmapRpass);
-println
+TRACE();
     render.createRenderPass({
             {&highresMatNorm, DontCare, Store, DontCare, DontCare},
             {&highresDepthStencil, Clear, Store, Clear, Store, {.depthStencil = {.depth = 1}}},
@@ -556,7 +557,7 @@ println
             {{&raygenGrassPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
             {{&raygenWaterPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
         }, &gbufferRpass);
-println
+TRACE();
     render.createRenderPass({
             {&highresMatNorm,      Load    , DontCare, DontCare, DontCare},
             {&highresFrame,        DontCare, DontCare, DontCare, DontCare},
@@ -574,9 +575,9 @@ println
             {{&tonemapPipe},           {&highresFrame},                         {&render.swapchainImages},   NULL},
             {{&overlayPipe},           {/*empty*/},                             {&render.swapchainImages},   NULL},
         }, &shadeRpass);
-println
+TRACE();
     setupDescriptors();
-println
+TRACE();
     createPipilines();
     
     return VK_SUCCESS;
@@ -584,7 +585,7 @@ println
 
 void LumRenderer::createSwapchainDependentImages() {
     // int mipmaps;
-println
+TRACE();
     render.createImageStorages (&highresMatNorm,
         VK_IMAGE_TYPE_2D,
         MATNORM_FORMAT,
@@ -694,7 +695,7 @@ VkResult LumRenderer::cleanupSwapchainDependent() {
     render.destroyRenderPass (&lightmapRpass);
     render.destroyRenderPass (&gbufferRpass);
     render.destroyRenderPass (&shadeRpass);
-println
+TRACE();
     render.destroyComputePipeline ( &mapPipe);
     vkDestroyDescriptorSetLayout (render.device, mapPushLayout, NULL);
     render.destroyComputePipeline ( &raytracePipe);
@@ -724,21 +725,21 @@ println
     render.destroyRasterPipeline (&tonemapPipe);
     render.destroyRasterPipeline (&overlayPipe);
     
-println
+TRACE();
     render.destroyImages (&highresFrame);
-println
+TRACE();
     render.destroyImages (&highresDepthStencil);
-println
+TRACE();
     for(auto v : stencilViewForDS){
         vkDestroyImageView (render.device, v, NULL);
     }
-println
+TRACE();
     render.destroyImages (&highresMatNorm);
-println
+TRACE();
     render.destroyImages (&farDepth);
-println
+TRACE();
     render.destroyImages (&nearDepth);
-println
+TRACE();
 
     return VK_SUCCESS;
 }
@@ -806,23 +807,23 @@ void LumRenderer::update_light_transform() {
 
 // #include <glm/gtx/string_cast.hpp>
 void LumRenderer::start_frame() {
-    println
+    TRACE();
     camera.updateCamera();
-    println
+    TRACE();
     update_light_transform();
-    println
+    TRACE();
     assert(computeCommandBuffers.current());
     assert(graphicsCommandBuffers.current());
     assert(copyCommandBuffers.current());
     assert(lightmapCommandBuffers.current());
-    println
+    TRACE();
     render.start_frame({
         computeCommandBuffers.current(),
         graphicsCommandBuffers.current(),
         copyCommandBuffers.current(),
         lightmapCommandBuffers.current(),
     });
-    println
+    TRACE();
 }
 
 void LumRenderer::start_blockify() {
@@ -1222,7 +1223,8 @@ void LumRenderer::raygen_block (Mesh* block_mesh, int block_id, ivec3 shift) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     VkBuffer vertexBuffers[] = { (*block_mesh).triangles.vertexes.current().buffer};
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets);
+    BIND_CACHED((*block_mesh).triangles.vertexes.current().buffer,
+        vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets));
     /*
         int16_t block;
         i16vec3 shift;
@@ -1264,7 +1266,8 @@ void LumRenderer::raygen_model (Mesh* model_mesh) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     VkBuffer vertexBuffers[] = { (*model_mesh).triangles.vertexes.current().buffer};
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets);
+    BIND_CACHED((*model_mesh).triangles.vertexes.current().buffer,
+        vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets));
     /*
         vec4 rot;
         vec4 shift;
@@ -1310,7 +1313,8 @@ void LumRenderer::lightmap_block (Mesh* block_mesh, int block_id, ivec3 shift) {
     VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
     VkBuffer vertexBuffers[] = { (*block_mesh).triangles.vertexes.current().buffer};
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
+    BIND_CACHED((*block_mesh).triangles.vertexes.current().buffer,
+        vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets));
     /*
         int16_t block;
         i16vec3 shift;
@@ -1341,7 +1345,8 @@ void LumRenderer::lightmap_model (Mesh* model_mesh) {
     VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
     VkBuffer vertexBuffers[] = { (*model_mesh).triangles.vertexes.current().buffer};
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
+    BIND_CACHED((*model_mesh).triangles.vertexes.current().buffer,
+         vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets));
     /*
         vec4 rot;
         vec4 shift;
@@ -1646,66 +1651,66 @@ void LumRenderer::end_frame() {
         graphicsCommandBuffers.current(),
     });
 
-println
+TRACE();
     copyCommandBuffers.move(); //runtime copies for ui. Also does first frame resources
-println
+TRACE();
     computeCommandBuffers.move();
-println
+TRACE();
     lightmapCommandBuffers.move();
-println
+TRACE();
     graphicsCommandBuffers.move();
-println
+TRACE();
     lightmap.move();
-println
+TRACE();
     highresFrame.move();
-println
+TRACE();
     highresDepthStencil.move();
-println
+TRACE();
     highresMatNorm.move();
-println
+TRACE();
     
     stencilViewForDS.move();
-println
+TRACE();
     farDepth.move(); //represents how much should smoke traversal for
-println
+TRACE();
     nearDepth.move(); //represents how much should smoke traversal for
-println
+TRACE();
     // maskFrame.move(); //where lowres renders to. Blends with highres afterwards
-println
+TRACE();
     stagingWorld.move();
-println
+TRACE();
     world.move(); //can i really use just one?
-println
+TRACE();
     radianceCache.move();
-println
+TRACE();
     originBlockPalette.move();
-println
+TRACE();
     // distancePalette.move();
-println
+TRACE();
     // bitPalette.move(); //bitmask of originBlockPalette
-println
+TRACE();
     materialPalette.move();
-println
+TRACE();
     lightUniform.move();
-println
+TRACE();
     uniform.move();
-println
+TRACE();
     aoLutUniform.move();
-println
+TRACE();
     gpuRadianceUpdates.move();
-println
+TRACE();
     stagingRadianceUpdates.move();
-println
+TRACE();
     gpuParticles.move(); //multiple because cpu-related work
-println
+TRACE();
     perlinNoise2d.move(); //full-world grass shift (~direction) texture sampled in grass
-println
+TRACE();
     grassState.move(); //full-world grass shift (~direction) texture sampled in grass
-println
+TRACE();
     waterState.move(); //~same but water
-println
+TRACE();
     perlinNoise3d.move(); //4 channels of different tileable noise for volumetrics
-println
+TRACE();
 
     // stagingWorldMapped.move();
     // stagingRadianceUpdatesMapped.move();
@@ -1716,7 +1721,7 @@ println
     // #ifdef MEASURE_PERFOMANCE
     // #endif
     // printl(timeTakenByRadiance)
-println
+TRACE();
 }
 
 tuple<int, int> get_block_xy (int N) {

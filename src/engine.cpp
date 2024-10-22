@@ -129,7 +129,7 @@ void Engine::setup_graphics(){
     Settings settings = {};
         settings.vsync = false; //every time deciding to which image to render, wait until monitor draws current. Icreases perfomance, but limits fps
         settings.fullscreen = false;
-        settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
+        settings.debug = true; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
         settings.timestampCount = 48;
         settings.profile = true; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
         settings.fif = 2; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
@@ -143,20 +143,35 @@ void Engine::setup_graphics(){
         settings.deviceFeatures12.storagePushConstant8 = VK_TRUE;
         settings.deviceFeatures12.shaderInt8 = VK_TRUE;
         settings.deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
+        VkPhysicalDeviceShaderExpectAssumeFeaturesKHR 
+            expect;
+            expect.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EXPECT_ASSUME_FEATURES_KHR;
+            expect.shaderExpectAssume = VK_TRUE;
+        void* temp = settings.physical_features2.pNext;
+        settings.physical_features2.pNext = &expect;
+        expect.pNext = temp;
+        
+        settings.deviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME); //simplifies renderer for negative cost lol
+        settings.deviceExtensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME); //pco / ubo +perfomance
+        settings.deviceExtensions.push_back(VK_KHR_16BIT_STORAGE_EXTENSION_NAME); //just explicit control
+        settings.deviceExtensions.push_back(VK_KHR_8BIT_STORAGE_EXTENSION_NAME); //just explicit control
+        settings.deviceExtensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+        settings.deviceExtensions.push_back(VK_KHR_SHADER_EXPECT_ASSUME_EXTENSION_NAME);
+
     render.init(settings);
-println
+TRACE();
     vkDeviceWaitIdle(render.render.device);
-println
+TRACE();
 
     render.load_scene("assets/scene");
-println
+TRACE();
     // for(int xx=0; xx< render.world_size.x; xx++){
     // for(int yy=0; yy< render.world_size.y; yy++){
     //     render.origin_world(xx,yy,0) = 2;
     // }}
     // render.origin_world.set(0);
         render.load_mesh(&tank_body, "assets/tank_body.vox");
-println
+TRACE();
         tank_body.shift += vec3(13.1,14.1,3.1)*16.0f;
         render.load_mesh(&tank_head, "assets/tank_head.vox");
 
@@ -165,11 +180,11 @@ println
 
         render.load_mesh(&tank_lf_leg, "assets/tank_lf_rb_leg.vox");
         render.load_mesh(&tank_rb_leg, "assets/tank_lf_rb_leg.vox");
-println
+TRACE();
 
     block_palette = (Block**)calloc(render.static_block_palette_size, sizeof(Block*));
     
-println
+TRACE();
     //block_palette[0] is "air"
     render.load_block(&block_palette[1], "assets/dirt.vox");
     render.load_block(&block_palette[2], "assets/grass.vox");
@@ -185,21 +200,21 @@ println
     render.load_block(&block_palette[12], "assets/bark.vox");
     render.load_block(&block_palette[13], "assets/wood.vox");
     render.load_block(&block_palette[14], "assets/planks.vox");
-println
+TRACE();
 
     render.updateBlockPalette(block_palette);
-println
+TRACE();
     render.updateMaterialPalette(render.mat_palette);
 
     vkDeviceWaitIdle(render.render.device);
-println
+TRACE();
 }
 void Engine::setup_ui(){
-println
+TRACE();
     ui.renderer = &render;
     ui.setup();
     vkDeviceWaitIdle(render.render.device);
-println
+TRACE();
 }
 
 void Engine::update_system(){
@@ -563,13 +578,13 @@ void Engine::cull_meshes(){
 
 void Engine::draw()
 {
-println
+TRACE();
     render.start_frame();
-println
+TRACE();
 
         // render.start_compute();
             render.start_blockify();
-println
+TRACE();
                 render.blockify_mesh(&tank_body);
                 render.blockify_mesh(&tank_head);
             
@@ -578,33 +593,33 @@ println
                 render.blockify_mesh(&tank_lf_leg);
                 render.blockify_mesh(&tank_rb_leg);
             render.end_blockify();
-println
+TRACE();
             render.update_radiance();
             // render.recalculate_df(); // currently unused. per-voxel Distance Field 
             // render.recalculate_bit(); // currently unused. Bitpacking, like (block==Air) ? 0 : 1 
-println
+TRACE();
             render.updade_grass({});
             render.updade_water();
-println
+TRACE();
             render.exec_copies();
-println
+TRACE();
                 render.start_map();
-println
+TRACE();
                     render.map_mesh(&tank_body);
                     render.map_mesh(&tank_head);
                     render.map_mesh(&tank_rf_leg);
-println
+TRACE();
                     render.map_mesh(&tank_lb_leg);
                     render.map_mesh(&tank_lf_leg);
                     render.map_mesh(&tank_rb_leg);
-println
+TRACE();
                 render.end_map();
-println
+TRACE();
             render.end_compute();
                 // render.raytrace();
-println
+TRACE();
                 render.start_lightmap();
-println
+TRACE();
                 //yeah its wrong
                 render.lightmap_start_blocks();
                     for(auto b : block_que){
@@ -613,7 +628,7 @@ println
                             block_mesh->shift = vec3(b.pos);
                         render.lightmap_block(block_mesh, b.index, b.pos);
                     }
-println
+TRACE();
                 render.lightmap_start_models();
                     render.lightmap_model(&tank_body);
                     render.lightmap_model(&tank_head);
@@ -622,10 +637,10 @@ println
                     render.lightmap_model(&tank_lf_leg);
                     render.lightmap_model(&tank_rb_leg);
                 render.end_lightmap();
-println
+TRACE();
 
                 render.start_raygen();
-println  
+TRACE();  
                 // printl(block_que.size());
                 render.raygen_start_blocks();
                     for(auto b : block_que){
@@ -643,15 +658,15 @@ println
                      
                     render.raygen_model(&tank_rf_leg);
                     render.raygen_model(&tank_lb_leg);
-println
+TRACE();
                     render.raygen_model(&tank_lf_leg);
                     render.raygen_model(&tank_rb_leg);
 
-println
+TRACE();
                 render.update_particles();
-println
+TRACE();
                 render.raygen_map_particles();
-println      
+TRACE();      
                 render.raygen_start_grass();
                     // for(int xx=0; xx<16;xx++){
                     // for(int yy=0; yy<16;yy++){
@@ -665,40 +680,40 @@ println
                     // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*1,16,0), 16);
                     // render.raygen_map_grass(&grass, vec4(128+16*1,128+16*2,16,0), 16);
                     // render.raygen_map_grass(&grass, vec4(128+16*2,128+16*2,16,0), 16);
-println
+TRACE();
 
                 render.raygen_start_water();
                     for(auto w : water_que){
                         render.raygen_map_water(vec4(w.pos,0), 32);
                     }
                 render.end_raygen();
-println
+TRACE();
                 render.start_2nd_spass();
-println
+TRACE();
                 render.diffuse();
-println
+TRACE();
                 render.ambient_occlusion(); 
-println
+TRACE();
                 render.glossy_raygen();
-println
+TRACE();
                 render.smoke_raygen();
-println
+TRACE();
                 render.glossy();
-println
+TRACE();
                 render.smoke();
-println
+TRACE();
                 render.tonemap();
-println
+TRACE();
             render.start_ui(); 
-println
+TRACE();
                 ui.update();
-println
+TRACE();
                 ui.draw();
-println
+TRACE();
         render.end_ui(); 
-println
+TRACE();
         render.end_2nd_spass();
-println
+TRACE();
     render.end_frame();
 }
 
@@ -714,7 +729,7 @@ void Engine::update(){
     delt_time = curr_time-prev_time;
     render.deltaTime = delt_time;
 
-println
+TRACE();
     update_system();
     handle_input();
     process_physics();

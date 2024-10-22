@@ -20,16 +20,18 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
     UiMesh ui_mesh = {};
     VkDeviceSize bufferSizeV = sizeof (Rml::Vertex) * num_vertices;
     VkDeviceSize bufferSizeI = sizeof (int ) * num_indices;
-    VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    bufferInfo.size = bufferSizeV;
-    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBufferCreateInfo 
+        bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        bufferInfo.size = bufferSizeV;
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    VmaAllocationCreateInfo 
+        allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     vmaCreateBuffer (render->render.VMAllocator, &bufferInfo, &allocInfo, &ui_mesh.vertexes.buffer, &ui_mesh.vertexes.alloc, NULL);
-    bufferInfo.size = bufferSizeI;
-    bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        bufferInfo.size = bufferSizeI;
+        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     vmaCreateBuffer (render->render.VMAllocator, &bufferInfo, &allocInfo, &ui_mesh.indexes.buffer, &ui_mesh.indexes.alloc, NULL);
     void* data;
     vmaMapMemory (render->render.VMAllocator, ui_mesh.vertexes.alloc, &data);
@@ -46,22 +48,22 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
     vkCmdPushConstants (renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (ui_pc), &ui_pc);
     Image* texture_image = (Image*)texture;
     VkDescriptorImageInfo
-    textureInfo = {};
+        textureInfo = {};
     if (texture_image != NULL) {
         textureInfo.imageView = texture_image->view; //CHANGE ME
     } else {
         textureInfo.imageView = default_image->view; //CHANGE ME
     }
-    textureInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    textureInfo.sampler = render->overlaySampler;
+        textureInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        textureInfo.sampler = render->overlaySampler;
     VkWriteDescriptorSet
-    textureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    textureWrite.dstSet = NULL;
-    textureWrite.dstBinding = 0;
-    textureWrite.dstArrayElement = 0;
-    textureWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    textureWrite.descriptorCount = 1;
-    textureWrite.pImageInfo = &textureInfo;
+        textureWrite = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        textureWrite.dstSet = NULL;
+        textureWrite.dstBinding = 0;
+        textureWrite.dstArrayElement = 0;
+        textureWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        textureWrite.descriptorCount = 1;
+        textureWrite.pImageInfo = &textureInfo;
     vector<VkWriteDescriptorSet> descriptorWrites = {textureWrite};
     vkCmdPushDescriptorSetKHR (renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
     vkCmdBindVertexBuffers (renderCommandBuffer, 0, 1, vertexBuffers, offsets);
@@ -84,20 +86,23 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* ver
     // }
     VkDeviceSize bufferSizeV = sizeof (Rml::Vertex) * num_vertices;
     VkDeviceSize bufferSizeI = sizeof (int ) * num_indices;
-    VkBufferCreateInfo stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    stagingBufferInfo.size = bufferSizeV;
-    stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VmaAllocationCreateInfo stagingAllocInfo = {};
-    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkBufferCreateInfo 
+        stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        stagingBufferInfo.size = bufferSizeV;
+        stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo 
+        stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBufferV = {};
     VkBuffer stagingBufferI = {};
     VmaAllocation stagingAllocationV = {};
     VmaAllocation stagingAllocationI = {};
-    VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    bufferInfo.size = bufferSizeV;
-    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VkBufferCreateInfo 
+        bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        bufferInfo.size = bufferSizeV;
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     VmaAllocationCreateInfo allocInfo = {};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     vmaCreateBuffer (render->render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBufferV, &stagingAllocationV, NULL);
@@ -115,10 +120,11 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* ver
     memcpy (data, indices, bufferSizeI);
     vmaUnmapMemory (render->render.VMAllocator, stagingAllocationI);
     VkCommandBuffer& copyCommandBuffer = render->copyCommandBuffers.current();
-    VkBufferCopy staging_copy = {};
-    staging_copy.size = bufferSizeV;
+    VkBufferCopy 
+        staging_copy = {};
+        staging_copy.size = bufferSizeV;
     vkCmdCopyBuffer (copyCommandBuffer, stagingBufferV, ui_mesh->vertexes.buffer, 1, &staging_copy);
-    staging_copy.size = bufferSizeI;
+        staging_copy.size = bufferSizeI;
     vkCmdCopyBuffer (copyCommandBuffer, stagingBufferI, ui_mesh->indexes.buffer, 1, &staging_copy);
     render->render.bufferDeletionQueue.push_back ({{stagingBufferV, stagingAllocationV}, MAX_FRAMES_IN_FLIGHT});
     render->render.bufferDeletionQueue.push_back ({{stagingBufferI, stagingAllocationI}, MAX_FRAMES_IN_FLIGHT});

@@ -58,7 +58,7 @@ void LumRenderer::updateBlockPalette (Block** blockPalette) {
             }
         }
     }
-// println
+// TRACE();
     VkBufferCreateInfo 
         stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         stagingBufferInfo.size = bufferSize;
@@ -153,10 +153,10 @@ void LumRenderer::load_scene (const char* vox_file) {
 
     assert((char*)stored_world < buffer + buffer_size);
     
-    printl(world_size.x);
-    printl(world_size.y);
-    printl(world_size.z);
-    printl(static_block_palette_size);
+    DEBUG_LOG(world_size.x);
+    DEBUG_LOG(world_size.y);
+    DEBUG_LOG(world_size.z);
+    DEBUG_LOG(static_block_palette_size);
 
     ivec3 size2read = glm::clamp(stored_world_size, ivec3(0), ivec3(world_size));
 
@@ -420,7 +420,7 @@ void LumRenderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_si
     }
     ogt::ogt_int_mesh* ogt_mesh = ogt::my_int_mesh_from_paletted_voxels (&ctx, (const u8*)contour.data(), x_size, y_size, z_size);
     ogt::my_int_mesh_optimize (&ctx, ogt_mesh);
-// println
+// TRACE();
     vector<VoxelVertex > verts (ogt_mesh->vertex_count);
     vector<PackedVoxelVertex> packed_verts (ogt_mesh->vertex_count);
     vector<PackedVoxelCircuit> circ_verts (ogt_mesh->vertex_count);
@@ -460,16 +460,16 @@ void LumRenderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_si
         else if (norm == vec<3, signed char, defaultp> (0, 0, +1)) { verts_zzP.push_back (index); }
         else if (norm == vec<3, signed char, defaultp> (0, 0, -1)) { verts_zzN.push_back (index); }
         else {
-            printl ((int)norm.x);
-            printl ((int)norm.y);
-            printl ((int)norm.z);
+            DEBUG_LOG ((int)norm.x);
+            DEBUG_LOG ((int)norm.y);
+            DEBUG_LOG ((int)norm.z);
             crash (unrecognized normal);
         }
     }
-// println
+// TRACE();
     assert (circ_verts.size() == ogt_mesh->vertex_count);
     mesh->triangles.vertexes = render.createElemBuffers<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-// println
+// TRACE();
     assert (verts_Pzz.size() != 0);  
     assert (verts_Nzz.size() != 0); 
     assert (verts_zPz.size() != 0); 
@@ -482,7 +482,7 @@ void LumRenderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_si
     mesh->triangles.zNz.indexes = render.createElemBuffers<u16> (verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     mesh->triangles.zzP.indexes = render.createElemBuffers<u16> (verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     mesh->triangles.zzN.indexes = render.createElemBuffers<u16> (verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-// println
+// TRACE();
     mesh->triangles.Pzz.icount = verts_Pzz.size();
     mesh->triangles.Nzz.icount = verts_Nzz.size();
     mesh->triangles.zPz.icount = verts_zPz.size();
