@@ -245,7 +245,7 @@ endif
 
 #sorry microsoft no telemetry today
 check_vcpkg_itself:
-ifeq (, $(shell $(WHICH_WHERE) vcpkg))
+ifeq (, -$(shell $(WHICH_WHERE) vcpkg))
 	$(error "No vcpkg in PATH, installing vcpkg")
 	git clone https://github.com/microsoft/vcpkg.git
 	cd vcpkg
