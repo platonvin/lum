@@ -11,11 +11,13 @@ EXTERNAL_LIBS = -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotli
 ifeq ($(OS),Windows_NT)
 	EXTERNAL_LIBS += -lgdi32       
 	STATIC_OR_DYNAMIC += -static
+	WHICH_WHERE = where
 	RUN_PREFIX = .\\
 
 else
 	EXTERNAL_LIBS += -lpthread -ldl
 	RUN_PREFIX = ./
+	WHICH_WHERE = which
 endif
 REQUIRED_LIBS += $(EXTERNAL_LIBS)
 REQUIRED_LIBS += -llumal
@@ -23,8 +25,8 @@ REQUIRED_LIBS += -llumal
 always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++23
 # debug build
 debug_flags   = $(always_enabled_flags) -O0 -g 
-# common_instructions := -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul
-common_instructions := -march=native
+common_instructions := -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul
+# common_instructions := -march=native oops TODO: sep
 # incremental development build
 dev_flags = $(always_enabled_flags) -O2 -DVKNDEBUG $(common_instructions) 
 # unity build
@@ -68,7 +70,7 @@ all:
 #rule for re-evaluation after vcpkg_installed created. 
 #Eval needed because vcpkg_installed does not exist when they initially evaluated
 .PHONY: vcpkg_installed_eval
-vcpkg_installed_eval: vcpkg_installed
+vcpkg_installed_eval: vcpkg_installed | check_vcpkg_itself
 	$(eval OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*)) )
 	$(eval INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS)) )
 	$(eval INCLUDE_LIST += $(addsuffix /include/vma, $(OTHER_DIRS)) )
@@ -115,17 +117,15 @@ _TARGETS = $(patsubst $(SHADER_SRC_DIR)/%, $(SHADER_OUT_DIR)/%.spv, $(_SHADERS))
 # $(SHADER_OUT_DIR)/%.spv: $(SHADER_OUT_DIR)/%.spv.temp
 # 	spirv-opt $< -o $@ -O
 
-$(SHADER_OUT_DIR)/%.spv: setup
-$(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/% $(SHADERS_EXTRA_DEPEND)
+$(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/% $(SHADERS_EXTRA_DEPEND) | vcpkg_installed_eval
 	$(GLSLC) -o $@ $< $(SHADER_FLAGS)
 
 shaders: init $(SHADERS_EXTRA_DEPEND) $(_TARGETS)
 
-
 debug: init shaders $(com_objs) $(deb_objs) build_deb 
 	$(RUN_PREFIX)bin/client_deb
 
-dev: setup shaders lum-al/lib/liblumal.a $(com_objs) $(dev_objs) build_dev 
+dev: setup shaders $(com_objs) $(dev_objs) build_dev 
 	$(RUN_PREFIX)bin/client_dev
 
 rel: setup shaders build_unity 
@@ -144,7 +144,7 @@ lumal:
 	make library
 	cd ..
 
-lum-al/lib/liblumal.a: vcpkg_installed
+lum-al/lib/liblumal.a: vcpkg_installed | check_vcpkg_itself
 	git submodule init
 	git submodule update
 	cd lum-al
@@ -190,14 +190,14 @@ else
 endif
 
 # yeah windows wants quotes and backslashes so linux obviously wants no quotes and forward slashes. They have to be incompatible.
-cleans: init
+cleans: folders
 ifeq ($(OS),Windows_NT)
 	-del "shaders\compiled\*.spv" 
 else
 	-rm -R shaders/compiled/*.spv
 endif
 
-cleand: init
+cleand: folders
 ifeq ($(OS),Windows_NT)
 	-del "obj\deb\*.o" 
 	-del "obj\deb\render\*.o"  
@@ -206,7 +206,7 @@ else
 	-rm -R obj/deb/render/*.o
 endif
 
-cleanr: init
+cleanr: folders
 ifeq ($(OS),Windows_NT)
 	-del "obj\rel\*.o"  
 	-del "obj\rel\render\*.o"  
@@ -215,7 +215,7 @@ else
 	-rm -R obj/rel/render/*.o
 endif
 
-clean: init
+clean: folders
 ifeq ($(OS),Windows_NT)
 	-del "obj\*.o"
 	-del "obj\deb\*.o"
@@ -243,12 +243,27 @@ else
 	mkdir -p $@
 endif
 
-vcpkg_installed:
+#sorry microsoft no telemetry today
+check_vcpkg_itself:
+ifeq (, $(shell $(WHICH_WHERE) vcpkg))
+	$(error "No vcpkg in PATH, installing vcpkg")
+	git clone https://github.com/microsoft/vcpkg.git
+	cd vcpkg
+ifeq ($(OS),Windows_NT)
+	.\bootstrap-vcpkg.bat -disableMetrics
+else
+	./bootstrap-vcpkg.sh -disableMetrics
+endif
+endif
+	@echo vcpkg is installed.
+
+
+vcpkg_installed: | check_vcpkg_itself
 	@echo installing vcpkg dependencies. Please do not interrupt
 	vcpkg install
 
 #use when big changes happen to lum 
-update: init clean
+update: init clean | check_vcpkg_itself
 	@echo updating vcpkg dependencies. Please do not interrupt
 	vcpkg install
 	git submodule init

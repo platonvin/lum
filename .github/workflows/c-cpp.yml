@@ -29,10 +29,5 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
           
-      - name: Clone vcpkg
-        run: git clone https://github.com/microsoft/vcpkg.git
-      - name: Bootstrap vcpkg
-        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-        
       - name: Build Lum
         run: make only_build_unity

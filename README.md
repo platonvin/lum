@@ -11,7 +11,7 @@
 ## Installation 
 - ### Prerequisites
   - **C++ Compiler**: [MSYS2 MinGW](https://www.msys2.org/) recommended for Windows. For Linux prefer GNU C++
-  - **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started)
+  - \[optional\] **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started). If no vcpkg found in PATH, it will be installed automatically
   - **Make**: for Windows, install with MinGW64. For Linux, typically installed by default
   - **Vulkan support**
 
@@ -26,7 +26,7 @@
     - on Linux, GLFW will ask you to install multiple different packages, but you can do it in advance:\
      `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential`
 
-Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for windows
+Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for Windows
 
 ## Engine Overview
 ```mermaid

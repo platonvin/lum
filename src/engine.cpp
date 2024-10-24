@@ -129,7 +129,7 @@ void Engine::setup_graphics(){
     Settings settings = {};
         settings.vsync = false; //every time deciding to which image to render, wait until monitor draws current. Icreases perfomance, but limits fps
         settings.fullscreen = false;
-        settings.debug = true; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
+        settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
         settings.timestampCount = 48;
         settings.profile = true; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
         settings.fif = 2; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
@@ -147,16 +147,14 @@ void Engine::setup_graphics(){
             expect;
             expect.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EXPECT_ASSUME_FEATURES_KHR;
             expect.shaderExpectAssume = VK_TRUE;
-        void* temp = settings.physical_features2.pNext;
-        settings.physical_features2.pNext = &expect;
-        expect.pNext = temp;
+        settings.addExtraFeaturesPnext(&expect);
         
         settings.deviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME); //simplifies renderer for negative cost lol
         settings.deviceExtensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME); //pco / ubo +perfomance
         settings.deviceExtensions.push_back(VK_KHR_16BIT_STORAGE_EXTENSION_NAME); //just explicit control
         settings.deviceExtensions.push_back(VK_KHR_8BIT_STORAGE_EXTENSION_NAME); //just explicit control
-        settings.deviceExtensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
-        settings.deviceExtensions.push_back(VK_KHR_SHADER_EXPECT_ASSUME_EXTENSION_NAME);
+        settings.deviceExtensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME); // aka zero-pain buffers
+        settings.deviceExtensions.push_back(VK_KHR_SHADER_EXPECT_ASSUME_EXTENSION_NAME); // GLSL's assumeEXT(statement)
 
     render.init(settings);
 TRACE();
@@ -438,7 +436,7 @@ void Engine::process_animations(){
     Particle p = {};
         p.lifeTime = 10.0 * (float(rand()) / float(RAND_MAX));
         p.pos = tank_head.rot*vec3(17,42,27) + tank_head.shift;
-        p.vel = (rnVec3(0,1)*2.f - 1.f)*0.1f;
+        p.vel = (rnVec3(0,1)*2.f - 1.f)*1.1f;
         p.matID = 79;
     render.particles.push_back(p);
 
