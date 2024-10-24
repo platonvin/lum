@@ -253,8 +253,12 @@ lum_vcpkg:
 	@echo No vcpkg in PATH, installing vcpkg
 	git clone https://github.com/microsoft/vcpkg.git lum_vcpkg
 	cd lum_vcpkg
+ifeq ($(OS),Windows_NT)
 	-$(RUN_PREFIX)bootstrap-vcpkg.bat -disableMetrics 
-	vcpkg$(RUN_POSTFIX) integrate
+else
+	-$(RUN_PREFIX)bootstrap-vcpkg.sh -disableMetrics 
+endif
+	vcpkg$(RUN_POSTFIX) integrate install
 	@echo bootstrapped
 
 check_vcpkg_itself: | lum_vcpkg
