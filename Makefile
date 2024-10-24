@@ -7,20 +7,25 @@ L = -Llum-al/lib
 #linux is so good that static doesn't work
 STATIC_OR_DYNAMIC = 
 #libs that i do not include in internal-unity-build
+#If anyone knows good way to solve "\" "/" ".exe" ".\" "./" problem - please tell me
 EXTERNAL_LIBS = -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
 ifeq ($(OS),Windows_NT)
 	EXTERNAL_LIBS += -lgdi32       
 	STATIC_OR_DYNAMIC += -static
 	WHICH_WHERE = where
+	RUN_POSTFIX = .exe
 	RUN_PREFIX = .\\
-
+	SLASH = \\
 else
 	EXTERNAL_LIBS += -lpthread -ldl
 	RUN_PREFIX = ./
 	WHICH_WHERE = which
+	RUN_POSTFIX =
+	SLASH = /
 endif
 REQUIRED_LIBS += $(EXTERNAL_LIBS)
 REQUIRED_LIBS += -llumal
+VCPKG_PATH_PREF := _vcpkg
 	
 always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++23
 # debug build
@@ -81,9 +86,9 @@ vcpkg_installed_eval: vcpkg_installed | check_vcpkg_itself
 	$(eval GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/shaderc))) )
 	$(eval GLSLC := $(strip $(GLSLC_DIR))/glslc )
 
-#If someone knows a way to simplify this, please tell me 
 setup: init vcpkg_installed_eval lum-al/lib/liblumal.a
 
+#If someone knows a way to simplify this, please tell me 
 obj/%.o: common/%.cpp | setup
 	c++ $(dev_flags) $(I) $(args) -MMD -MP -c $< -o $@
 DEPS = $(com_objs:.o=.d)
@@ -123,13 +128,13 @@ $(SHADER_OUT_DIR)/%.spv: $(SHADER_SRC_DIR)/% $(SHADERS_EXTRA_DEPEND) | vcpkg_ins
 shaders: init $(SHADERS_EXTRA_DEPEND) $(_TARGETS)
 
 debug: init shaders $(com_objs) $(deb_objs) build_deb 
-	$(RUN_PREFIX)bin/client_deb
+	$(RUN_PREFIX)bin/client_deb$(RUN_POSTFIX)
 
 dev: setup shaders $(com_objs) $(dev_objs) build_dev 
-	$(RUN_PREFIX)bin/client_dev
+	$(RUN_PREFIX)bin/client_dev$(RUN_POSTFIX)
 
 rel: setup shaders build_unity 
-	$(RUN_PREFIX)bin/client_rel
+	$(RUN_PREFIX)bin/client_rel$(RUN_POSTFIX)
 
 #not separate on purpose. make cleanr before usage
 dev_p: args = -D_PRINTLINE
@@ -244,31 +249,28 @@ else
 endif
 
 #sorry microsoft no telemetry today
-check_vcpkg_itself:
-ifeq (, $(shell $(WHICH_WHERE) vcpkg))
-	$(error "No vcpkg in PATH, installing vcpkg")
-	git clone https://github.com/microsoft/vcpkg.git
-	cd vcpkg
-ifeq ($(OS),Windows_NT)
-	.\bootstrap-vcpkg.bat -disableMetrics
-else
-	./bootstrap-vcpkg.sh -disableMetrics
-endif
-endif
-	@echo vcpkg is installed.
+lum_vcpkg:
+	@echo No vcpkg in PATH, installing vcpkg
+	git clone https://github.com/microsoft/vcpkg.git lum_vcpkg
+	cd lum_vcpkg
+	-$(RUN_PREFIX)bootstrap-vcpkg.bat -disableMetrics 
+	vcpkg$(RUN_POSTFIX) integrate
+	@echo bootstrapped
 
+check_vcpkg_itself: | lum_vcpkg
+	@echo vcpkg is installed
 
 vcpkg_installed: | check_vcpkg_itself
 	@echo installing vcpkg dependencies. Please do not interrupt
-	vcpkg install
+	lum_vcpkg/vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
 
 #use when big changes happen to lum 
 update: init clean | check_vcpkg_itself
 	@echo updating vcpkg dependencies. Please do not interrupt
-	vcpkg install
+	lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
 	git submodule init
 	git submodule update
 	cd lum-al
-	vcpkg install
+	lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
 	make library
 	cd ..
