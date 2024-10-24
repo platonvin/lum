@@ -20,7 +20,7 @@ else
 	EXTERNAL_LIBS += -lpthread -ldl
 	RUN_PREFIX = ./
 	WHICH_WHERE = which
-	RUN_POSTFIX =
+	RUN_POSTFIX = 
 	SLASH = /
 endif
 REQUIRED_LIBS += $(EXTERNAL_LIBS)
@@ -67,10 +67,10 @@ com_objs := $(patsubst common/%.cpp,obj/%.o,$(filter common/%.cpp,$(srcs)))
 #default target
 all: init rel
 #for testing.
-all: 
-	@echo $(deb_objs)
-	@echo $(dev_objs)
-	@echo $(com_objs)
+# all: 
+# 	@echo $(deb_objs)
+# 	@echo $(dev_objs)
+# 	@echo $(com_objs)
 
 #rule for re-evaluation after vcpkg_installed created. 
 #Eval needed because vcpkg_installed does not exist when they initially evaluated
@@ -262,15 +262,15 @@ check_vcpkg_itself: | lum_vcpkg
 
 vcpkg_installed: | check_vcpkg_itself
 	@echo installing vcpkg dependencies. Please do not interrupt
-	lum_vcpkg/vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
+	$(RUN_PREFIX)lum_vcpkg/vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
 
 #use when big changes happen to lum 
 update: init clean | check_vcpkg_itself
 	@echo updating vcpkg dependencies. Please do not interrupt
-	lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
+	$(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
 	git submodule init
 	git submodule update
 	cd lum-al
-	lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
+	$(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
 	make library
 	cd ..
