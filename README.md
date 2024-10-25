@@ -24,9 +24,10 @@ support level:
 | --- | --- | --- | 
 | High performance  | 3 | Fully optimized :rocket: - works well even on integrated GPUs | 
 | Library separation :bangbang: - this is important | 0 | Current TODO: needs a bunch of stuff... 
-| Raytraced voxel-space reflections | 2 | Fully implemented | 
+| Raytraced voxel-space reflections (glossy) | 2 | Fully implemented | 
+| Non-per-block diffuse light | 0.1 | Implemented in past, not fast enough yet (requires accumulation and denoising) | 
 | Ambient Occlusion | 2 | Fully implemented (HBAO btw) | 
-| Per-block raytraced lighting | 1.9 | implemented, needs 6-direction radiance | 
+| Per-block raytraced lighting (diffuse) | 1.9 | implemented, needs 6-direction radiance | 
 | Lightmaps | 1 | Partially implemented (Sun only) | 
 | Deferred rendering | 2 | Fully implemented | 
 | Particle system | 1 | Partially implemented (CPU side, no blocks) | 
@@ -167,7 +168,7 @@ flowchart TD
 
 
 ### Some implemented optimizations 
-| Optimization | Support | Extra | 
+| Optimization | Support Level  | Description | 
 | --- | --- | --- | 
 | Contour meshing | 2 | No per-voxel data in vertices. Saves VFA, PES+VPC, memory (cache, VRAM) | 
 | GPU-driven grass | 2 | No per-blade data. Saves memory | 
