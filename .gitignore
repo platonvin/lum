@@ -7,16 +7,15 @@ client
 shaders/*.spv
 shaders/compiled/*.spv
 
-# IDE things
+#generating compile commands without 10000 lines of cmake
 # compile_flags.txt
 *.txt
+# IDE things
 .vscode
 .idea
 
 test.cpp
-temp.cpp
 r.cpp
-.vscode
 assets/*.zip
 #memory dump from VMA
 dump.json
@@ -30,11 +29,12 @@ package.zip
 diag.mmd
 *.py
 *.orig
-#generating compile commands without 10000 lines of cmake
 build_wrapper_output_directory
 vcpkg_installed
 *.tar
 /bin
 /VGD.md
 /VGD_PR.md
+#pocket vcpkg installation
 /lum_vcpkg
+/API_PLANS.md

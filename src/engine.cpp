@@ -143,11 +143,12 @@ void Engine::setup_graphics(){
         settings.deviceFeatures12.storagePushConstant8 = VK_TRUE;
         settings.deviceFeatures12.shaderInt8 = VK_TRUE;
         settings.deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
-        VkPhysicalDeviceShaderExpectAssumeFeaturesKHR 
-            expect;
-            expect.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EXPECT_ASSUME_FEATURES_KHR;
-            expect.shaderExpectAssume = VK_TRUE;
-        settings.addExtraFeaturesPnext(&expect);
+        // for assumeEXT, currently disabled and will be brought back with new shader system
+        // VkPhysicalDeviceShaderExpectAssumeFeaturesKHR 
+        //     expect;
+        //     expect.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_EXPECT_ASSUME_FEATURES_KHR;
+        //     expect.shaderExpectAssume = VK_TRUE;
+        // settings.addExtraFeaturesPnext(&expect);
         
         settings.deviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME); //simplifies renderer for negative cost lol
         settings.deviceExtensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME); //pco / ubo +perfomance

@@ -4,10 +4,11 @@
 I = -Isrc -Icommon -Ilum-al/src
 L = -Llum-al/lib
 
-#linux is so good that static doesn't work
+#Linux is so good that static doesn't work
 STATIC_OR_DYNAMIC = 
 #libs that i do not include in internal-unity-build
-#If anyone knows good way to solve "\" "/" ".exe" ".\" "./" problem - please tell me
+#Windows is so good that lum_vcpkg/vcpkg.exe is not executable
+#if anyone knows good way to solve "\" "/" ".exe" ".\" "./" problem - please tell me
 EXTERNAL_LIBS = -lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon -lpng16 -lz -lbz2
 ifeq ($(OS),Windows_NT)
 	EXTERNAL_LIBS += -lgdi32       
@@ -25,9 +26,9 @@ else
 endif
 REQUIRED_LIBS += $(EXTERNAL_LIBS)
 REQUIRED_LIBS += -llumal
-VCPKG_PATH_PREF := _vcpkg
+VCPKG_EXECUTABLE := $(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) --vcpkg-root=lum_vcpkg
 	
-always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++23
+always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20
 # debug build
 debug_flags   = $(always_enabled_flags) -O0 -g 
 common_instructions := -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul
@@ -175,20 +176,21 @@ test:
 	c++ -pg test.cpp -o test -Wl,--stack,1000000
 	test
 
+#not sure if it works on non-Windows
 pack:
 ifeq ($(OS),Windows_NT)
-	mkdir "package"
-	mkdir "package/shaders/compiled"
-	mkdir "package/assets"
-	copy "client" "package/client"
-	copy "shaders/compiled" "package/shaders/compiled"
-	copy "assets" "package/assets"
-	powershell Compress-Archive -Update package package.zip
+	-mkdir "package"
+	-mkdir "package\shaders\compiled"
+	-mkdir "package\assets"
+	-xcopy /s /i /y ".\bin\client_rel.exe" ".\package\client.exe*"
+	-xcopy /s /i /y "shaders\compiled" "package\shaders\compiled"
+	-xcopy /s /i /y "assets" "package\assets"
+# powershell Compress-Archive -Update ./package package.zip
 else
-	mkdir -p package
-	mkdir -p package/shaders/compiled
-	mkdir -p package/assets
-	cp client package/client
+	-mkdir -p package
+	-mkdir -p package/shaders/compiled
+	-mkdir -p package/assets
+	cp bin/client_rel package/client
 	cp -a /shaders/compiled /package/shaders/compiled
 	cp -a /assets           /package/assets
 	zip -r package.zip package
@@ -248,6 +250,9 @@ else
 	mkdir -p $@
 endif
 
+# try to find native vcpkg 
+VCPKG_FOUND := $(shell $(WHICH_WHERE) vcpkg)
+
 #sorry microsoft no telemetry today
 lum_vcpkg:
 	@echo No vcpkg in PATH, installing vcpkg
@@ -261,20 +266,29 @@ endif
 	vcpkg$(RUN_POSTFIX) integrate install
 	@echo bootstrapped
 
+# if no vcpkg found, install it directly in Lum 
+ifdef VCPKG_FOUND
+check_vcpkg_itself:
+	$(info NATIVE VCPKG IS FOUND AT $(VCPKG_FOUND))
+	$(eval VCPKG_EXECUTABLE := vcpkg)
+else
 check_vcpkg_itself: | lum_vcpkg
-	@echo vcpkg is installed
+	$(info NATIVE VCPKG NOT FOUND, INSTALLED POCKET VERSION)
+endif
+
 
 vcpkg_installed: | check_vcpkg_itself
 	@echo installing vcpkg dependencies. Please do not interrupt
-	$(RUN_PREFIX)lum_vcpkg/vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
+	$(VCPKG_EXECUTABLE) install
 
 #use when big changes happen to lum 
 update: init clean | check_vcpkg_itself
 	@echo updating vcpkg dependencies. Please do not interrupt
-	$(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
+	$(info VCPKG IS FOUND AS $(VCPKG_EXECUTABLE))
+	$(VCPKG_EXECUTABLE) install
 	git submodule init
 	git submodule update
 	cd lum-al
-	$(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) install --vcpkg-root=lum_vcpkg
+	$(VCPKG_EXECUTABLE) install
 	make library
 	cd ..
