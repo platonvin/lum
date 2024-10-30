@@ -1,11 +1,12 @@
 [![Build](https://github.com/platonvin/lum/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/c-cpp.yml)
 
 # Lum
-**Lum** is a voxel renderer* I'm developing because none of the existing ones meet my needs\*\*. Currently, it's not available as a standalone project but is bundled with a demo\*\*\* instead
+**Lum** is a voxel\* renderer\*\* I'm developing because none of the existing ones meet my needs\*\*\*. Currently, it's only available in a form of C++ API, but might (on request) be ported into Unity/Unreal/C
 
-\* technically, it also has input system, Ui and loader, but it is stil mostly GPU code\
-\*\* my needs are high perfomance, dynamic GI, simplicity and very specific style (similar to Minecraft Dungeons). I did not find any perfomant engine i would enjoy and understand enough so i made Lum.\
-\*\*\* After separation, Lum will be a library with very simple (and restrained) API (*demo will stay in this repo*). If you have any suggestions, open an issue
+\* As any domain specific renderer, it has very limited usecase. By voxel i mean "small single-material cube, grid-aligned with its neighbours". Lum also wants you to unite voxels into blocks, and blocks into world. Non-world-grid aligned models are still alowed, but they have to be voxel too, and they also have some perfomance cost (~1 microsecond per model)
+\*\* technically, it also has input system, Ui, meshloader (and will have voxel physics engine), but it is stil mostly GPU code\
+\*\*\* my needs are high perfomance, dynamic GI, simplicity and very specific style (similar to Minecraft Dungeons). I did not find any perfomant engine i would enjoy and understand enough so i made Lum.\
+\*\*\*\* If you have any API suggestions, open an issue
 
 ##### Some demo footage
 https://github.com/user-attachments/assets/ce7883c4-a706-406f-875c-fbf23d68020d
@@ -23,7 +24,7 @@ support level:
 | Feature | Support Level | Description | 
 | --- | --- | --- | 
 | High performance  | 3 | Fully optimized :rocket: - works well even on integrated GPUs | 
-| Library separation :bangbang: - this is important | 0 | Current TODO: needs a bunch of stuff... 
+| Library separation | 1.5 | simple API exists, but it might need improvements | 
 | Raytraced voxel-space reflections (glossy) | 2 | Fully implemented | 
 | Non-per-block diffuse light | 0.1 | Implemented in past, not fast enough yet (requires accumulation and denoising) | 
 | Ambient Occlusion | 2 | Fully implemented (HBAO btw) | 
@@ -42,11 +43,11 @@ support level:
 | Settings | 1 | Partially implemented (CPU-side only; needs block size, material palette size, etc.) | 
 | OpenGL backend | 0 | this is going to be a long journey... |
 
-## Installation 
+## Installation
 - ### Prerequisites
   - **C++ Compiler**: [MSYS2 MinGW](https://www.msys2.org/) recommended for Windows. For Linux prefer GNU C++
   - \[optional\] **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started). If no vcpkg found in PATH, it will be installed automatically
-  - **Make**: for Linux, typically installed by default. For Windows, install manually (shipped with MinGW)
+  - \[optional, used to build demo / liblum.a\] **Make**: for Linux, typically installed by default. For Windows, install manually (shipped with MinGW)
   - **Vulkan support**
 
 - ### Steps  
@@ -60,7 +61,9 @@ support level:
     - on Linux, GLFW will ask you to install multiple different packages, but you can do it in advance:\
      `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential`
 
-Alternatively, you can [download](https://github.com/platonvin/lum/releases) pre-built version for Windows
+ - There is `unity.cpp` file, that includes every used source file. You can use it for your own unity (single translation unit) build - just include `lum/unity.cpp` in your own
+
+You can also [download](https://github.com/platonvin/lum/releases) pre-built demo for Windows
 
 ## Engine frame overview
 ```mermaid

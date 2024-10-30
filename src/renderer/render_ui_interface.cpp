@@ -2,7 +2,7 @@
 #include "defines/macros.hpp"
 
 // typedef struct UiDrawCall {
-// UiMesh mesh;
+// InternalUiMesh mesh;
 // vec2 shift;
 // mat4 translate;
 // } UiDrawCall;
@@ -17,7 +17,7 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
                                         int num_indices,
                                         Rml::TextureHandle texture,
                                         const Rml::Vector2f& translation) {
-    UiMesh ui_mesh = {};
+    InternalUiMesh ui_mesh = {};
     VkDeviceSize bufferSizeV = sizeof (Rml::Vertex) * num_vertices;
     VkDeviceSize bufferSizeI = sizeof (int ) * num_indices;
     VkBufferCreateInfo 
@@ -78,7 +78,7 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
 
 // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
 Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture) {
-    UiMesh* ui_mesh = new UiMesh;
+    InternalUiMesh* ui_mesh = new InternalUiMesh;
     ui_mesh->image = (Image*)texture;
     ui_mesh->icount = num_indices;
     // for(int i=0; i < num_vertices; i++){
@@ -134,7 +134,7 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* ver
 // Called by RmlUi when it wants to render application-compiled geometry.
 void MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation) {
     VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
-    UiMesh* ui_mesh = (UiMesh*)geometry;
+    InternalUiMesh* ui_mesh = (InternalUiMesh*)geometry;
     VkBuffer vertexBuffers[] = {ui_mesh->vertexes.buffer};
     VkDeviceSize offsets[] = {0};
     struct {vec4 shift; mat4 trans;} ui_pc = {vec4 (translation.x, translation.y, render->render.swapChainExtent.width, render->render.swapChainExtent.height), current_transform};
@@ -172,7 +172,7 @@ void MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geom
 void MyRenderInterface::ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry) {
     //we cant immediately relese it because previous frames use buffers for rendering (exept when 1 fif)
     //so we add it to deletion queue
-    UiMesh* mesh = (UiMesh*)geometry;
+    InternalUiMesh* mesh = (InternalUiMesh*)geometry;
     BufferDeletion vBufferDel = {mesh->vertexes, MAX_FRAMES_IN_FLIGHT};
     BufferDeletion iBufferDel = {mesh->indexes, MAX_FRAMES_IN_FLIGHT};
     render->render.bufferDeletionQueue.push_back (vBufferDel);

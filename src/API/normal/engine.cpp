@@ -107,18 +107,18 @@ bool is_block_visible(dmat4 trans, dvec3 pos){
 }
 
 //just objects to render
-Mesh tank_body = {};
-Mesh tank_head = {};
-Mesh tank_rf_leg = {};
-Mesh tank_lf_leg = {};
-Mesh tank_rb_leg = {};
-Mesh tank_lb_leg = {};
+InternalMeshModel tank_body = {};
+InternalMeshModel tank_head = {};
+InternalMeshModel tank_rf_leg = {};
+InternalMeshModel tank_lf_leg = {};
+InternalMeshModel tank_rb_leg = {};
+InternalMeshModel tank_lb_leg = {};
 vec2 physical_points[4] = {}; // that each leg follows
 vec2 interpolated_leg_points[4] = {}; // that each leg follows
 vec2 target_leg_points[4]; // that each leg follows
 float physical_body_height;
 float interpolated_body_height;
-Block** block_palette = {};
+BlockWithMesh** block_palette = {};
 
 static double curr_time = 0;
 static double prev_time = 0;
@@ -181,7 +181,7 @@ TRACE();
         render.load_mesh(&tank_rb_leg, "assets/tank_lf_rb_leg.vox");
 TRACE();
 
-    block_palette = (Block**)calloc(render.static_block_palette_size, sizeof(Block*));
+    block_palette = (BlockWithMesh**)calloc(render.static_block_palette_size, sizeof(BlockWithMesh*));
     
 TRACE();
     //block_palette[0] is "air"
@@ -508,7 +508,7 @@ void Engine::cull_meshes(){
     for(int xx=0; xx<48; xx++){
     for(int yy=0; yy<48; yy++){
     for(int zz=0; zz<16;  zz++){
-        Mesh* block_mesh = NULL;
+        InternalMeshModel* block_mesh = NULL;
         
         int block_id = render.origin_world(xx,yy,zz);
         if(block_id != 0){
@@ -695,7 +695,7 @@ TRACE();
 TRACE();
                 render.glossy_raygen();
 TRACE();
-                render.smoke_raygen();
+                render.raygen_start_smoke();
 TRACE();
                 render.glossy();
 TRACE();

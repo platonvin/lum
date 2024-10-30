@@ -28,7 +28,7 @@ REQUIRED_LIBS += $(EXTERNAL_LIBS)
 REQUIRED_LIBS += -llumal
 VCPKG_EXECUTABLE := $(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) --vcpkg-root=lum_vcpkg
 	
-always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20
+always_enabled_flags = -fno-exceptions -Wuninitialized -std=c++20 -ftrivial-auto-var-init=zero
 # debug build
 debug_flags   = $(always_enabled_flags) -O0 -g 
 common_instructions := -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul
@@ -41,9 +41,10 @@ rel_flags = $(always_enabled_flags) -Ofast $(common_instructions) -s -Wl,--gc-se
 SHADER_FLAGS = --target-env=vulkan1.1 -g -O
 
 #all source files. Separate for convinience and unity build 
+# src/engine.cpp
 srcs := \
-	src/main.cpp\
-	src/engine.cpp\
+	src/demo_modern.cpp\
+	src/lum_modern.cpp\
 	src/renderer/render.cpp\
 	src/renderer/ao_lut.cpp\
 	src/renderer/setup.cpp\

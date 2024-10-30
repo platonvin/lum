@@ -33,7 +33,7 @@ struct bp_tex {u8 r;};
 
 #endif
 //block palette on cpu side is expected to be array of pointers to blocks
-void LumRenderer::updateBlockPalette (Block** blockPalette) {
+void LumRenderer::updateBlockPalette (BlockWithMesh* blockPalette) {
     //block palette is in u8, but for easy copying we convert it to u16 cause block palette is R16_UNIT
     VkDeviceSize bufferSize = (sizeof (bp_tex)) * 16 * BLOCK_PALETTE_SIZE_X * 16 * BLOCK_PALETTE_SIZE_Y * 16;
     table3d<bp_tex> blockPaletteLinear = {};
@@ -45,11 +45,12 @@ void LumRenderer::updateBlockPalette (Block** blockPalette) {
             for (i32 y = 0; y < BLOCK_SIZE; y++) {
                 for (i32 z = 0; z < BLOCK_SIZE; z++) {
                     auto [block_x, block_y] = get_block_xy (N);
-                    if (blockPalette[N] == NULL) {
-                        blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
-                    } else {
+                    // if (blockPalette[N] == NULL) {
+                    //     blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
+                    // } else 
+                    {
                         if (N < static_block_palette_size) {
-                            blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = (u16) blockPalette[N]->voxels[x][y][z];
+                            blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = (u16) blockPalette[N].voxels[x][y][z];
                         } else {
                             blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
                         }
@@ -185,46 +186,33 @@ void LumRenderer::save_scene (const char* vox_file) {
     fclose(fp);
 }
 
-//size limited by 256^3
-void LumRenderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette) {
-    size_t buffer_size;
-    char* buffer = readFileBuffer(vox_file, &buffer_size);
-    assert(buffer != NULL);
-    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
-    free(buffer);
-    assert(scene != NULL);
-    assert(scene->num_models == 1);
-    
-    load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
-    
-    if (extrude_palette && !hasPalette) {
-        hasPalette = true;
-        for (int i = 0; i < MATERIAL_PALETTE_SIZE; i++) {
-            mat_palette[i].color = vec4(
-                scene->palette.color[i].r / 256.0,
-                scene->palette.color[i].g / 256.0,
-                scene->palette.color[i].b / 256.0,
-                scene->palette.color[i].a / 256.0
-            );
-            mat_palette[i].emmit = 0;
-            float rough;
-            switch (scene->materials.matl[i].type) {
-                case ogt::matl_type_diffuse:
-                    rough = 1.0;
-                    break;
-                case ogt::matl_type_emit:
-                    mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux * 4.0);
-                    rough = 0.5;
-                    break;
-                case ogt::matl_type_metal:
-                    rough = (scene->materials.matl[i].rough + (1.0 - scene->materials.matl[i].metal)) / 2.0;
-                    break;
-                default:
-                    rough = 0;
-                    break;
-            }
-            mat_palette[i].rough = rough;
+static void extract_palette_mem(const ogt::vox_scene* scene, Material* mat_palette) {
+    assert(mat_palette != NULL);
+    for (int i = 0; i < MATERIAL_PALETTE_SIZE; i++) {
+        mat_palette[i].color = vec4(
+            scene->palette.color[i].r / 256.0,
+            scene->palette.color[i].g / 256.0,
+            scene->palette.color[i].b / 256.0,
+            scene->palette.color[i].a / 256.0
+        );
+        mat_palette[i].emmit = 0;
+        float rough;
+        switch (scene->materials.matl[i].type) {
+            case ogt::matl_type_diffuse:
+                rough = 1.0;
+                break;
+            case ogt::matl_type_emit:
+                mat_palette[i].emmit = scene->materials.matl[i].emit * (2.0 + scene->materials.matl[i].flux * 4.0);
+                rough = 0.5;
+                break;
+            case ogt::matl_type_metal:
+                rough = (scene->materials.matl[i].rough + (1.0 - scene->materials.matl[i].metal)) / 2.0;
+                break;
+            default:
+                rough = 0;
+                break;
         }
+        mat_palette[i].rough = rough;
     }
     /*
         roughness
@@ -236,10 +224,26 @@ void LumRenderer::load_mesh(Mesh* mesh, const char* vox_file, bool _make_vertice
         Power - radiant flux
         Ldr
     */
+}
+
+void LumRenderer::extract_palette(const char* scene_file, Material* mat_palette) {
+    size_t buffer_size;
+    char* buffer = readFileBuffer(scene_file, &buffer_size);
+    assert(buffer != NULL);
+
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
+    free(buffer);
+    assert(scene != NULL);
+    assert(scene->num_models > 0);
+
+    hasPalette = true;
+    extract_palette_mem(scene, mat_palette);
+    
     ogt::vox_destroy_scene(scene);
 }
 
-void LumRenderer::load_block(Block** block, const char* vox_file) {
+//size limited by 256^3
+void LumRenderer::load_mesh(InternalMeshModel* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette, Material* mat_palette) {
     size_t buffer_size;
     char* buffer = readFileBuffer(vox_file, &buffer_size);
     assert(buffer != NULL);
@@ -247,46 +251,89 @@ void LumRenderer::load_block(Block** block, const char* vox_file) {
     free(buffer);
     assert(scene != NULL);
     assert(scene->num_models == 1);
-    if ((*block) == NULL) {
-        *block = new Block;
+    
+    load_mesh(mesh, (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z, _make_vertices);
+    
+    if (extrude_palette && !hasPalette) {
+        assert(mat_palette != NULL);
+        hasPalette = true;
+        extract_palette_mem(scene, mat_palette);
     }
-    (*block)->mesh.size = ivec3(scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
-    (*block)->mesh.shift = vec3(0);
-    (*block)->mesh.rot = quat_identity<float, defaultp>();
-    assert(scene->models[0]->size_x > 0 && scene->models[0]->size_y > 0 && scene->models[0]->size_z > 0);
-    make_vertices(&((*block)->mesh), (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
-    for (int x = 0; x < scene->models[0]->size_x; x++) {
-        for (int y = 0; y < scene->models[0]->size_y; y++) {
-            for (int z = 0; z < scene->models[0]->size_z; z++) {
-                (*block)->voxels[x][y][z] = (u16)scene->models[0]->voxel_data[x + y * scene->models[0]->size_x + z * scene->models[0]->size_x * scene->models[0]->size_y];
-            }
-        }
-    }
+    
     ogt::vox_destroy_scene(scene);
 }
 
-#define free_helper(dir) \
-if(not (*block)->mesh.triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, (*block)->mesh.triangles.dir.indexes[i].buffer, (*block)->mesh.triangles.dir.indexes[i].alloc);
-void LumRenderer::free_block(Block** block) {
-    assert(block != NULL);
-    assert(*block != NULL);
-    
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        free_helper(Pzz);
-        free_helper(Nzz);
-        free_helper(zPz);
-        free_helper(zNz);
-        free_helper(zzP);
-        free_helper(zzN);
-        if (!(*block)->mesh.triangles.vertexes.empty()) {
-            vmaDestroyBuffer(render.VMAllocator, (*block)->mesh.triangles.vertexes[i].buffer, (*block)->mesh.triangles.vertexes[i].alloc);
+// pointer to block_ptr, so block_ptr can be modified 
+void LumRenderer::load_block(BlockWithMesh* block, const char* vox_file) {
+    size_t buffer_size;
+    char* buffer = readFileBuffer(vox_file, &buffer_size);
+    assert(buffer != NULL);
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
+    free(buffer);
+    assert(scene != NULL);
+    assert(scene->num_models == 1);
+    // if ((block) == NULL) {
+    //     *block = new Block;
+    TRACE()
+    // }
+    (block)->mesh.size = ivec3(scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    TRACE()
+    assert(scene->models[0]->size_x > 0 && scene->models[0]->size_y > 0 && scene->models[0]->size_z > 0);
+    TRACE()
+    make_vertices(&((block)->mesh), (Voxel*)scene->models[0]->voxel_data, scene->models[0]->size_x, scene->models[0]->size_y, scene->models[0]->size_z);
+    TRACE()
+    for (int x = 0; x < scene->models[0]->size_x; x++) {
+        for (int y = 0; y < scene->models[0]->size_y; y++) {
+            for (int z = 0; z < scene->models[0]->size_z; z++) {
+                (block)->voxels[x][y][z] = (u16)scene->models[0]->voxel_data[x + y * scene->models[0]->size_x + z * scene->models[0]->size_x * scene->models[0]->size_y];
+            }
         }
     }
-    delete *block;
-    *block = NULL;
+    TRACE()
+    ogt::vox_destroy_scene(scene);
 }
 
-void LumRenderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
+// #define free_helper(dir) \
+// if(not (block)->mesh.triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, (block)->mesh.triangles.dir.indexes[i].buffer, (block)->mesh.triangles.dir.indexes[i].alloc);
+#define free_helper(__dir) \
+if(block->mesh.triangles.__dir.indexes.buffer) {\
+    BufferDeletion bd = {};\
+        bd.buffer = block->mesh.triangles.__dir.indexes;\
+        bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
+    render.bufferDeletionQueue.push_back(bd);\
+    block->mesh.triangles.__dir.indexes.buffer = VK_NULL_HANDLE;\
+}
+
+void LumRenderer::free_block(BlockWithMesh* block) {
+    assert(block != NULL);
+    // assert(*block != NULL);
+    
+    // free_helper(Pzz);
+    // free_helper(Nzz);
+    // free_helper(zPz);
+    // free_helper(zNz);
+    // free_helper(zzP);
+    // free_helper(zzN);
+    if(block->mesh.triangles.indices.buffer) {\
+        BufferDeletion bd = {};\
+            bd.buffer = block->mesh.triangles.indices;\
+            bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
+        render.bufferDeletionQueue.push_back(bd);\
+        block->mesh.triangles.indices.buffer = VK_NULL_HANDLE;\
+    }
+    if((block)->mesh.triangles.vertexes.buffer){
+        vmaDestroyBuffer(render.VMAllocator, (block)->mesh.triangles.vertexes.buffer, (block)->mesh.triangles.vertexes.alloc);
+        (block)->mesh.triangles.vertexes.buffer = VK_NULL_HANDLE;
+    }
+    // for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        // if (!(block)->mesh.triangles.vertexes.empty()) {
+        // }
+    // }
+    // delete *block;
+    // *block = NULL;
+}
+
+void LumRenderer::load_mesh(InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
     assert(mesh != NULL);
     assert(Voxels != NULL);
     assert(x_size > 0 && y_size > 0 && z_size > 0);
@@ -295,34 +342,54 @@ void LumRenderer::load_mesh(Mesh* mesh, Voxel* Voxels, int x_size, int y_size, i
         make_vertices(mesh, Voxels, x_size, y_size, z_size);
     }
     mesh->voxels = create_RayTrace_VoxelImages(Voxels, mesh->size);
-    mesh->shift = vec3(0);
-    mesh->rot = quat_identity<float, defaultp>();
 }
 
 //frees only gpu side stuff, not mesh ptr
 #undef  free_helper
-#define free_helper(dir) \
-if(not mesh->triangles.dir.indexes.empty()) vmaDestroyBuffer(render.VMAllocator, mesh->triangles.dir.indexes[i].buffer, mesh->triangles.dir.indexes[i].alloc);
-void LumRenderer::free_mesh(Mesh* mesh) {
+#define free_helper(__dir) \
+if(mesh->triangles.__dir.indexes.buffer) {\
+    BufferDeletion bd = {};\
+        bd.buffer = mesh->triangles.__dir.indexes;\
+        bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
+    render.bufferDeletionQueue.push_back(bd);\
+}
+
+void LumRenderer::free_mesh(InternalMeshModel* mesh) {
     assert(mesh != NULL);
+    // free_helper(Pzz);
+    // free_helper(Nzz);
+    // free_helper(zPz);
+    // free_helper(zNz);
+    // free_helper(zzP);
+    // free_helper(zzN);
+    if(mesh->triangles.indices.buffer) {\
+        BufferDeletion bd = {};\
+            bd.buffer = mesh->triangles.indices;\
+            bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
+        render.bufferDeletionQueue.push_back(bd);\
+    }
+    BufferDeletion
+        bd = {};
+        bd.buffer = mesh->triangles.vertexes;
+        bd.life_counter = render.settings.fif; // delete after fif+1 frames
+    render.bufferDeletionQueue.push_back(bd);
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        free_helper(Pzz);
-        free_helper(Nzz);
-        free_helper(zPz);
-        free_helper(zNz);
-        free_helper(zzP);
-        free_helper(zzN);
-        if (!mesh->triangles.vertexes.empty()) {
-            vmaDestroyBuffer(render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
-        }
+        // if (!mesh->triangles.vertexes.empty()) {
+            // vmaDestroyBuffer(render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
+        // }
         if (!mesh->voxels.empty()) {
-            vmaDestroyImage(render.VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
-        }
-        if (!mesh->voxels.empty()) {
-            vkDestroyImageView(render.device, mesh->voxels[i].view, NULL);
+            // vmaDestroyImage(render.VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
+            // vkDestroyImageView(render.device, mesh->voxels[i].view, NULL);
+            ImageDeletion
+                id = {};
+                id.image = mesh->voxels[i];
+                id.life_counter = render.settings.fif; // delete after fif+1 frames
+            render.imageDeletionQueue.push_back(id);
         }
     }
 }
+#undef free_helper
+
 bool operator== (const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
     return
         (one.pos.x == other.pos.x) &&
@@ -400,7 +467,7 @@ void repack_helper (vector<PackedVoxelVertex>& vs, vector<PackedVoxelQuad>& qs, 
 }
 
 //defenetly not an example of highly optimized code
-void LumRenderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size) {
+void LumRenderer::make_vertices (InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size) {
     ogt::ogt_voxel_meshify_context ctx = {};
     //code to generate cube lol
     // const u8 a[] = {1};
@@ -468,28 +535,47 @@ void LumRenderer::make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_si
     }
 // TRACE();
     assert (circ_verts.size() == ogt_mesh->vertex_count);
-    mesh->triangles.vertexes = render.createElemBuffers<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    mesh->triangles.vertexes = render.createElemBuffer<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 // TRACE();
     assert (verts_Pzz.size() != 0);  
     assert (verts_Nzz.size() != 0); 
     assert (verts_zPz.size() != 0); 
     assert (verts_zNz.size() != 0); 
     assert (verts_zzP.size() != 0); 
-    assert (verts_zzN.size() != 0); 
-    mesh->triangles.Pzz.indexes = render.createElemBuffers<u16> (verts_Pzz.data(), verts_Pzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.Nzz.indexes = render.createElemBuffers<u16> (verts_Nzz.data(), verts_Nzz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zPz.indexes = render.createElemBuffers<u16> (verts_zPz.data(), verts_zPz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zNz.indexes = render.createElemBuffers<u16> (verts_zNz.data(), verts_zNz.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzP.indexes = render.createElemBuffers<u16> (verts_zzP.data(), verts_zzP.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    mesh->triangles.zzN.indexes = render.createElemBuffers<u16> (verts_zzN.data(), verts_zzN.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-// TRACE();
+    assert (verts_zzN.size() != 0);
+    
+    std::vector<u16> all_indices;
+    mesh->triangles.Pzz.offset = all_indices.size();
+    all_indices.insert(all_indices.end(), verts_Pzz.begin(), verts_Pzz.end());
     mesh->triangles.Pzz.icount = verts_Pzz.size();
+
+    mesh->triangles.Nzz.offset = all_indices.size();
+    all_indices.insert(all_indices.end(), verts_Nzz.begin(), verts_Nzz.end());
     mesh->triangles.Nzz.icount = verts_Nzz.size();
+
+    mesh->triangles.zPz.offset = all_indices.size();
+    all_indices.insert(all_indices.end(), verts_zPz.begin(), verts_zPz.end());
     mesh->triangles.zPz.icount = verts_zPz.size();
+
+    mesh->triangles.zNz.offset = all_indices.size();
+    all_indices.insert(all_indices.end(), verts_zNz.begin(), verts_zNz.end());
     mesh->triangles.zNz.icount = verts_zNz.size();
+
+    mesh->triangles.zzP.offset = all_indices.size();
+    all_indices.insert(all_indices.end(), verts_zzP.begin(), verts_zzP.end());
     mesh->triangles.zzP.icount = verts_zzP.size();
+
+    mesh->triangles.zzN.offset = all_indices.size();
+    all_indices.insert(all_indices.end(), verts_zzN.begin(), verts_zzN.end());
     mesh->triangles.zzN.icount = verts_zzN.size();
-    mesh->shift = vec3 (0);
-    mesh->rot = quat_identity<float, defaultp>();
+
+    // create a single index buffer for all indices
+    mesh->triangles.indices = render.createElemBuffer<u16>(
+        all_indices.data(), 
+        all_indices.size(), 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+    );
+
+// TRACE();
     ogt::ogt_mesh_destroy (&ctx, (ogt::ogt_mesh*)ogt_mesh);
 }

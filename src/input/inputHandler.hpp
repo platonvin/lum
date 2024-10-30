@@ -23,14 +23,14 @@ Action's could be created in runtime, but there is no need to
 */
 
 //maybe block one if another chosen?
-enum class Device : int{
+enum class Device : char {
     KeyboardMouse,
     Gamepad
     //TODO is it all?
 };
 
 //input obviously does not know game state, so this is purely key-press sugar
-enum class ActionType : int {
+enum class ActionType : char {
     //calls callback every update()
     //used for movement
     Continuous, // DEFAULT

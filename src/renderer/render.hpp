@@ -19,6 +19,7 @@
 #include <RmlUi/Core.h>
 
 #include "../../lum-al/src/al.hpp"
+#include <glm/gtx/quaternion.hpp>
 
 using std::vector;
 using std::cout;
@@ -92,40 +93,68 @@ typedef struct Particle {
 } Particle;
 
 typedef struct IndexedVertices {
-    ring<Buffer> indexes;
-    u32 icount;
+    u32 offset, icount;
 } IndexedVertices;
 
-typedef struct NonIndexedVertices {
-    ring<Buffer> vertices;
-    u32 vcount;
-} NonIndexedVertices;
+// typedef struct NonIndexedVertices {
+//     ring<Buffer> vertices;
+//     u32 vcount;
+// } NonIndexedVertices;
 
 typedef struct FaceBuffers {
     IndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
-    ring<Buffer> vertexes;
+    Buffer vertexes;
+    Buffer indices;
 } FaceBuffers;
 
-typedef struct Mesh {
-    //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
-    FaceBuffers triangles;
-    ring<Image> voxels; //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
-    quat rot;
-    vec3 shift;
-    ivec3 size;
-} Mesh;
+// separate from Mesh so you can "instance" mesh
+typedef struct MeshTransform {
+    quat rot = glm::quat_identity<float, defaultp>();   // rotation quaternion
+    vec3 shift = vec3(0); // float because not necessarily snapped to grid
+} MeshTransform;
 
-typedef struct UiMesh {
+typedef struct InternalMeshModel {
+    FaceBuffers triangles;
+    //staged per frame in flight, so you can update it faster. But costs double the memory
+    //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
+    ring<Image> voxels; 
+    ivec3 size; // integer because in voxels
+} InternalMeshModel;
+
+typedef struct InternalMeshFoliage {
+    //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
+    RasterPipe pipe = {};
+    int vertices;
+    // ivec3 size; // integer because in voxels
+    int dencity; // total dencity^2 foliage objects rendered as mesh
+} InternalMeshFoliage;
+
+typedef struct InternalMeshLiquid {
+    MatID_t main;
+    MatID_t foam;
+} InternalMeshLiquid;
+
+typedef struct InternalMeshVolumetric {
+    float max_dencity;
+    float variation;
+    u8vec3 color;
+} InternalMeshVolumetric;
+
+typedef struct InternalUiMesh {
     Buffer vertexes;
     Buffer indexes;
     u32 icount;
     Image* image;
-} UiMesh;
+} InternalUiMesh;
+
+typedef struct BlockVoxels {
+    Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
+} BlockVoxels;
 
 typedef struct Block {
     Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
-    Mesh mesh;
-} Block; //in palette
+    InternalMeshModel mesh;
+} BlockWithMesh; //in palette
 
 //just 3d array. Content invalid after allocate()
 template <typename Type> class table3d {
@@ -159,10 +188,10 @@ template <typename Type> class table3d {
     Type* data() {return this->memory;}
     uvec3 size() {return _size;}
 
-    Type& operator() (int x, int y, int z) {
+    Type& operator() (int x, int y, int z) const {
         return this->memory [x + _size.x * y + (_size.x* _size.y) * z];
     }
-    Type& operator() (ivec3 v) {return (*this) (v.x, v.y, v.z);}
+    Type& operator() (ivec3 v) const {return (*this) (v.x, v.y, v.z);}
 
 };
 
@@ -183,11 +212,22 @@ typedef struct Camera {
 //forward declaration for pointer
 class MyRenderInterface;
 
+typedef struct LumSpecificSettings {
+    ivec3 world_size = ivec3(48, 48, 16);
+    int static_block_palette_size = 15;
+    int maxParticleCount = 8128;
+} LumSpecificSettings;
+typedef struct LumSettings : Settings, LumSpecificSettings {
+    // wait for it
+    // LumSettings(LumSpecificSettings s) : LumSpecificSettings(s) {};
+    // LumSettings() = default;
+} LumSettings;
+
 struct LumRenderer {
     Renderer render;
     
   public:
-    void init (Settings settings);
+    void init (LumSettings settings);
     void setupDescriptors();
     void createImages();
     VkResult createSwapchainDependent();
@@ -198,20 +238,22 @@ struct LumRenderer {
     void createSamplers();
 
     // sets voxels and size. By default uses first .vox palette as main palette
-    void load_mesh (Mesh* mesh, const char* vox_file, bool _make_vertices = true, bool extrude_palette = true);
+    void load_mesh (InternalMeshModel* mesh, const char* vox_file, bool _make_vertices = true, bool extrude_palette = true, Material* mat_palette = nullptr);
     // sets voxels and size. By default uses first .vox palette as main palette
-    void load_mesh (Mesh* mesh, Voxel* voxel_mem, int x_size, int y_size, int z_size, bool _make_vertices = true);
-    void free_mesh (Mesh* mesh);
-    void make_vertices (Mesh* mesh, Voxel* Voxels, int x_size, int y_size, int z_size);
-    void load_vertices (Mesh* mesh, VoxelVertex* vertices);
+    void load_mesh (InternalMeshModel* mesh, Voxel* voxel_mem, int x_size, int y_size, int z_size, bool _make_vertices = true);
+    // safe to call in game/rendering loop frames
+    void free_mesh (InternalMeshModel* mesh);
+    void make_vertices (InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size);
+    void load_vertices (InternalMeshModel* mesh, VoxelVertex* vertices);
     // void extrude_palette(Material* material_palette);
-    void load_block (Block** block, const char* vox_file);
-    void free_block (Block** block);
+    void load_block (BlockWithMesh* block, const char* vox_file);
+    // safe to call in game/rendering loop frames
+    void free_block (BlockWithMesh* block);
 
     void load_scene (const char* scene_file);
     void save_scene (const char* scene_file);
+    void extract_palette(const char* scene_file, Material* mat_palette);
 
-    Material mat_palette[MATERIAL_PALETTE_SIZE];
     table3d<BlockID_t> origin_world = {};
     table3d<BlockID_t> current_world = {};
     MyRenderInterface* ui_render_interface;
@@ -238,12 +280,12 @@ struct LumRenderer {
     void start_frame();
         void start_compute();
             void start_blockify();
-                void blockify_mesh(Mesh* mesh);
+                void blockify_mesh(InternalMeshModel* mesh, MeshTransform* model_trans);
             void end_blockify();
             void blockify_custom(void* ptr); // just in case you have custom blockify algorithm. If using this, no startBlockify needed
             void exec_copies();
             void start_map();
-                void map_mesh(Mesh* mesh);
+                void map_mesh(InternalMeshModel* mesh, MeshTransform* model_trans);
             void end_map();
             void update_radiance();
             void updade_grass(vec2 windDirection);
@@ -253,23 +295,23 @@ struct LumRenderer {
         void end_compute();
         void start_lightmap();
             void lightmap_start_blocks();
-                void lightmap_block(Mesh* block_mesh, int block_id, ivec3 shift); void lightmap_block_face(i8vec3 normal, IndexedVertices& buff, int block_id);
+                void lightmap_block(InternalMeshModel* block_mesh, int block_id, ivec3 shift); void lightmap_block_face(i8vec3 normal, IndexedVertices& buff, int block_id);
             void lightmap_start_models();
-                void lightmap_model(Mesh* mesh); void lightmap_model_face(vec3 normal, IndexedVertices& buff);
+                void lightmap_model(InternalMeshModel* mesh, MeshTransform* model_trans); void lightmap_model_face(vec3 normal, IndexedVertices& buff);
         void end_lightmap(); //ends somewhere after raygen but operates on separate cmd buf
             // void start_lightmap();
             void start_raygen();
             void raygen_start_blocks();
-                void raygen_block(Mesh* block_mesh, int block_id, ivec3 shift); void draw_block_face(i8vec3 normal, IndexedVertices& buff, int block_id);
+                void raygen_block(InternalMeshModel* block_mesh, int block_id, ivec3 shift); void draw_block_face(i8vec3 normal, IndexedVertices& buff, int block_id);
             void raygen_start_models();
-                void raygen_model(Mesh* mesh); void draw_model_face(vec3 normal, IndexedVertices& buff);
+                void raygen_model(InternalMeshModel* mesh, MeshTransform* model_trans); void draw_model_face(vec3 normal, IndexedVertices& buff);
             void update_particles();
             void raygen_map_particles();
             void raygen_start_grass();
-                void raygen_map_grass(vec4 shift, int size);
+                void raygen_map_grass(InternalMeshFoliage grass, ivec3 pos);
             // void raygen_end_grass();
             void raygen_start_water();
-                void raygen_map_water(vec4 shift, int size);
+                void raygen_map_water(InternalMeshLiquid water, ivec3 pos);
             // void raygen_end_water();
         void end_raygen();
             // void end_raygen_first();
@@ -277,7 +319,8 @@ struct LumRenderer {
             void ambient_occlusion();
             void start_2nd_spass();
                 void glossy_raygen();
-                void smoke_raygen();// special mesh?
+                void raygen_start_smoke();// special mesh?
+                void raygen_map_smoke(InternalMeshVolumetric smoke, ivec3 pos);// special mesh?
                 void smoke();
                 void glossy();
                 void tonemap();
@@ -292,31 +335,31 @@ struct LumRenderer {
     template<class Vertex_T> vector<Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
 
     ring<Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
-    void updateBlockPalette (Block** blockPalette);
+    void updateBlockPalette (BlockWithMesh* blockPalette);
     void updateMaterialPalette (Material* materialPalette);
 
     // VkExtent2D swapChainExtent;
     // VkExtent2D raytraceExtent;
     VkExtent2D lightmapExtent;
 
-    RasterPipe lightmapBlocksPipe;
-    RasterPipe lightmapModelsPipe;
+    RasterPipe lightmapBlocksPipe = {};
+    RasterPipe lightmapModelsPipe = {};
 
-    RasterPipe raygenBlocksPipe;
-    RasterPipe raygenModelsPipe;
+    RasterPipe raygenBlocksPipe = {};
+    RasterPipe raygenModelsPipe = {};
     VkDescriptorSetLayout raygenModelsPushLayout;
-    RasterPipe raygenParticlesPipe;
-    RasterPipe raygenGrassPipe;
-    RasterPipe raygenWaterPipe;
+    RasterPipe raygenParticlesPipe = {};
+    RasterPipe raygenGrassPipe = {};
+    RasterPipe raygenWaterPipe = {};
 
-    RasterPipe diffusePipe;
-    RasterPipe aoPipe;
-    RasterPipe fillStencilGlossyPipe;
-    RasterPipe fillStencilSmokePipe;
-    RasterPipe glossyPipe;
-    RasterPipe smokePipe;
-    RasterPipe tonemapPipe;
-    RasterPipe overlayPipe;
+    RasterPipe diffusePipe = {};
+    RasterPipe aoPipe = {};
+    RasterPipe fillStencilGlossyPipe = {};
+    RasterPipe fillStencilSmokePipe = {};
+    RasterPipe glossyPipe = {};
+    RasterPipe smokePipe = {};
+    RasterPipe tonemapPipe = {};
+    RasterPipe overlayPipe = {};
 
     RenderPass lightmapRpass;
     RenderPass gbufferRpass;
@@ -382,18 +425,18 @@ struct LumRenderer {
     ring<Image> perlinNoise3d; //4 channels of different tileable noise for volumetrics
 
     VkDescriptorPool descriptorPool;
-    ComputePipe raytracePipe;
-    ComputePipe radiancePipe;
-    ComputePipe mapPipe;
+    ComputePipe raytracePipe = {};
+    ComputePipe radiancePipe = {};
+    ComputePipe mapPipe = {};
     VkDescriptorSetLayout mapPushLayout;
-    ComputePipe updateGrassPipe;
-    ComputePipe updateWaterPipe;
-    ComputePipe genPerlin2dPipe; //generate noise for grass
-    ComputePipe genPerlin3dPipe; //generate noise for grass
-    ComputePipe dfxPipe;
-    ComputePipe dfyPipe;
-    ComputePipe dfzPipe;
-    ComputePipe bitmaskPipe;
+    ComputePipe updateGrassPipe = {};
+    ComputePipe updateWaterPipe = {};
+    ComputePipe genPerlin2dPipe = {}; //generate noise for grass
+    ComputePipe genPerlin3dPipe = {}; //generate noise for grass
+    ComputePipe dfxPipe = {};
+    ComputePipe dfyPipe = {};
+    ComputePipe dfzPipe = {};
+    ComputePipe bitmaskPipe = {};
 
   private:
     int paletteCounter = 0;

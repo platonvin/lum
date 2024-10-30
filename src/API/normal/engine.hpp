@@ -49,10 +49,10 @@ public:
     void update();
     void cleanup();
 
-    void update_tank_joints(const Mesh& body, Mesh& head);
+    void update_tank_joints(const InternalMeshModel& body, InternalMeshModel& head);
 
     void update_tank_leg_ik(
-        const Mesh& body, Mesh& leg, const Mesh& body_leg_joint, 
+        const InternalMeshModel& body, InternalMeshModel& leg, const InternalMeshModel& body_leg_joint, 
         const vec3& tank_direction, vec2& target_leg_point, 
         vec2& physical_point, vec2& interpolated_leg_point
     );

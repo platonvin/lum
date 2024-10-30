@@ -17,5 +17,10 @@ this gives higher perfomance (like -flto, but better) and decreases compile time
 #include "ogt_voxel_meshify.cpp"
 #include "meshopt.cpp"
 
-#include "engine.cpp"
-#include "main.cpp"
+// #include "engine.cpp"
+// #include "main.cpp"
+// #include "lum.cpp"
+// #include "demo.cpp"
+
+#include "lum_modern.cpp"
+#include "demo_modern.cpp"

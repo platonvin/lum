@@ -37,14 +37,14 @@ tuple<int, int> get_block_xy (int N);
 
 vector<char> readFile (const char* filename);
 
-
-
-void LumRenderer::init (Settings settings) {
-    world_size = ivec3(48, 48, 16);
-    static_block_palette_size = 15;
-    maxParticleCount = 8128;
+void LumRenderer::init (LumSettings settings) {
+    world_size = settings.world_size;
+    static_block_palette_size = settings.static_block_palette_size;
+    maxParticleCount = settings.maxParticleCount;
+TRACE();
 
     render.init(settings);
+TRACE();
 
     origin_world.allocate (world_size);
     current_world.allocate (world_size);
@@ -327,7 +327,9 @@ TRACE();
     // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_COMPUTE_BIT);
+TRACE();
     render.flushDescriptorSetup();
+TRACE();
 }
 
 void LumRenderer::createPipilines() {
@@ -684,8 +686,10 @@ void LumRenderer::cleanup() {
         vmaDestroyBuffer (render.VMAllocator, gpuRadianceUpdates[i].buffer, gpuRadianceUpdates[i].alloc);
     }
     cleanupSwapchainDependent();
+ATRACE();
 
     render.cleanup();
+ATRACE();
 }
 
 VkResult LumRenderer::cleanupSwapchainDependent() {
@@ -867,9 +871,9 @@ static AABB get_shift (dmat4 trans, ivec3 size) {
 }
 
 // allocates temp block in palette for every block that intersects with every mesh blockified
-void LumRenderer::blockify_mesh (Mesh* mesh) {
-    mat4 rotate = toMat4 ((*mesh).rot);
-    mat4 shift = translate (identity<mat4>(), (*mesh).shift);
+void LumRenderer::blockify_mesh (InternalMeshModel* mesh, MeshTransform* trans) {
+    mat4 rotate = toMat4 ((*trans).rot);
+    mat4 shift = translate (identity<mat4>(), (*trans).shift);
     struct AABB border_in_voxel = get_shift (shift* rotate, (*mesh).size);
     struct {ivec3 min; ivec3 max;} border;
     border.min = (ivec3 (border_in_voxel.min) - ivec3 (1)) / ivec3 (16);
@@ -1082,7 +1086,7 @@ void LumRenderer::start_map() {
     PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
-void LumRenderer::map_mesh (Mesh* mesh) {
+void LumRenderer::map_mesh (InternalMeshModel* mesh, MeshTransform* mesh_trans) {
     VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
     VkDescriptorImageInfo
         modelVoxelsInfo = {};
@@ -1098,8 +1102,8 @@ void LumRenderer::map_mesh (Mesh* mesh) {
         modelVoxelsWrite.pImageInfo = &modelVoxelsInfo;
     vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite};
     vkCmdPushDescriptorSetKHR (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
-    dmat4 rotate = toMat4 ((*mesh).rot);
-    dmat4 shift = translate (identity<mat4>(), (*mesh).shift);
+    dmat4 rotate = toMat4 ((*mesh_trans).rot);
+    dmat4 shift = translate (identity<mat4>(), (*mesh_trans).shift);
     dmat4 transform = shift * rotate;
     struct AABB border_in_voxel = get_shift (transform, (*mesh).size);
     struct {ivec3 min; ivec3 max;} border;
@@ -1199,9 +1203,8 @@ if(is_face_visible(i8vec3(__norm), camera.cameraDir)) {\
 }
 void LumRenderer::draw_block_face (i8vec3 normal, IndexedVertices& buff, int block_id) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    assert (buff.indexes.data());
+    // assert (buff.indexes.data());
     assert (block_id);
-    vkCmdBindIndexBuffer (commandBuffer, buff.indexes.current().buffer, 0, VK_INDEX_TYPE_UINT16);
     i8 sum = normal.x + normal.y + normal.z;
     u8 sign = (sum > 0) ? 0 : 1;
     u8vec3 absnorm = abs (normal);
@@ -1216,15 +1219,20 @@ void LumRenderer::draw_block_face (i8vec3 normal, IndexedVertices& buff, int blo
     struct {u8vec4 inorm;} norms = {u8vec4 (pbn, 0, 0, 0)};
     vkCmdPushConstants (commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         8, sizeof (norms), &norms);
-    vkCmdDrawIndexed (commandBuffer, buff.icount, 1, 0, 0, 0);
+    vkCmdDrawIndexed (commandBuffer, buff.icount, 1, buff.offset, 0, 0);
 }
 
-void LumRenderer::raygen_block (Mesh* block_mesh, int block_id, ivec3 shift) {
+void LumRenderer::raygen_block (InternalMeshModel* block_mesh, int block_id, ivec3 shift) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    VkBuffer vertexBuffers[] = { (*block_mesh).triangles.vertexes.current().buffer};
+    VkBuffer vertexBuffers[] = {(*block_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
-    BIND_CACHED((*block_mesh).triangles.vertexes.current().buffer,
+    DEBUG_LOG((*block_mesh).triangles.vertexes.buffer)
+    BIND_CACHED((*block_mesh).triangles.vertexes.buffer,
         vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets));
+    BIND_CACHED((*block_mesh).triangles.indices.buffer,
+        vkCmdBindIndexBuffer (commandBuffer, (*block_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16));
+    ;
+
     /*
         int16_t block;
         i16vec3 shift;
@@ -1249,31 +1257,31 @@ void LumRenderer::raygen_start_models() {
 }
 
 #define CHECK_N_DRAW_MODEL(__norm, __dir) \
-if(is_face_visible(model_mesh->rot*__norm, camera.cameraDir)) {\
+if(is_face_visible(model_trans->rot*__norm, camera.cameraDir)) {\
     draw_model_face(__norm, (*model_mesh).triangles.__dir);\
 }
 void LumRenderer::draw_model_face (vec3 normal, IndexedVertices& buff) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    assert (buff.indexes.data());
-    vkCmdBindIndexBuffer (commandBuffer, buff.indexes.current().buffer, 0, VK_INDEX_TYPE_UINT16);
+    // assert (buff.indexes.data());
     struct {vec4 fnorm;} norms = {vec4 (normal, 0)};
     vkCmdPushConstants (commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         32, sizeof (norms), &norms);
-    vkCmdDrawIndexed (commandBuffer, buff.icount, 1, 0, 0, 0);
+    vkCmdDrawIndexed (commandBuffer, buff.icount, 1, buff.offset, 0, 0);
 }
 
-void LumRenderer::raygen_model (Mesh* model_mesh) {
+void LumRenderer::raygen_model (InternalMeshModel* model_mesh, MeshTransform* model_trans) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    VkBuffer vertexBuffers[] = { (*model_mesh).triangles.vertexes.current().buffer};
+    VkBuffer vertexBuffers[] = { (*model_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
-    BIND_CACHED((*model_mesh).triangles.vertexes.current().buffer,
+    BIND_CACHED((*model_mesh).triangles.vertexes.buffer,
         vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets));
+    vkCmdBindIndexBuffer (commandBuffer, (*model_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     /*
         vec4 rot;
         vec4 shift;
         vec4 fnormal; //not encoded
     */
-    struct {quat rot; vec4 shift;} rotshift = {model_mesh->rot, vec4 (model_mesh->shift, 0)};
+    struct {quat rot; vec4 shift;} rotshift = {model_trans->rot, vec4 (model_trans->shift, 0)};
     vkCmdPushConstants (commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         0, sizeof (rotshift), &rotshift);
     VkDescriptorImageInfo
@@ -1305,16 +1313,17 @@ if(is_face_visible(i8vec3(__norm), lightDir)){\
 }
 void LumRenderer::lightmap_block_face (i8vec3 normal, IndexedVertices& buff, int block_id) {
     VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
-    vkCmdBindIndexBuffer (lightmap_commandBuffer, buff.indexes.current().buffer, 0, VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed (lightmap_commandBuffer, buff.icount, 1, 0, 0, 0);
+    vkCmdDrawIndexed (lightmap_commandBuffer, buff.icount, 1, buff.offset, 0, 0);
 }
 
-void LumRenderer::lightmap_block (Mesh* block_mesh, int block_id, ivec3 shift) {
+void LumRenderer::lightmap_block (InternalMeshModel* block_mesh, int block_id, ivec3 shift) {
     VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
-    VkBuffer vertexBuffers[] = { (*block_mesh).triangles.vertexes.current().buffer};
+    VkBuffer vertexBuffers[] = {(*block_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
-    BIND_CACHED((*block_mesh).triangles.vertexes.current().buffer,
+    // DEBUG_LOG((*block_mesh).triangles.vertexes.buffer)
+    BIND_CACHED((*block_mesh).triangles.vertexes.buffer,
         vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets));
+    vkCmdBindIndexBuffer (lightmap_commandBuffer, (*block_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     /*
         int16_t block;
         i16vec3 shift;
@@ -1332,27 +1341,27 @@ void LumRenderer::lightmap_block (Mesh* block_mesh, int block_id, ivec3 shift) {
 }
 
 #define CHECK_N_LIGHTMAP_MODEL(__norm, __dir) \
-if(is_face_visible(model_mesh->rot*(__norm), lightDir)){\
+if(is_face_visible(model_trans->rot*(__norm), lightDir)){\
     lightmap_model_face(__norm, (*model_mesh).triangles.__dir);\
 }
 void LumRenderer::lightmap_model_face (vec3 normal, IndexedVertices& buff) {
     VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
-    vkCmdBindIndexBuffer (lightmap_commandBuffer, buff.indexes.current().buffer, 0, VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed (lightmap_commandBuffer, buff.icount, 1, 0, 0, 0);
+    vkCmdDrawIndexed (lightmap_commandBuffer, buff.icount, 1, buff.offset, 0, 0);
 }
 
-void LumRenderer::lightmap_model (Mesh* model_mesh) {
+void LumRenderer::lightmap_model (InternalMeshModel* model_mesh, MeshTransform* model_trans) {
     VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
-    VkBuffer vertexBuffers[] = { (*model_mesh).triangles.vertexes.current().buffer};
+    VkBuffer vertexBuffers[] = {(*model_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
-    BIND_CACHED((*model_mesh).triangles.vertexes.current().buffer,
-         vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets));
+    BIND_CACHED((*model_mesh).triangles.vertexes.buffer,
+        vkCmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets));
+    vkCmdBindIndexBuffer (lightmap_commandBuffer, (*model_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     /*
         vec4 rot;
         vec4 shift;
         vec4 fnormal; //not encoded
     */
-    struct {quat rot; vec4 shift;} rotshift = {model_mesh->rot, vec4 (model_mesh->shift, 0)};
+    struct {quat rot; vec4 shift;} rotshift = {model_trans->rot, vec4 (model_trans->shift, 0)};
     vkCmdPushConstants (lightmap_commandBuffer, lightmapModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT,
         0, sizeof (rotshift), &rotshift);
     CHECK_N_LIGHTMAP_MODEL (vec3 (+1, 0, 0), Pzz);
@@ -1445,17 +1454,19 @@ void LumRenderer::updade_water() {
 
 //blade is hardcoded but it does not really increase perfomance
 //done this way for simplicity, can easilly be replaced with any vertex buffer
-void LumRenderer::raygen_map_grass (vec4 shift, int size) {
+void LumRenderer::raygen_map_grass (InternalMeshFoliage grass, ivec3 pos) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    // int size = grass.dencity;
+    int size = 10;
     bool x_flip = camera.cameraDir.x < 0;
     bool y_flip = camera.cameraDir.y < 0;
-    struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {shift, size, render.iFrame, x_flip, y_flip};
+    struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {vec4(pos,0), size, render.iFrame, x_flip, y_flip};
     vkCmdPushConstants (commandBuffer, raygenGrassPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
-    const int verts_per_blade = 6; //for triangle strip
+    const int verts_per_blade = grass.vertices; //for triangle strip
     const int blade_per_instance = 1; //for triangle strip
     vkCmdDraw (commandBuffer,
                verts_per_blade* blade_per_instance,
-               (size* size + (blade_per_instance - 1)) / blade_per_instance,
+               (size * size + (blade_per_instance - 1)) / blade_per_instance,
                0, 0);
 }
 
@@ -1468,9 +1479,10 @@ void LumRenderer::raygen_start_water() {
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.lineLayout, 0, 1, &raygenWaterPipe.sets.current(), 0, 0);
 }
 
-void LumRenderer::raygen_map_water (vec4 shift, int qualitySize) {
+void LumRenderer::raygen_map_water (InternalMeshLiquid water, ivec3 pos) {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {shift, qualitySize, render.iFrame};
+    int qualitySize = 32;
+    struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {vec4(pos,0), qualitySize, render.iFrame};
     vkCmdPushConstants (commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
     const int verts_per_water_tape = qualitySize * 2 + 2;
     const int tapes_per_block = qualitySize;
@@ -1565,12 +1577,16 @@ void LumRenderer::glossy_raygen() {
     PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
 }
 
-void LumRenderer::smoke_raygen() {
+void LumRenderer::raygen_start_smoke() {
     VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     render.cmdBindPipe(commandBuffer, fillStencilSmokePipe);
     vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilSmokePipe.lineLayout, 0, 1, &fillStencilSmokePipe.sets.current(), 0, 0);
-    struct rtpc {vec4 centerSize;} pushconstant = {vec4 (vec3 (11, 11, 1.5) * 16.f, 32)};
+}
+
+void LumRenderer::raygen_map_smoke(InternalMeshVolumetric smoke, ivec3 pos) {
+    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    struct rtpc {vec4 centerSize;} pushconstant = {vec4 (vec3 (pos) * 16.f, 32)};
     specialRadianceUpdates.push_back (ivec4 (11, 11, 1, 0));
     vkCmdPushConstants (commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
     PLACE_TIMESTAMP_OUTSIDE(commandBuffer);

@@ -10,7 +10,7 @@
 //     return static_cast<E>(value);
 // }
 
-enum class GameAction : int {
+enum class GameAction : char {
     MOVE_CAMERA_FORWARD,
     MOVE_CAMERA_BACKWARD,
     MOVE_CAMERA_LEFT,
