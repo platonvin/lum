@@ -48,6 +48,31 @@ SHADERS_EXTRA_DEPEND = \
 # Source files, mostly for incremental build
 # src/cdemo.c
 
+LIB_CPP_SOURCES = \
+    src/lum.cpp \
+    src/renderer/render.cpp \
+    src/renderer/ao_lut.cpp \
+    src/renderer/setup.cpp \
+    src/renderer/load_stuff.cpp \
+    src/renderer/render_ui_interface.cpp \
+    src/renderer/ui.cpp \
+    common/ogt_vox.cpp \
+    common/ogt_voxel_meshify.cpp \
+    common/meshopt.cpp
+
+LIB_C99_SOURCES = \
+    src/lum.cpp \
+    src/clum.cpp \
+    src/renderer/render.cpp \
+    src/renderer/ao_lut.cpp \
+    src/renderer/setup.cpp \
+    src/renderer/load_stuff.cpp \
+    src/renderer/render_ui_interface.cpp \
+    src/renderer/ui.cpp \
+    common/ogt_vox.cpp \
+    common/ogt_voxel_meshify.cpp \
+    common/meshopt.cpp
+
 ALL_SOURCES = \
     src/demo.cpp \
     src/lum.cpp \
@@ -179,7 +204,7 @@ lum-al/lib/liblumal.a: vcpkg_installed | check_vcpkg_itself
 #mostly for testing
 only_build: init compile_shaders lum-al/lib/liblumal.a $(COMMON_OBJECTS) $(DEV_OBJECTS) build_dev
 
-only_build_unity: init compile_shaders build_unity
+only_build_unity: init compile_shaders build_unity_lib_cpp build_unity_lib_c99 build_demo_cpp build_demo_c99
 
 #i could not make it work without this. Maybe posssible with eval
 build_deb: setup $(DEBUG_OBJECTS) $(COMMON_OBJECTS)
@@ -189,14 +214,14 @@ build_dev: setup $(COMMON_OBJECTS) $(DEV_OBJECTS)
 
 # build libs objects and ar them
 # C++ API lib
-obj/rel/unity/unity_lib.o: src/unity/unity_lib.cpp | setup
+obj/rel/unity/unity_lib.o: src/unity/unity_lib.cpp $(LIB_CPP_SOURCES) | setup
 	c++ $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
 build_unity_lib_cpp: obj/rel/unity/unity_lib.o
 	ar rvs lib/liblum.a obj/rel/unity/unity_lib.o
 # C99 API lib
-obj/rel/unity/unity_c_lib.o: src/unity/unity_c_lib.cpp | setup
+obj/rel/unity/unity_c_lib.o: src/unity/unity_c_lib.cpp $(LIB_C99_SOURCES) | setup
 	c++ $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
@@ -212,11 +237,11 @@ build_unity_demo_99: setup
 
 # example of unity library + separate (unity or not unity) app, linked with unity-built lib
 # note that you dont have to link with lumal
-build_demo_cpp: setup obj/rel/demo.o
+build_demo_cpp: setup obj/rel/demo.o build_unity_lib_cpp
 	c++         -o bin/demo_cpp$(RUN_POSTFIX) obj/rel/demo.o  -Llib  -llum $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 # (!) library was (& has to be) built with C++ compiler, but your code can be compiled and linked by C compiler
 # you still HAVE TO link against -lstdc++ (and put it last. Order matters)
-build_demo_c99: setup obj/rel/cdemo.o
+build_demo_c99: setup obj/rel/cdemo.o build_unity_lib_c99
 	cc -std=c99 -o bin/demo_c99$(RUN_POSTFIX) obj/rel/cdemo.o -Llib -lclum -Ofast $(common_instructions) -s -Wl,--gc-sections $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) -lstdc++ $(STATIC_OR_DYNAMIC)
 
 fun:
@@ -256,19 +281,20 @@ endif
 cleand: folders
 ifeq ($(OS),Windows_NT)
 	-del "obj\deb\*.o" 
-	-del "obj\deb\render\*.o"  
+	-del "obj\deb\renderer\*.o"  
 else
 	-rm -R obj/deb/*.o
-	-rm -R obj/deb/render/*.o
+	-rm -R obj/deb/renderer/*.o
 endif
 
 cleanr: folders
 ifeq ($(OS),Windows_NT)
 	-del "obj\rel\*.o"  
-	-del "obj\rel\render\*.o"  
+	-del "obj\rel\renderer\*.o"  
+	-del "obj\rel\renderer\*.o"  
 else
 	-rm -R obj/rel/*.o
-	-rm -R obj/rel/render/*.o
+	-rm -R obj/rel/renderer/*.o
 endif
 
 clean: folders
@@ -276,18 +302,22 @@ ifeq ($(OS),Windows_NT)
 	-del "obj\*.o"
 	-del "obj\deb\*.o"
 	-del "obj\rel\*.o"
-	-del "obj\deb\render\*.o"  
-	-del "obj\rel\render\*.o"  
+	-del "obj\deb\renderer\*.o"  
+	-del "obj\rel\renderer\*.o"  
 	-del "shaders\compiled\*.spv"
 	-del "lum-al\lib\*.a"
+	-del "lib\*.a"
+	-del "bin\*.exe"
 else
 	-rm -R obj/*.o
 	-rm -R obj/deb/*.o 
 	-rm -R obj/rel/*.o 
-	-rm -R obj/deb/render/*.o
-	-rm -R obj/rel/render/*.o
+	-rm -R obj/deb/renderer/*.o
+	-rm -R obj/rel/renderer/*.o
 	-rm -R shaders/compiled/*.spv 
 	-rm -R lum-al/lib/*.a
+	-rm -R lib/*.a
+	-rm -R bin/*
 endif
 
 init: folders vcpkg_installed vcpkg_installed_eval lum-al/lib/liblumal.a
