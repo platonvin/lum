@@ -129,8 +129,8 @@ vcpkg_installed_eval: vcpkg_installed | check_vcpkg_itself
 	$(eval INCLUDE_DIRS += $(addprefix -I, $(INCLUDE_LIST)) )
 	$(eval LINK_DIRS += $(addprefix -L, $(LIB_LIST)) )
 	$(eval GLSLC_DIR := $(firstword $(foreach dir, $(OTHER_DIRS), $(wildcard $(dir)/tools/glslang))) )
-	$(eval GLSLC := $(strip $(GLSLC_DIR))/glslang )
-	$(eval GLSLC := $(subst /,\\,$(GLSLC)) )
+	$(eval GLSLC := $(strip $(GLSLC_DIR))/glslang ) 
+	$(eval GLSLC := $(subst /,$(SLASH),$(GLSLC)) )
 
 setup: init vcpkg_installed_eval lum-al/lib/liblumal.a
 
