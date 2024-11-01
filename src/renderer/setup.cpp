@@ -1,9 +1,9 @@
 #include "render.hpp"
 #include "defines/macros.hpp"
 
-ring<Image> LumRenderer::create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size) {
+ring<Lumal::Image> LumInternal::LumInternalRenderer::create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size) {
     VkDeviceSize bufferSize = (sizeof (Voxel)) * size.x * size.y * size.z;
-    ring<Image> voxelImages = {};
+    ring<Lumal::Image> voxelImages = {};
     render.createImageStorages (&voxelImages,
                            VK_IMAGE_TYPE_3D,
                            VK_FORMAT_R8_UINT,
@@ -11,7 +11,7 @@ ring<Image> LumRenderer::create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size)
                            VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
                            0, // no VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT
                            VK_IMAGE_ASPECT_COLOR_BIT,
-                           extent3d(size));
+                           Lumal::extent3d(size));
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         render.transitionImageLayoutSingletime (&voxelImages[i], VK_IMAGE_LAYOUT_GENERAL);
     }
@@ -38,7 +38,7 @@ ring<Image> LumRenderer::create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size)
     return voxelImages;
 }
 
-void LumRenderer::createSamplers() {
+void LumInternal::LumInternalRenderer::createSamplers() {
     VkSamplerCreateInfo 
         samplerInfo = {};
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;

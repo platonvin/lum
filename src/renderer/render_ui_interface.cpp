@@ -11,7 +11,7 @@
 
 // Called by RmlUi when it wants to render geometry that the application does not wish to optimise
 // Called in active renderpass
-void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
+void LumInternal::MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
                                         int num_vertices,
                                         int* indices,
                                         int num_indices,
@@ -46,7 +46,7 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
     struct {vec4 shift; mat4 trans;} ui_pc = {vec4 (translation.x, translation.y, render->render.swapChainExtent.width, render->render.swapChainExtent.height), current_transform};
     //TODO:
     vkCmdPushConstants (renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (ui_pc), &ui_pc);
-    Image* texture_image = (Image*)texture;
+    Lumal::Image* texture_image = (Lumal::Image*)texture;
     VkDescriptorImageInfo
         textureInfo = {};
     if (texture_image != NULL) {
@@ -70,16 +70,16 @@ void MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
     vkCmdBindIndexBuffer (renderCommandBuffer, ui_mesh.indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
     // render->render.cmdPipelineBarrier(renderCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS);
     vkCmdDrawIndexed (renderCommandBuffer, ui_mesh.icount, 1, 0, 0, 0);
-    BufferDeletion vBufferDel = {ui_mesh.vertexes, MAX_FRAMES_IN_FLIGHT};
-    BufferDeletion iBufferDel = {ui_mesh.indexes, MAX_FRAMES_IN_FLIGHT};
+    Lumal::BufferDeletion vBufferDel = {ui_mesh.vertexes, MAX_FRAMES_IN_FLIGHT};
+    Lumal::BufferDeletion iBufferDel = {ui_mesh.indexes, MAX_FRAMES_IN_FLIGHT};
     render->render.bufferDeletionQueue.push_back (vBufferDel);
     render->render.bufferDeletionQueue.push_back (iBufferDel);
 }
 
 // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
-Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture) {
+Rml::CompiledGeometryHandle LumInternal::MyRenderInterface::CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture) {
     InternalUiMesh* ui_mesh = new InternalUiMesh;
-    ui_mesh->image = (Image*)texture;
+    ui_mesh->image = (Lumal::Image*)texture;
     ui_mesh->icount = num_indices;
     // for(int i=0; i < num_vertices; i++){
     // printf("%3d tex: x%6f y%6f\n", i, vertices[i].tex_coord.x, vertices[i].tex_coord.y);
@@ -132,7 +132,7 @@ Rml::CompiledGeometryHandle MyRenderInterface::CompileGeometry (Rml::Vertex* ver
 }
 
 // Called by RmlUi when it wants to render application-compiled geometry.
-void MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation) {
+void LumInternal::MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation) {
     VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     InternalUiMesh* ui_mesh = (InternalUiMesh*)geometry;
     VkBuffer vertexBuffers[] = {ui_mesh->vertexes.buffer};
@@ -141,7 +141,7 @@ void MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geom
     //TODO:
     vkCmdPushConstants (renderCommandBuffer, render->overlayPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (ui_pc), &ui_pc);
     // vkCmdPushConstants(renderCommandBuffer, render->render.overlayPipe.pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rgpc), &rgpc);
-    Image* texture_image = ui_mesh->image;
+    Lumal::Image* texture_image = ui_mesh->image;
 // printl(texture_image);
     VkDescriptorImageInfo
     textureInfo = {};
@@ -169,18 +169,18 @@ void MyRenderInterface::RenderCompiledGeometry (Rml::CompiledGeometryHandle geom
 }
 
 // Called by RmlUi when it wants to release application-compiled geometry.
-void MyRenderInterface::ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry) {
+void LumInternal::MyRenderInterface::ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry) {
     //we cant immediately relese it because previous frames use buffers for rendering (exept when 1 fif)
     //so we add it to deletion queue
     InternalUiMesh* mesh = (InternalUiMesh*)geometry;
-    BufferDeletion vBufferDel = {mesh->vertexes, MAX_FRAMES_IN_FLIGHT};
-    BufferDeletion iBufferDel = {mesh->indexes, MAX_FRAMES_IN_FLIGHT};
+    Lumal::BufferDeletion vBufferDel = {mesh->vertexes, MAX_FRAMES_IN_FLIGHT};
+    Lumal::BufferDeletion iBufferDel = {mesh->indexes, MAX_FRAMES_IN_FLIGHT};
     render->render.bufferDeletionQueue.push_back (vBufferDel);
     render->render.bufferDeletionQueue.push_back (iBufferDel);
 }
 
 // Called by RmlUi when it wants to enable or disable scissoring to clip content.
-void MyRenderInterface::EnableScissorRegion (bool enable) {
+void LumInternal::MyRenderInterface::EnableScissorRegion (bool enable) {
     VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     if (true) {
         //do nothing...
@@ -194,7 +194,7 @@ void MyRenderInterface::EnableScissorRegion (bool enable) {
 }
 
 // Called by RmlUi when it wants to change the scissor region.
-void MyRenderInterface::SetScissorRegion (int x, int y, int width, int height) {
+void LumInternal::MyRenderInterface::SetScissorRegion (int x, int y, int width, int height) {
     VkCommandBuffer& renderCommandBuffer = render->graphicsCommandBuffers.current();
     last_scissors = {};
     last_scissors.offset = {std::clamp (x, 0, int (render->render.swapChainExtent.width - 1)),
@@ -225,13 +225,14 @@ struct TGAHeader {
 // Restore packing
 #pragma pack()
 
-char* readFileBuffer (const char* path, size_t* size);
+std::vector<char> readFileBuffer(const std::string& asset_name);
 // Called by RmlUi when a texture is required by the library.
-bool MyRenderInterface::LoadTexture (Rml::TextureHandle& texture_handle,
+bool LumInternal::MyRenderInterface::LoadTexture (Rml::TextureHandle& texture_handle,
                                      Rml::Vector2i& texture_dimensions,
                                      const Rml::String& source) {
     size_t bsize;
-    Rml::byte* bytes = (Rml::byte*) readFileBuffer (source.c_str(), &bsize);
+    auto buffer = readFileBuffer (source.c_str());
+    Rml::byte* bytes = (Rml::byte*) buffer.data();
     TGAHeader header = {};
     memcpy (&header, bytes, sizeof (TGAHeader));
     int color_mode = header.bitsPerPixel / 8;
@@ -272,16 +273,16 @@ bool MyRenderInterface::LoadTexture (Rml::TextureHandle& texture_handle,
     texture_dimensions.x = header.width;
     texture_dimensions.y = header.height;
     delete[] image_dest_buffer;
-    free (bytes);
+
     bool res = GenerateTexture (texture_handle, image_dest_buffer, texture_dimensions);
     return res;
 }
 
 // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
-bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
+bool LumInternal::MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
         const Rml::byte* source,
         const Rml::Vector2i& source_dimensions) {
-    Image* texture_image = new Image;
+    Lumal::Image* texture_image = new Lumal::Image;
     VkDeviceSize bufferSize = (sizeof (Rml::byte) * 4) * source_dimensions.x * source_dimensions.y;
     assert (bufferSize != 0);
     // if(bufferSize == 0) return false;
@@ -379,13 +380,13 @@ bool MyRenderInterface::GenerateTexture (Rml::TextureHandle& texture_handle,
 }
 
 // Called by RmlUi when a loaded texture is no longer required.
-void MyRenderInterface::ReleaseTexture (Rml::TextureHandle texture_handle) {
-    render->render.imageDeletionQueue.push_back ({ * ((Image*)texture_handle), MAX_FRAMES_IN_FLIGHT});
+void LumInternal::MyRenderInterface::ReleaseTexture (Rml::TextureHandle texture_handle) {
+    render->render.imageDeletionQueue.push_back ({ * ((Lumal::Image*)texture_handle), MAX_FRAMES_IN_FLIGHT});
 }
 
 // Called by RmlUi when it wants the renderer to use a new transform matrix.
 // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
 // an identity matrix or otherwise omit the multiplication with the transform.
-void MyRenderInterface::SetTransform (const Rml::Matrix4f* transform) {
+void LumInternal::MyRenderInterface::SetTransform (const Rml::Matrix4f* transform) {
     current_transform = (* (mat4*) (transform));
 }

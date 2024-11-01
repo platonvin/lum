@@ -13,35 +13,7 @@ https://github.com/user-attachments/assets/ce7883c4-a706-406f-875c-fbf23d68020d
 
 
 ## Feature-list
-
-*for perfomance lists go to end
-
-support level:
- - 0 - not implemented yet
- - 1 - partially implemented (e.g. hardcoded)
- - 2 - fully implemented
-
-| Feature | Support Level | Description | 
-| --- | --- | --- | 
-| High performance  | 3 | Fully optimized :rocket: - works well even on integrated GPUs | 
-| Library separation | 1.5 | simple API exists, but it might need improvements | 
-| Raytraced voxel-space reflections (glossy) | 2 | Fully implemented | 
-| Non-per-block diffuse light | 0.1 | Implemented in past, not fast enough yet (requires accumulation and denoising) | 
-| Ambient Occlusion | 2 | Fully implemented (HBAO btw) | 
-| Per-block raytraced lighting (diffuse) | 1.9 | implemented, needs 6-direction radiance | 
-| Lightmaps | 1 | Partially implemented (Sun only) | 
-| Deferred rendering | 2 | Fully implemented | 
-| Particle system | 1 | Partially implemented (CPU side, no blocks) | 
-| Foliage rendering | 1 | Partially implemented (hardcoded grass) | 
-| Water rendering | 1.9 | Nearly complete (cascaded DFT, no control) | 
-| Volumetrics | 1 | Partially implemented (hardcoded raster) | 
-| Postprocess | 1 | Partially implemented (needs sharpening, proper values for correction) | 
-| UI | 1 | Partially implemented (needs? some RmlUI abstraction) |
-| Material palette | 1 | Needs better management | 
-| Bloom | 0 | Not implemented (Does Lum need ~~bLum~~ bloom?) | 
-| Transparency | 0 | Not implemented. Big challenge BTW | 
-| Settings | 1 | Partially implemented (CPU-side only; needs block size, material palette size, etc.) | 
-| OpenGL backend | 0 | this is going to be a long journey... |
+[md file with features](FEATURES.md)
 
 ## Installation
 - ### Prerequisites
@@ -155,36 +127,6 @@ flowchart TD
     style 3tonemapping color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
     style 3ui color:#1E1A1D, fill:#83C5BE, stroke:#1B2A41
 ```
-
-### Performance TODO List 
-| Feature | Support Level | Description | 
-| --- | --- | --- | 
-| Shader JIT | 0 | TODO, +settings (specialization constants?) | 
-| World shift | 0 | TODO | 
-| Stencil buffer generation | 1 | Discard in FS is used currently, TODO: simple raster | 
-| No-stall swapchain recreation | 0 | AKA resize window | 
-| LOD for "rough" rays | 0 | Not implemented | 
-| Small vertex buffer optimization | 0 | Not implemented | 
-| Depth sorting | 1.7 | Needs better algorithm | 
-| Radiance | 1 | Needs more stable work distribution | 
-| Better indexing | 0 | Not implemented (beta omega curve? Morton?) | 
-
-
-### Some implemented optimizations 
-| Optimization | Support Level  | Description | 
-| --- | --- | --- | 
-| Contour meshing | 2 | No per-voxel data in vertices. Saves VFA, PES+VPC, memory (cache, VRAM) | 
-| GPU-driven grass | 2 | No per-blade data. Saves memory | 
-| Water simulation | 2 | Cascaded DFT. Saves memory | 
-| HBAO LUT | 2 | Completed. Reduces computations for small memory| 
-| BVH hierarchy | 2 | Least possible scoreboard stall for huge saves | 
-| Subpasses | 1.99 | Nearly complete. Might save a lot of memory, does on mobile and some others | 
-| Screen-space volumetrics | 2 | Custom depth buffer via programmable blend min/max. Saves 3d volumetrics structure | 
-| Inverse voxel mapping | 2 | Mapping from world from model instead of from model into world. Prevents override | 
-| Smallest possible formats | 1.99 | Some formats are just not faster | 
-| Quaternions | 2 | Fully implemented (no stretching tho. 50% memory saves) | 
-| Smallest precision | 2 | 16/8 bit when possible. Saves a ton | 
-| Shadow samplers | 2 | No gains on modern hardware |
 
 ### Demo controls
 - WASD for camera movement

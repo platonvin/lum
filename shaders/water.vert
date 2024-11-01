@@ -7,8 +7,9 @@ it is basically cascade heightmap sampling
 rendered via instanced triangle strips that represent long thin rectangles
 can probably be optimized by few times
 */
-#include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(push_constant) uniform readonly restrict constants{
     vec4 shift;

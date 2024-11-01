@@ -1,3 +1,7 @@
+#pragma once
+#ifndef __INPUT_HPP__
+#define __INPUT_HPP__
+
 #include "inputHandler.hpp"
 
 // template <typename E>
@@ -70,3 +74,5 @@ public:
     Input(){};
     //  handler;
 };
+
+#endif // __INPUT_HPP__

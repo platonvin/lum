@@ -5,8 +5,9 @@ layout(early_fragment_tests) in;
 precision varp int;
 precision varp float;
 
-#include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(binding = 1, set = 0) uniform usampler3D blockPalette;
 

@@ -3,7 +3,7 @@
 #ifndef __ARENA_HPP__
 #define __ARENA_HPP__
 
-// extracted from [Circulli Bellum] (https://github.com/platonvin/circuli-Bellum)
+// extracted from [Circulli Bellum](https://github.com/platonvin/circuli-Bellum)
 // simple arena allocator with faster allocation time
 
 #include <vector>

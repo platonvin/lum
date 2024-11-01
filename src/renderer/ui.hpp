@@ -69,7 +69,7 @@ class Ui {
     void update();
     void draw();
     void cleanup();
-    LumRenderer* renderer;
+    LumInternal::LumInternalRenderer* renderer;
     SystemInterface_GLFW sysInterface;
 
     Rml::Context* context;

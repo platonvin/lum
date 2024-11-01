@@ -7,7 +7,8 @@ layout(location = 0) out float  far_depth_out;
 layout(location = 1) out float near_depth_out;
 
 //desired effect of separation achieved through min max blend
-#include "common/ext.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
 
 void main() {
     if(!gl_FrontFacing){

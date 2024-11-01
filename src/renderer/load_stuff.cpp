@@ -2,6 +2,7 @@
 #include "defines/macros.hpp"
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <fstream>
 
 using std::array;
 using std::vector;
@@ -21,7 +22,6 @@ using glm::vec,glm::vec2,glm::vec3,glm::vec4;
 using glm::dvec2,glm::dvec3,glm::dvec4;
 using glm::mat, glm::mat2, glm::mat3, glm::mat4;
 using glm::dmat2, glm::dmat3, glm::dmat4;
-using glm::quat_identity;
 
 tuple<int, int> get_block_xy (int N);
 
@@ -33,7 +33,7 @@ struct bp_tex {u8 r;};
 
 #endif
 //block palette on cpu side is expected to be array of pointers to blocks
-void LumRenderer::updateBlockPalette (BlockWithMesh* blockPalette) {
+void LumInternal::LumInternalRenderer::updateBlockPalette (BlockWithMesh* blockPalette) {
     //block palette is in u8, but for easy copying we convert it to u16 cause block palette is R16_UNIT
     VkDeviceSize bufferSize = (sizeof (bp_tex)) * 16 * BLOCK_PALETTE_SIZE_X * 16 * BLOCK_PALETTE_SIZE_Y * 16;
     table3d<bp_tex> blockPaletteLinear = {};
@@ -86,7 +86,7 @@ void LumRenderer::updateBlockPalette (BlockWithMesh* blockPalette) {
 }
 
 //TODO: do smth with frames in flight
-void LumRenderer::updateMaterialPalette (Material* materialPalette) {
+void LumInternal::LumInternalRenderer::updateMaterialPalette (Material* materialPalette) {
     VkDeviceSize bufferSize = sizeof (Material) * 256;
     VkBufferCreateInfo 
         stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -109,50 +109,89 @@ void LumRenderer::updateMaterialPalette (Material* materialPalette) {
     }
     vmaDestroyBuffer (render.VMAllocator, stagingBuffer, stagingAllocation);
 }
+// std::string find_shader(const std::string& shader_name) {
+//     std::string paths[] = {
+//         "../shaders/compiled/" + shader_name,
+//         "../../shaders/compiled/" + shader_name
+//     };
 
-char* readFileBuffer(const char* path, size_t* size) {
-    FILE* fp = fopen (path, "rb");
-    assert (fp != NULL);
-    fseek(fp, 0, SEEK_END);
-    *size = ftell(fp);
-    rewind(fp);
-    char* buffer = (char*) malloc (*size);
-    assert (buffer != NULL);
-    fread (buffer, *size, 1, fp);
-    fclose (fp);
+//     for (const auto& path : paths) {
+//         std::ifstream file(path);
+//         if (file.good()) {
+//             return path;
+//         }
+//     }
+
+//     throw std::runtime_error("Shader file not found: " + shader_name);
+// }
+
+// try to find shader in multiple places just in case if lum is launched incorrectly
+std::string find_asset(const std::string& asset_name) {
+    std::string paths[] = {
+        asset_name,
+        "../" + asset_name // when in bin/
+    };
+
+    for (const auto& path : paths) {
+        std::ifstream file(path);
+        if (file.good()) {
+            return path;
+        }
+    }
+
+    assert(false && ("Asset file not found: " + asset_name).c_str());
+    std::unreachable();
+}
+
+std::vector<char> readFileBuffer(const std::string& asset_name) {
+    std::string path = find_asset(asset_name);
+    
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        return {};
+    }
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size)) {
+        return {};
+    }
+
     return buffer;
 }
+
+void updateFileBuffer(const std::string& asset_name, const std::vector<char>& content) {
+    std::string path = find_asset(asset_name);
+
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        crash(Failed to open file for writing);
+    }
+
+    if (!file.write(content.data(), content.size())) {
+        crash(Failed to write content to file);
+    }
+}
+
 // namespace ogt { //this library for some reason uses ogt_ in cases when it will never intersect with others BUT DOES NOT WHEN IT FOR SURE WILL
 #include <ogt_vox.hpp>
 #include <ogt_voxel_meshify.hpp>
 
-void LumRenderer::load_scene (const char* vox_file) {
-    size_t buffer_size;
-    FILE* fp = fopen(vox_file, "rb");
-    if (fp == NULL) {
-        origin_world.set(0);
-        return;
-    }
-    fseek(fp, 0, SEEK_END);
-    buffer_size = ftell(fp);
-    rewind(fp);
+void LumInternal::LumInternalRenderer::load_scene (const char* vox_file) {
+    auto buffer = readFileBuffer(vox_file);
 
-    if (buffer_size < sizeof(ivec3)) {
-        fclose(fp);
+    if (buffer.size() < sizeof(ivec3)) {
         origin_world.set(0);
         return;
     }
 
-    char* buffer = (char*)malloc(buffer_size);
-
-    fread(buffer, buffer_size, 1, fp);
-    fclose(fp);
-
-    ivec3* header = (ivec3*)buffer;
+    ivec3* header = (ivec3*)buffer.data();
     ivec3 stored_world_size = *header;
-    BlockID_t* stored_world = (BlockID_t*)(buffer + sizeof(ivec3));
+    BlockID_t* stored_world = (BlockID_t*)(buffer.data() + sizeof(ivec3));
 
-    assert((char*)stored_world < buffer + buffer_size);
+    assert((char*)stored_world < buffer.data() + buffer.size());
     
     DEBUG_LOG(world_size.x);
     DEBUG_LOG(world_size.y);
@@ -165,7 +204,7 @@ void LumRenderer::load_scene (const char* vox_file) {
         for (int yy = 0; yy < size2read.y; yy++) {
             for (int zz = 0; zz < size2read.z; zz++) {
                 size_t index = xx + stored_world_size.x * yy + (stored_world_size.x * stored_world_size.y) * zz;
-                assert(index < (buffer_size - sizeof(ivec3)) / sizeof(BlockID_t));
+                assert(index < (buffer.size() - sizeof(ivec3)) / sizeof(BlockID_t));
                 
                 BlockID_t loaded_block = stored_world[index];
                 origin_world(xx, yy, zz) = glm::clamp(loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
@@ -173,22 +212,24 @@ void LumRenderer::load_scene (const char* vox_file) {
         }
     }
 
-    free(buffer);
     return;
 }
 
-void LumRenderer::save_scene (const char* vox_file) {
-    FILE* fp = fopen(vox_file, "wb");
-    assert(fp != NULL);
+void LumInternal::LumInternalRenderer::save_scene (const char* vox_file) {
     assert(world_size.x > 0 && world_size.y > 0 && world_size.z > 0);
-    fwrite(&world_size, sizeof(ivec3), 1, fp);
-    fwrite(origin_world.data(), sizeof(BlockID_t), world_size.x * world_size.y * world_size.z, fp);
-    fclose(fp);
+    
+    std::vector<char> content;
+    size_t buffer_size = sizeof(ivec3) + (world_size.x * world_size.y * world_size.z * sizeof(BlockID_t));
+    content.resize(buffer_size);
+    std::memcpy(content.data(), &world_size, sizeof(ivec3));
+    std::memcpy(content.data() + sizeof(ivec3), origin_world.data(), world_size.x * world_size.y * world_size.z * sizeof(BlockID_t));
+
+    updateFileBuffer(vox_file, content);
 }
 
-static void extract_palette_mem(const ogt::vox_scene* scene, Material* mat_palette) {
+static void extract_palette_mem(const ogt::vox_scene* scene, LumInternal::Material* mat_palette) {
     assert(mat_palette != NULL);
-    for (int i = 0; i < MATERIAL_PALETTE_SIZE; i++) {
+    for (int i = 0; i < LumInternal::MATERIAL_PALETTE_SIZE; i++) {
         mat_palette[i].color = vec4(
             scene->palette.color[i].r / 256.0,
             scene->palette.color[i].g / 256.0,
@@ -226,13 +267,11 @@ static void extract_palette_mem(const ogt::vox_scene* scene, Material* mat_palet
     */
 }
 
-void LumRenderer::extract_palette(const char* scene_file, Material* mat_palette) {
-    size_t buffer_size;
-    char* buffer = readFileBuffer(scene_file, &buffer_size);
-    assert(buffer != NULL);
+void LumInternal::LumInternalRenderer::extract_palette(const char* scene_file, Material* mat_palette) {
+    auto buffer = readFileBuffer(scene_file);
+    assert(not buffer.empty());
 
-    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
-    free(buffer);
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer.data(), buffer.size());
     assert(scene != NULL);
     assert(scene->num_models > 0);
 
@@ -243,12 +282,11 @@ void LumRenderer::extract_palette(const char* scene_file, Material* mat_palette)
 }
 
 //size limited by 256^3
-void LumRenderer::load_mesh(InternalMeshModel* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette, Material* mat_palette) {
-    size_t buffer_size;
-    char* buffer = readFileBuffer(vox_file, &buffer_size);
-    assert(buffer != NULL);
-    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
-    free(buffer);
+void LumInternal::LumInternalRenderer::load_mesh(InternalMeshModel* mesh, const char* vox_file, bool _make_vertices, bool extrude_palette, Material* mat_palette) {
+    auto buffer = readFileBuffer(vox_file);
+    assert(not buffer.empty());
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer.data(), buffer.size());
+ 
     assert(scene != NULL);
     assert(scene->num_models == 1);
     
@@ -264,12 +302,11 @@ void LumRenderer::load_mesh(InternalMeshModel* mesh, const char* vox_file, bool 
 }
 
 // pointer to block_ptr, so block_ptr can be modified 
-void LumRenderer::load_block(BlockWithMesh* block, const char* vox_file) {
-    size_t buffer_size;
-    char* buffer = readFileBuffer(vox_file, &buffer_size);
-    assert(buffer != NULL);
-    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer, buffer_size);
-    free(buffer);
+void LumInternal::LumInternalRenderer::load_block(BlockWithMesh* block, const char* vox_file) {
+    auto buffer = readFileBuffer(vox_file);
+    assert(not buffer.empty());
+    const ogt::vox_scene* scene = ogt::vox_read_scene((u8*)buffer.data(), buffer.size());
+
     assert(scene != NULL);
     assert(scene->num_models == 1);
     // if ((block) == NULL) {
@@ -304,7 +341,7 @@ if(block->mesh.triangles.__dir.indexes.buffer) {\
     block->mesh.triangles.__dir.indexes.buffer = VK_NULL_HANDLE;\
 }
 
-void LumRenderer::free_block(BlockWithMesh* block) {
+void LumInternal::LumInternalRenderer::free_block(BlockWithMesh* block) {
     assert(block != NULL);
     // assert(*block != NULL);
     
@@ -315,7 +352,7 @@ void LumRenderer::free_block(BlockWithMesh* block) {
     // free_helper(zzP);
     // free_helper(zzN);
     if(block->mesh.triangles.indices.buffer) {\
-        BufferDeletion bd = {};\
+        Lumal::BufferDeletion bd = {};\
             bd.buffer = block->mesh.triangles.indices;\
             bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
         render.bufferDeletionQueue.push_back(bd);\
@@ -333,7 +370,7 @@ void LumRenderer::free_block(BlockWithMesh* block) {
     // *block = NULL;
 }
 
-void LumRenderer::load_mesh(InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
+void LumInternal::LumInternalRenderer::load_mesh(InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size, bool _make_vertices) {
     assert(mesh != NULL);
     assert(Voxels != NULL);
     assert(x_size > 0 && y_size > 0 && z_size > 0);
@@ -354,7 +391,7 @@ if(mesh->triangles.__dir.indexes.buffer) {\
     render.bufferDeletionQueue.push_back(bd);\
 }
 
-void LumRenderer::free_mesh(InternalMeshModel* mesh) {
+void LumInternal::LumInternalRenderer::free_mesh(InternalMeshModel* mesh) {
     assert(mesh != NULL);
     // free_helper(Pzz);
     // free_helper(Nzz);
@@ -363,12 +400,12 @@ void LumRenderer::free_mesh(InternalMeshModel* mesh) {
     // free_helper(zzP);
     // free_helper(zzN);
     if(mesh->triangles.indices.buffer) {\
-        BufferDeletion bd = {};\
+        Lumal::BufferDeletion bd = {};\
             bd.buffer = mesh->triangles.indices;\
             bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
         render.bufferDeletionQueue.push_back(bd);\
     }
-    BufferDeletion
+    Lumal::BufferDeletion
         bd = {};
         bd.buffer = mesh->triangles.vertexes;
         bd.life_counter = render.settings.fif; // delete after fif+1 frames
@@ -380,7 +417,7 @@ void LumRenderer::free_mesh(InternalMeshModel* mesh) {
         if (!mesh->voxels.empty()) {
             // vmaDestroyImage(render.VMAllocator, mesh->voxels[i].image, mesh->voxels[i].alloc);
             // vkDestroyImageView(render.device, mesh->voxels[i].view, NULL);
-            ImageDeletion
+            Lumal::ImageDeletion
                 id = {};
                 id.image = mesh->voxels[i];
                 id.life_counter = render.settings.fif; // delete after fif+1 frames
@@ -390,7 +427,7 @@ void LumRenderer::free_mesh(InternalMeshModel* mesh) {
 }
 #undef free_helper
 
-bool operator== (const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
+bool operator== (const LumInternal::PackedVoxelVertex& one, const LumInternal::PackedVoxelVertex& other) {
     return
         (one.pos.x == other.pos.x) &&
         (one.pos.y == other.pos.y) &&
@@ -398,17 +435,17 @@ bool operator== (const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
         ;
 }
 
-bool operator!= (const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
+bool operator!= (const LumInternal::PackedVoxelVertex& one, const LumInternal::PackedVoxelVertex& other) {
     return ! (one == other);
 }
 
-bool operator< (const PackedVoxelVertex& one, const PackedVoxelVertex& other) {
+bool operator< (const LumInternal::PackedVoxelVertex& one, const LumInternal::PackedVoxelVertex& other) {
     return one != other;
 }
 
-PackedVoxelQuad pack_quad (const array<PackedVoxelVertex, 6> vertices, uvec3 norm) {
-    PackedVoxelQuad quad = {};
-    vector<PackedVoxelVertex> uniq;
+LumInternal::PackedVoxelQuad pack_quad (const array<LumInternal::PackedVoxelVertex, 6> vertices, uvec3 norm) {
+    LumInternal::PackedVoxelQuad quad = {};
+    vector<LumInternal::PackedVoxelVertex> uniq;
     unsigned char mat = vertices[0].matID;
     for (auto v : vertices) {
         cout << glm::to_string (v.pos) << " \n";
@@ -456,7 +493,7 @@ label:
     return quad;
 }
 
-void repack_helper (vector<PackedVoxelVertex>& vs, vector<PackedVoxelQuad>& qs, uvec3 norm) {
+void repack_helper (vector<LumInternal::PackedVoxelVertex>& vs, vector<LumInternal::PackedVoxelQuad>& qs, uvec3 norm) {
     assert ((vs.size() % 6) == 0);
     for (int i = 0; i < vs.size() / 6; i++) {
         qs.push_back (pack_quad ({
@@ -467,24 +504,15 @@ void repack_helper (vector<PackedVoxelVertex>& vs, vector<PackedVoxelQuad>& qs, 
 }
 
 //defenetly not an example of highly optimized code
-void LumRenderer::make_vertices (InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size) {
+void LumInternal::LumInternalRenderer::make_vertices (InternalMeshModel* mesh, Voxel* Voxels, int x_size, int y_size, int z_size) {
     ogt::ogt_voxel_meshify_context ctx = {};
-    //code to generate cube lol
-    // const u8 a[] = {1};
-    // ogt::ogt_mesh* m = ogt::ogt_mesh_from_paletted_voxels_simple(&ctx, (const u8*)a, 1, 1, 1, NULL);
-    // for(int i=0; i<m->index_count; i++){
-    // printf("vec3(%f,%f,%f)\n", m->vertices[m->indices[i]].pos.x, m->vertices[m->indices[i]].pos.y, m->vertices[m->indices[i]].pos.z);
-    // }
-    // abort();
-    //at this point i just hope compilers know how to optimize sweet vectors into mallocs
-    vector<Voxel> contour (x_size* y_size* z_size);
-    for (int xx = 0; xx < x_size; xx++) {
-        for (int yy = 0; yy < y_size; yy++) {
-            for (int zz = 0; zz < z_size; zz++) {
-                contour[xx + x_size * yy + x_size * y_size * zz] = (Voxels[xx + x_size* yy + x_size* y_size* zz] == 0) ? 0 : 1;
-            }
-        }
+
+    const int totalVoxels = x_size * y_size * z_size;
+    std::vector<Voxel> contour(totalVoxels);
+    for (int i = 0; i < totalVoxels; ++i) {
+        contour[i] = (Voxels[i] == 0) ? 0 : 1;
     }
+
     ogt::ogt_int_mesh* ogt_mesh = ogt::my_int_mesh_from_paletted_voxels (&ctx, (const u8*)contour.data(), x_size, y_size, z_size);
     ogt::my_int_mesh_optimize (&ctx, ogt_mesh);
 // TRACE();
@@ -514,28 +542,29 @@ void LumRenderer::make_vertices (InternalMeshModel* mesh, Voxel* Voxels, int x_s
     vector<u16> verts_zNz = {};
     vector<u16> verts_zzP = {};
     vector<u16> verts_zzN = {};
-    // printl(ogt_mesh->index_count);
-    for (u32 i = 0; i < ogt_mesh->index_count; i++) {
+
+    auto classify_normal = [&](const vec3& norm) {
+        if (norm == vec3(1, 0, 0)) return &verts_Pzz;
+        if (norm == vec3(-1, 0, 0)) return &verts_Nzz;
+        if (norm == vec3(0, 1, 0)) return &verts_zPz;
+        if (norm == vec3(0, -1, 0)) return &verts_zNz;
+        if (norm == vec3(0, 0, 1)) return &verts_zzP;
+        if (norm == vec3(0, 0, -1)) return &verts_zzN;
+        return (std::vector<u16>*)(nullptr); // error
+    };
+
+    for (u32 i = 0; i < ogt_mesh->index_count; ++i) {
         u32 index = ogt_mesh->indices[i];
-        u32 provoking_index = ogt_mesh->indices[ (i / 3) * 3];
-        vec<3, signed char, defaultp> norm = verts[provoking_index].norm;
-        //where is my clang-tidy disable specific warning #pragma?..
-        if (norm == vec<3, signed char, defaultp> (+1, 0, 0)) { verts_Pzz.push_back (index); }
-        else if (norm == vec<3, signed char, defaultp> (-1, 0, 0)) { verts_Nzz.push_back (index); }
-        else if (norm == vec<3, signed char, defaultp> (0, +1, 0)) { verts_zPz.push_back (index); }
-        else if (norm == vec<3, signed char, defaultp> (0, -1, 0)) { verts_zNz.push_back (index); }
-        else if (norm == vec<3, signed char, defaultp> (0, 0, +1)) { verts_zzP.push_back (index); }
-        else if (norm == vec<3, signed char, defaultp> (0, 0, -1)) { verts_zzN.push_back (index); }
-        else {
-            DEBUG_LOG ((int)norm.x);
-            DEBUG_LOG ((int)norm.y);
-            DEBUG_LOG ((int)norm.z);
-            crash (unrecognized normal);
-        }
+        u32 provoking_index = ogt_mesh->indices[(i / 3) * 3];
+        const auto& norm = ogt_mesh->vertices[provoking_index].normal;
+
+        auto* target_vector = classify_normal(norm);
+        if (target_vector) target_vector->push_back(index);
+        else crash("Unrecognized normal");
     }
 // TRACE();
     assert (circ_verts.size() == ogt_mesh->vertex_count);
-    mesh->triangles.vertexes = render.createElemBuffer<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    // mesh->triangles.vertexes = render.createElemBuffer<PackedVoxelCircuit> (circ_verts.data(), circ_verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 // TRACE();
     assert (verts_Pzz.size() != 0);  
     assert (verts_Nzz.size() != 0); 
@@ -545,36 +574,28 @@ void LumRenderer::make_vertices (InternalMeshModel* mesh, Voxel* Voxels, int x_s
     assert (verts_zzN.size() != 0);
     
     std::vector<u16> all_indices;
-    mesh->triangles.Pzz.offset = all_indices.size();
-    all_indices.insert(all_indices.end(), verts_Pzz.begin(), verts_Pzz.end());
-    mesh->triangles.Pzz.icount = verts_Pzz.size();
+    auto offset_and_insert = [&all_indices](auto& vector, IndexedVertices& section) {
+        section.offset = all_indices.size();
+        all_indices.insert(all_indices.end(), vector.begin(), vector.end());
+        section.icount = vector.size();
+    };
 
-    mesh->triangles.Nzz.offset = all_indices.size();
-    all_indices.insert(all_indices.end(), verts_Nzz.begin(), verts_Nzz.end());
-    mesh->triangles.Nzz.icount = verts_Nzz.size();
+    offset_and_insert(verts_Pzz, mesh->triangles.Pzz);
+    offset_and_insert(verts_Nzz, mesh->triangles.Nzz);
+    offset_and_insert(verts_zPz, mesh->triangles.zPz);
+    offset_and_insert(verts_zNz, mesh->triangles.zNz);
+    offset_and_insert(verts_zzP, mesh->triangles.zzP);
+    offset_and_insert(verts_zzN, mesh->triangles.zzN);
 
-    mesh->triangles.zPz.offset = all_indices.size();
-    all_indices.insert(all_indices.end(), verts_zPz.begin(), verts_zPz.end());
-    mesh->triangles.zPz.icount = verts_zPz.size();
+    mesh->triangles.vertexes = render.createElemBuffer<PackedVoxelCircuit>(
+        circ_verts.data(), 
+        circ_verts.size(),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-    mesh->triangles.zNz.offset = all_indices.size();
-    all_indices.insert(all_indices.end(), verts_zNz.begin(), verts_zNz.end());
-    mesh->triangles.zNz.icount = verts_zNz.size();
-
-    mesh->triangles.zzP.offset = all_indices.size();
-    all_indices.insert(all_indices.end(), verts_zzP.begin(), verts_zzP.end());
-    mesh->triangles.zzP.icount = verts_zzP.size();
-
-    mesh->triangles.zzN.offset = all_indices.size();
-    all_indices.insert(all_indices.end(), verts_zzN.begin(), verts_zzN.end());
-    mesh->triangles.zzN.icount = verts_zzN.size();
-
-    // create a single index buffer for all indices
     mesh->triangles.indices = render.createElemBuffer<u16>(
         all_indices.data(), 
-        all_indices.size(), 
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-    );
+        all_indices.size(),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
 // TRACE();
     ogt::ogt_mesh_destroy (&ctx, (ogt::ogt_mesh*)ogt_mesh);

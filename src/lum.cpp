@@ -1,15 +1,15 @@
-#include "lum_modern.hpp"
+#include "lum.hpp"
 #include "defines/macros.hpp"
 
 #define let auto&
 
-void Lum::init(LumSettings lum_settings) noexcept {
+void Lum::Renderer::init(LumInternal::LumSettings lum_settings) noexcept {
     // LumSettings lum_settings(settings); 
         lum_settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
         lum_settings.timestampCount = 48;
         lum_settings.profile = true; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
         // currently fif has bug in it, do not change for now 
-        lum_settings.fif = MAX_FRAMES_IN_FLIGHT; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
+        lum_settings.fif = LumInternal::MAX_FRAMES_IN_FLIGHT; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
 
         lum_settings.deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
         lum_settings.deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
@@ -36,83 +36,86 @@ void Lum::init(LumSettings lum_settings) noexcept {
 
     render.init(lum_settings);
         vkDeviceWaitIdle(render.render.device);
-    render.load_scene("assets/scene");
-
-    // block_palette.resize(settings.static_block_palette_size);
 
     should_close = false; // just in case, idk
 }
 
-void Lum::loadWorld(const BlockID_t* world_data) noexcept {
+void Lum::Renderer::loadWorld(const LumInternal::BlockID_t* world_data) noexcept {
     assert(world_data);
     // TODO
     render.load_scene("assets/scene");
 }
-void Lum::loadWorld(const std::string& file) noexcept {
+void Lum::Renderer::loadWorld(const std::string& file) noexcept {
     // TODO
     render.load_scene(file.c_str());
 }
 
-void Lum::setWorldBlock(const ivec3& pos, MeshBlock block) noexcept {
+void Lum::Renderer::setWorldBlock(const ivec3& pos, MeshBlock block) noexcept {
     // yep, CPU-side structure
     // it is copied to gpu every frame for internal reasons
     // in some sence, this is a cache
     render.origin_world(pos) = block;
 }
-void Lum::setWorldBlock(int x, int y, int z, MeshBlock block) noexcept {
+void Lum::Renderer::setWorldBlock(int x, int y, int z, MeshBlock block) noexcept {
     render.origin_world(x,y,z) = block;
 }
 
-BlockID_t Lum::getWorldBlock(const ivec3& pos) const noexcept {
-    BlockID_t block = render.origin_world(pos);
+LumInternal::BlockID_t Lum::Renderer::getWorldBlock(const ivec3& pos) const noexcept {
+    LumInternal::BlockID_t block = render.origin_world(pos);
     return block;
 }
-BlockID_t Lum::getWorldBlock(int x, int y, int z) const noexcept {
-    BlockID_t block = render.origin_world(x,y,z);
+LumInternal::BlockID_t Lum::Renderer::getWorldBlock(int x, int y, int z) const noexcept {
+    LumInternal::BlockID_t block = render.origin_world(x,y,z);
     return block;  
 }
 
-void Lum::loadBlock(MeshBlock block, BlockWithMesh* block_data) noexcept {
-    memcpy(&block_palette[block], block_data, sizeof(BlockWithMesh));
+void Lum::Renderer::loadBlock(MeshBlock block, LumInternal::BlockWithMesh* block_data) noexcept {
+    memcpy(&block_palette[block], block_data, sizeof(LumInternal::BlockWithMesh));
     // render.updateMaterialPalette(mat_palette);
 }
-void Lum::loadBlock(MeshBlock block, const std::string& file) noexcept {
+void Lum::Renderer::loadBlock(MeshBlock block, const std::string& file) noexcept {
     render.load_block(&block_palette[block], file.c_str());
 }
 
-void Lum::uploadBlockPaletteToGPU() noexcept {
+void Lum::Renderer::uploadBlockPaletteToGPU() noexcept {
     render.updateBlockPalette(block_palette.data());
 }
 
-void Lum::uploadMaterialPaletteToGPU() noexcept {
+void Lum::Renderer::uploadMaterialPaletteToGPU() noexcept {
     render.updateMaterialPalette(mat_palette.data());
 }
-void Lum::loadPalette(const std::string& file) noexcept{
+void Lum::Renderer::loadPalette(const std::string& file) noexcept{
     render.extract_palette(file.c_str(), mat_palette.data());
 }
-MeshModel Lum::loadMesh(const std::string& file, bool try_extract_palette) noexcept {
-    InternalMeshModel* new_mesh = mesh_models_storage.allocate();
+Lum::MeshModel Lum::Renderer::loadMesh(const std::string& file, bool try_extract_palette) noexcept {
+    LumInternal::InternalMeshModel* new_mesh = mesh_models_storage.allocate();
     render.load_mesh(new_mesh, file.c_str(), true, /*extract palette if no found = */ try_extract_palette, mat_palette.data());
     return new_mesh;
 }
-MeshModel Lum::loadMesh(Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept {
-    InternalMeshModel* new_mesh = mesh_models_storage.allocate();
+Lum::MeshModel Lum::Renderer::loadMesh(LumInternal::Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept {
+    LumInternal::InternalMeshModel* new_mesh = mesh_models_storage.allocate();
     render.load_mesh(new_mesh, mesh_data, x_size,y_size,z_size, true);
     return new_mesh;
 }
-void Lum::freeMesh(MeshModel& model) noexcept {
-    InternalMeshModel* mesh_ptr = model;
+void Lum::Renderer::freeMesh(MeshModel model) noexcept {
+    LumInternal::InternalMeshModel* mesh_ptr = model;
     render.free_mesh(mesh_ptr);
 }
 
-MeshFoliage Lum::loadFoliage(const std::string& vertex_shader_file, int vertices_per_foliage, int density) noexcept {
-    MeshFoliage 
-        foliage = {};
-        foliage.vertices = vertices_per_foliage;
-        foliage.dencity = density;
-    return foliage;
+Lum::MeshFoliage Lum::Renderer::loadFoliage(const std::string& vertex_shader_file, int vertices_per_foliage, int density) noexcept {
+    LumInternal::InternalMeshFoliage* 
+        new_foliage = mesh_foliage_storage.allocate();
+        // this is not creating pipe(line). Only queuing shader file for later pipe(line)
+        // i just hope C++ is not fucked up and lifetime of string is whole main
+        new_foliage->vertex_shader_file = vertex_shader_file;
+        LOG(new_foliage->vertex_shader_file)
+        new_foliage->vertices = vertices_per_foliage;
+        new_foliage->dencity = density;
+    // registering in internal renderer
+    render.registered_foliage.push_back(new_foliage);
+    return new_foliage;
 }
-MeshVolumetric Lum::loadVolumetric(float max_density, float density_deviation, const u8vec3& color) noexcept {
+Lum::MeshVolumetric Lum::Renderer::loadVolumetric(float max_density, float density_deviation, const u8vec3& color) noexcept {
     MeshVolumetric 
         volumetric = {};
         volumetric.max_dencity = max_density;
@@ -120,7 +123,7 @@ MeshVolumetric Lum::loadVolumetric(float max_density, float density_deviation, c
         volumetric.color = color;
     return volumetric;
 }
-MeshLiquid Lum::loadLiquid(MatID_t main_mat, MatID_t foam_mat) noexcept {
+Lum::MeshLiquid Lum::Renderer::loadLiquid(LumInternal::MatID_t main_mat, LumInternal::MatID_t foam_mat) noexcept {
     MeshLiquid 
         liquid = {};
         liquid.main = main_mat;
@@ -150,7 +153,7 @@ static bool is_block_visible(dmat4 trans, dvec3 pos){
     return false;
 }
 
-void Lum::drawWorld() noexcept {
+void Lum::Renderer::drawWorld() noexcept {
     // block_que.clear(); done in startFrame
     // cam_dist could be moved into update()
     for(int xx=0; xx<settings.world_size.x; xx++){
@@ -177,11 +180,11 @@ void Lum::drawWorld() noexcept {
     }}}
 }
 
-void Lum::drawParticles() noexcept {
+void Lum::Renderer::drawParticles() noexcept {
     // nothing here. Particles are not worth sorting
 }
 
-void Lum::drawMesh(const MeshModel& mesh, const MeshTransform& trans) noexcept {
+void Lum::Renderer::drawModel(const MeshModel& mesh, const MeshTransform& trans) noexcept {
     ModelRenderRequest 
         mrr = {};
         mrr.mesh = mesh;
@@ -189,20 +192,20 @@ void Lum::drawMesh(const MeshModel& mesh, const MeshTransform& trans) noexcept {
     mesh_que.push_back(mrr);
 }
 
-void Lum::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& pos) noexcept {
+void Lum::Renderer::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& pos) noexcept {
     FoliageRenderRequest 
         frr = {};
         frr.foliage = foliage;
         frr.pos = pos;
     foliage_que.push_back(frr);
 }
-void Lum::drawLiquidBlock(const MeshLiquid& liquid, const ivec3& pos) noexcept {
+void Lum::Renderer::drawLiquidBlock(const MeshLiquid& liquid, const ivec3& pos) noexcept {
     LiquidRenderRequest 
         lrr = {};
         lrr.pos = pos;
     liquid_que.push_back(lrr);
 }
-void Lum::drawVolumetricBlock(const MeshVolumetric& volumetric, const ivec3& pos) noexcept {
+void Lum::Renderer::drawVolumetricBlock(const MeshVolumetric& volumetric, const ivec3& pos) noexcept {
     VolumetricRenderRequest 
         vrr = {};
         vrr.pos = pos;
@@ -210,7 +213,7 @@ void Lum::drawVolumetricBlock(const MeshVolumetric& volumetric, const ivec3& pos
 }
 
 // clears vectors so you can fill them again
-void Lum::startFrame() noexcept {
+void Lum::Renderer::startFrame() noexcept {
     block_que.clear();
     mesh_que.clear();
     foliage_que.clear();
@@ -235,7 +238,7 @@ void calculateAndSortByCamDist(Container& render_queue, const glm::dmat4& camera
     std::sort(render_queue.begin(), render_queue.end(), sortByCamDist);
 }
 
-void Lum::prepareFrame() noexcept{
+void Lum::Renderer::prepareFrame() noexcept{
     glfwPollEvents();
     should_close |= glfwWindowShouldClose(render.render.window.pointer);
     updateTime();
@@ -258,7 +261,7 @@ void Lum::prepareFrame() noexcept{
     calculateAndSortByCamDist<VolumetricRenderRequest>(volumetric_que, cam);
 }
 
-void Lum::submitFrame() noexcept {
+void Lum::Renderer::submitFrame() noexcept {
     render.start_frame();
 
         // render.start_compute();
@@ -338,7 +341,7 @@ void Lum::submitFrame() noexcept {
     render.end_frame();
 }
 
-void Lum::cleanup() noexcept {
+void Lum::Renderer::cleanup() noexcept {
     waitIdle();
 ATRACE();
     for(int i=1; i<render.static_block_palette_size; i++){
@@ -351,7 +354,7 @@ ATRACE();
         bool idx_is_free = mesh_models_storage.free_indices.contains(i);
         bool is_allocated = (not idx_is_free);
         if(is_allocated) {
-            InternalMeshModel* imm_ptr = &mesh_models_storage.storage[i];
+            LumInternal::InternalMeshModel* imm_ptr = &mesh_models_storage.storage[i];
             // LOG(imm_ptr)
             render.free_mesh(imm_ptr);
             // no free cause not needed and will actually make referenced memory illegal
@@ -364,10 +367,10 @@ ATRACE();
 ATRACE();
 }
 
-void Lum::waitIdle() noexcept {
+void Lum::Renderer::waitIdle() noexcept {
     render.render.deviceWaitIdle();
 }
 
-GLFWwindow* Lum::getGLFWptr() const noexcept {
+GLFWwindow* Lum::Renderer::getGLFWptr() const noexcept {
     return render.render.window.pointer;
 }

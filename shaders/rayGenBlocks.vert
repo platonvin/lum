@@ -4,8 +4,9 @@
 precision varp int;
 precision varp float;
 
-#include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(location = 0) in lowp uvec3 posIn;
 layout(location = 0) out vec3 sample_point;

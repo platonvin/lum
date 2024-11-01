@@ -3,8 +3,9 @@
 // layout (location = 0) out vec2 outUV;
 layout (location = 0) out float end_depth;
 
-#include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(push_constant) uniform restrict readonly constants{
     vec4 originSize;

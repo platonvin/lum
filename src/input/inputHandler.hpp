@@ -1,14 +1,18 @@
 #pragma once
-#include "glm/ext/vector_double2.hpp"
-#include "glm/ext/vector_int2.hpp"
 #ifndef __INPUT_HANDLER_HPP__
 #define __INPUT_HANDLER_HPP__
+
+// extracted from [Circulli Bellum](https://github.com/platonvin/circuli-Bellum)
+// simple arena allocator with faster allocation time
+
+#include "glm/ext/vector_double2.hpp"
+#include "glm/ext/vector_int2.hpp"
 
 #include <GLFW/glfw3.h>
 #include <functional>
 #include <iostream>
 
-#include "containers/fixed_map.hpp"
+#include "../containers/fixed_map.hpp"
 using glm::dvec2;
 using glm::ivec2;
 

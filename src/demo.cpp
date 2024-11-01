@@ -1,31 +1,32 @@
-#include "input/input.hpp"
 #include "lum.hpp"
+#include "input/input.hpp"
+#include "defines/macros.hpp"
 // #include "defines/macros.hpp"
 #include <glm/gtx/quaternion.hpp>
 #include <random>
 
 vec3 rnVec3(float minValue, float maxValue);
 void printFPS();
-void setup_input(Input& input, Lum& render);
-void process_animations(Lum& lum);
-void process_physics(Lum& lum);
-void cleanup(Lum& lum);
+void setup_input(Input& input, Lum::Renderer& render);
+void process_animations(Lum::Renderer& lum);
+void process_physics(Lum::Renderer& lum);
+void cleanup(Lum::Renderer& lum);
 
 // call me evil
 // in real world you would store them as ECS components / member in EntityClass
-// but for simplicity lets stick to just this
-MeshModel tank_body = {};
-MeshTransform tank_body_trans = {};
-MeshModel tank_head = {};
-MeshTransform tank_head_trans = {};
-MeshModel tank_rf_leg = {};
-MeshTransform tank_rf_leg_trans = {};
-MeshModel tank_lf_leg = {};
-MeshTransform tank_lf_leg_trans = {};
-MeshModel tank_rb_leg = {};
-MeshTransform tank_rb_leg_trans = {};
-MeshModel tank_lb_leg = {};
-MeshTransform tank_lb_leg_trans = {};
+// but for simplicity lets stick to this
+Lum::MeshModel     tank_body = {};
+Lum::MeshTransform tank_body_trans = {};
+Lum::MeshModel     tank_head = {};
+Lum::MeshTransform tank_head_trans = {};
+Lum::MeshModel     tank_rf_leg = {};
+Lum::MeshTransform tank_rf_leg_trans = {};
+Lum::MeshModel     tank_lf_leg = {};
+Lum::MeshTransform tank_lf_leg_trans = {};
+Lum::MeshModel     tank_rb_leg = {};
+Lum::MeshTransform tank_rb_leg_trans = {};
+Lum::MeshModel     tank_lb_leg = {};
+Lum::MeshTransform tank_lb_leg_trans = {};
 vec2 physical_points[4] = {}; // that each leg follows
 vec2 interpolated_leg_points[4] = {}; // that each leg follows
 vec2 target_leg_points[4]; // that each leg follows
@@ -36,113 +37,133 @@ int main(){
     // input system i designed. You can use, but it is not neccessary for Lum
     Input input;
 
-    Lum render = {};
-        render.settings.fullscreen = false;
-        render.settings.vsync = false;
-        render.settings.world_size = ivec3(48, 48, 16);
-        render.settings.static_block_palette_size = 15;
-        render.settings.maxParticleCount = 8128;
-    render.init();
+    Lum::Settings settings = {};
+        settings.fullscreen = false;
+        settings.vsync = false;
+        settings.world_size = ivec3(48, 48, 16);
+        settings.static_block_palette_size = 15;
+        settings.maxParticleCount = 8128;
+    Lum::Renderer lum(settings, 4096, 64, 15);
+
+    // ATTENTION: all foliage has to be declared BEFORE init()
+    // this restriction just makes everything 100x simpler
+    // i might implement dynamic Vulkan resources in future, but it will only hurt perfomance until ~20k foliage meshes
+    // and you are supposed to compile shader to SPIRV yourself (for GLSL, use glslang / shaderc)
+    Lum::MeshFoliage grass = lum.loadFoliage("shaders/compiled/grass.vert.spv", 6, 10);
+
+    lum.init(settings);
+    lum.loadWorld("assets/scene");
 
     // preparation stage. These functions also can be called in runtime
     // If no palette is found, first models defines it
-
-    // this DOES set palette
-    tank_body = render.loadMesh("assets/tank_body.vox", /*extract palette if no found = */ true);
+        // this DOES set palette
+    tank_body = lum.loadMesh("assets/tank_body.vox", /*extract palette if no found = */ true);
     tank_body_trans.shift += vec3(13.1,14.1,3.1)*16.0f;
-    // this DOES NOT set palette cause already setten
-    tank_head = render.loadMesh("assets/tank_head.vox", /*extract palette if no found = */ true);
+        // this DOES NOT set palette cause already setten.
+    tank_head = lum.loadMesh("assets/tank_head.vox", /*extract palette if no found = */ true);
+        // material palette can also be loaded from alone
+        // lum.loadPalette("my_magicavox_filescene_with_palette_i_want_to_extract.vox")
+        // good way to handle this would be to have voxel for each material placed in scene to view them
 
-    tank_rf_leg = render.loadMesh("assets/tank_rf_lb_leg.vox");
-    tank_lb_leg = render.loadMesh("assets/tank_rf_lb_leg.vox");
+    tank_rf_leg = lum.loadMesh("assets/tank_rf_lb_leg.vox");
+    tank_lb_leg = lum.loadMesh("assets/tank_rf_lb_leg.vox");
 
-    tank_lf_leg = render.loadMesh("assets/tank_lf_rb_leg.vox");
-    tank_rb_leg = render.loadMesh("assets/tank_lf_rb_leg.vox");
+    tank_lf_leg = lum.loadMesh("assets/tank_lf_rb_leg.vox");
+    tank_rb_leg = lum.loadMesh("assets/tank_lf_rb_leg.vox");
     
-    MeshFoliage grass = render.loadFoliage("", 6, 10);
-    MeshLiquid  water = render.loadLiquid(69, 42);
-    MeshVolumetric smoke = render.loadVolumetric(1, .5, {});
+    Lum::MeshLiquid  water = lum.loadLiquid(69, 42);
+    Lum::MeshVolumetric smoke = lum.loadVolumetric(1, .5, {});
 
-    render.loadBlock(  1, "assets/dirt.vox");
-    render.loadBlock(  2, "assets/grass.vox");
-    render.loadBlock(  3, "assets/grassNdirt.vox");
-    render.loadBlock(  4, "assets/stone_dirt.vox");
-    render.loadBlock(  5, "assets/bush.vox");
-    render.loadBlock(  6, "assets/leaves.vox");
-    render.loadBlock(  7, "assets/iron.vox");
-    render.loadBlock(  8, "assets/lamp.vox");
-    render.loadBlock(  9, "assets/stone_brick.vox");
-    render.loadBlock( 10, "assets/stone_brick_cracked.vox");
-    render.loadBlock( 11, "assets/stone_pack.vox");
-    render.loadBlock( 12, "assets/bark.vox");
-    render.loadBlock( 13, "assets/wood.vox");
-    render.loadBlock( 14, "assets/planks.vox");
+    lum.loadBlock(  1, "assets/dirt.vox");
+    lum.loadBlock(  2, "assets/grass.vox");
+    lum.loadBlock(  3, "assets/grassNdirt.vox");
+    lum.loadBlock(  4, "assets/stone_dirt.vox");
+    lum.loadBlock(  5, "assets/bush.vox");
+    lum.loadBlock(  6, "assets/leaves.vox");
+    lum.loadBlock(  7, "assets/iron.vox");
+    lum.loadBlock(  8, "assets/lamp.vox");
+    lum.loadBlock(  9, "assets/stone_brick.vox");
+    lum.loadBlock( 10, "assets/stone_brick_cracked.vox");
+    lum.loadBlock( 11, "assets/stone_pack.vox");
+    lum.loadBlock( 12, "assets/bark.vox");
+    lum.loadBlock( 13, "assets/wood.vox");
+    lum.loadBlock( 14, "assets/planks.vox");
+    // total 15 max blocks specified, so loadBlock(15) is illegal
 
     // literally uploads data to gpu. You can call them in runtime, but atm its not recommended (a lot of overhead curently, can be significantly reduced)
-    render.uploadBlockPaletteToGPU();
-    render.uploadMaterialPaletteToGPU();
+    lum.uploadBlockPaletteToGPU();
+    lum.uploadMaterialPaletteToGPU();
 
-    render.render.render.deviceWaitIdle();
+    lum.waitIdle();
 
-    setup_input(input, render);
+    // callback functions for glfw action input system 
+    setup_input(input, lum);
 
-    MeshTransform trans = {};
-    trans.shift += vec3(13.1,14.1,3.1)*16.0f;
-    while(not render.should_close){
+    while(not lum.should_close){
         input.pollUpdates();
         glfwPollEvents();
-        render.should_close |= glfwWindowShouldClose(render.getGLFWptr());
-        render.should_close |= (glfwGetKey(render.getGLFWptr(), GLFW_KEY_ESCAPE) == GLFW_PRESS);
+        lum.should_close |= glfwWindowShouldClose(lum.getGLFWptr());
+        lum.should_close |= (glfwGetKey(lum.getGLFWptr(), GLFW_KEY_ESCAPE) == GLFW_PRESS);
 
-        process_physics(render);
-        process_animations(render);
+        process_physics(lum);
+        process_animations(lum);
 
-        render.startFrame();
+        lum.startFrame();
         // this *could* be implicit
-        render.drawWorld();
-        render.drawParticles();
+        lum.drawWorld();
+        lum.drawParticles();
         
-        render.drawMesh(tank_body, &tank_body_trans);
-        render.drawMesh(tank_head, &tank_head_trans);
-        render.drawMesh(tank_rf_leg, &tank_rf_leg_trans);
-        render.drawMesh(tank_lf_leg, &tank_lf_leg_trans);
-        render.drawMesh(tank_rb_leg, &tank_rb_leg_trans);
-        render.drawMesh(tank_lb_leg, &tank_lb_leg_trans);
+        lum.drawModel(tank_body, tank_body_trans);
+        lum.drawModel(tank_head, tank_head_trans);
+        lum.drawModel(tank_rf_leg, tank_rf_leg_trans);
+        lum.drawModel(tank_lf_leg, tank_lf_leg_trans);
+        lum.drawModel(tank_rb_leg, tank_rb_leg_trans);
+        lum.drawModel(tank_lb_leg, tank_lb_leg_trans);
 
-        // literally procedural grass generation every frame. You probably want to store it as entities in your own structures
+        // literally procedural grass placement every frame. You probably want to store it as entities in your own structures
         for(int xx=4; xx<20; xx++){
         for(int yy=4; yy<20; yy++){
             if((xx>=5) and (xx<12) and (yy>=6) and (yy<16)) continue;
             ivec3 pos = ivec3(xx*16, yy*16, 16);
-            render.drawFoliageBlock(grass, pos);
+            lum.drawFoliageBlock(grass, pos);
         }}
 
-        // literally procedural water generation every frame. You probably want to store it as entities in your own structures
+        // literally procedural water placement every frame. You probably want to store it as entities in your own structures
         for(int xx=5; xx<12; xx++){
         for(int yy=6; yy<16; yy++){
             ivec3 pos = ivec3(xx*16, yy*16, 14);
-            render.drawLiquidBlock(water, pos);
-            render.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
-            render.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
+            lum.drawLiquidBlock(water, pos);
+            lum.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
+            lum.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
         }}
 
-        // literally procedural smoke generation every frame. You probably want to store it as entities in your own structures
+        // literally procedural smoke placement every frame. You probably want to store it as entities in your own structures
         for(int xx=8; xx<10; xx++){
         for(int yy=10; yy<13; yy++){
             ivec3 pos = ivec3(xx*16, yy*16, 20);
-            render.drawVolumetricBlock(smoke, pos);
+            lum.drawVolumetricBlock(smoke, pos);
             // render.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
             // render.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
         }}
 
-        render.prepareFrame();
-        render.submitFrame();
+        lum.prepareFrame();
+        lum.submitFrame();
     }
-    cleanup(render);
+
+    // prints GPU profile data
+    if (lum.render.render.settings.profile){
+        printf("%-22s: %7.3f: %7.3f\n", lum.render.render.timestampNames[0], 0.0, 0.0);    
+        for (int i=1; i<lum.render.render.currentTimestamp; i++){
+            double time_point = double(lum.render.render.average_ftimestamps[i] - lum.render.render.average_ftimestamps[0]);
+            double time_diff = double(lum.render.render.average_ftimestamps[i] - lum.render.render.average_ftimestamps[i-1]);
+            printf("%3d %-22s: %7.3f: %7.3f\n", i, lum.render.render.timestampNames[i], time_point, time_diff);
+        }
+    }
+    cleanup(lum);
 }
 
 // binding keys to some functions
-void setup_input(Input& input, Lum& render) {
+void setup_input(Input& input, Lum::Renderer& render) {
     input.setup(render.getGLFWptr());
     
     input.rebindKey(GameAction::MOVE_CAMERA_FORWARD, GLFW_KEY_W);
@@ -197,46 +218,46 @@ void setup_input(Input& input, Lum& render) {
 
     // bind action callbacks
     input.setActionCallback(GameAction::MOVE_CAMERA_FORWARD, [&](GameAction action) {
-        render.render.camera.cameraPos += render.delt_time * dvec3(dvec2(render.render.camera.cameraDir), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        render.render.camera.cameraPos += render.delta_time * dvec3(dvec2(render.render.camera.cameraDir), 0) * 400.5 / render.render.camera.pixelsInVoxel;
     });
 
     input.setActionCallback(GameAction::MOVE_CAMERA_BACKWARD, [&](GameAction action) {
-        render.render.camera.cameraPos -= render.delt_time * dvec3(dvec2(render.render.camera.cameraDir), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        render.render.camera.cameraPos -= render.delta_time * dvec3(dvec2(render.render.camera.cameraDir), 0) * 400.5 / render.render.camera.pixelsInVoxel;
     });
 
     input.setActionCallback(GameAction::MOVE_CAMERA_LEFT, [&](GameAction action) {
         dvec3 camera_direction_to_right = glm::dquat(dvec3(0.0, 0.0, glm::pi<double>() / 2.0)) * render.render.camera.cameraDir;
-        render.render.camera.cameraPos += render.delt_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        render.render.camera.cameraPos += render.delta_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.render.camera.pixelsInVoxel;
     });
     input.setActionCallback(GameAction::MOVE_CAMERA_RIGHT, [&](GameAction action) {
         dvec3 camera_direction_to_right = glm::dquat(dvec3(0.0, 0.0, glm::pi<double>() / 2.0)) * render.render.camera.cameraDir;
-        render.render.camera.cameraPos -= render.delt_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        render.render.camera.cameraPos -= render.delta_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.render.camera.pixelsInVoxel;
     });
 
     input.setActionCallback(GameAction::TURN_CAMERA_LEFT, [&](GameAction action) {
-        render.render.camera.cameraDir = rotate(glm::identity<dmat4>(), +0.60 * render.delt_time, dvec3(0, 0, 1)) * dvec4(render.render.camera.cameraDir, 0);
+        render.render.camera.cameraDir = rotate(glm::identity<dmat4>(), +0.60 * render.delta_time, dvec3(0, 0, 1)) * dvec4(render.render.camera.cameraDir, 0);
         render.render.camera.cameraDir = normalize(render.render.camera.cameraDir);
     });
     input.setActionCallback(GameAction::TURN_CAMERA_RIGHT, [&](GameAction action) {
-        render.render.camera.cameraDir = rotate(glm::identity<dmat4>(), -0.60 * render.delt_time, dvec3(0, 0, 1)) * dvec4(render.render.camera.cameraDir, 0);
+        render.render.camera.cameraDir = rotate(glm::identity<dmat4>(), -0.60 * render.delta_time, dvec3(0, 0, 1)) * dvec4(render.render.camera.cameraDir, 0);
         render.render.camera.cameraDir = normalize(render.render.camera.cameraDir);
     });
 
     input.setActionCallback(GameAction::MOVE_TANK_FORWARD, [&](GameAction action) {
         vec3 tank_direction_forward = tank_body_trans.rot * vec3(0, 1, 0);
-        float tank_speed = 50.0 * render.delt_time;
+        float tank_speed = 50.0 * render.delta_time;
         tank_body_trans.shift += tank_direction_forward * tank_speed;
     });
     input.setActionCallback(GameAction::MOVE_TANK_BACKWARD, [&](GameAction action) {
         vec3 tank_direction_forward = tank_body_trans.rot * vec3(0, 1, 0);
-        float tank_speed = 50.0 * render.delt_time;
+        float tank_speed = 50.0 * render.delta_time;
         tank_body_trans.shift -= tank_direction_forward * tank_speed;
     });
 
     input.setActionCallback(GameAction::TURN_TANK_LEFT, [&](GameAction action) {
         // assert(tank_body);
         quat old_rot = tank_body_trans.rot;
-        tank_body_trans.rot *= quat(vec3(0, 0, +0.05f * 50.0f * render.delt_time));
+        tank_body_trans.rot *= quat(vec3(0, 0, +0.05f * 50.0f * render.delta_time));
         quat new_rot = tank_body_trans.rot;
 
         vec3 old_center = old_rot * vec3(tank_body->size) / 2.0f;
@@ -250,7 +271,7 @@ void setup_input(Input& input, Lum& render) {
 
     input.setActionCallback(GameAction::TURN_TANK_RIGHT, [&](GameAction action) {
         quat old_rot = tank_body_trans.rot;
-        tank_body_trans.rot *= quat(vec3(0, 0, -0.05f * 50.0f * render.delt_time));
+        tank_body_trans.rot *= quat(vec3(0, 0, -0.05f * 50.0f * render.delta_time));
         quat new_rot = tank_body_trans.rot;
 
         vec3 old_center = old_rot * vec3(tank_body->size) / 2.0f;
@@ -291,7 +312,7 @@ void setup_input(Input& input, Lum& render) {
 
 
     input.setActionCallback(GameAction::SHOOT, [&](GameAction action) {
-        Particle 
+        Lum::Particle 
             p = {};
             p.lifeTime = 12.0;
             p.pos = tank_head_trans.rot*vec3(16.5,3,9.5) + tank_head_trans.shift;
@@ -308,10 +329,10 @@ void setup_input(Input& input, Lum& render) {
     });
 
     input.setActionCallback(GameAction::INCREASE_ZOOM, [&](GameAction action){
-            render.render.camera.pixelsInVoxel *= 1.0 + render.delt_time;
+            render.render.camera.pixelsInVoxel *= 1.0 + render.delta_time;
     });
     input.setActionCallback(GameAction::DECREASE_ZOOM, [&](GameAction action){
-            render.render.camera.pixelsInVoxel /= 1.0 + render.delt_time;
+            render.render.camera.pixelsInVoxel /= 1.0 + render.delta_time;
     });
 }
 
@@ -357,25 +378,15 @@ vec3 rnVec3(float minValue, float maxValue) {
     return glm::vec3(x, y, z);
 }
 
-void cleanup(Lum& render){
-    render.waitIdle();
-
+void cleanup(Lum::Renderer& lum){
     // save_scene functions are not really supposed to be used, i implemented them for demo
-    render.render.save_scene("assets/scene");
+    lum.render.save_scene("assets/scene");
 
-    render.freeMesh(tank_body);
-    render.freeMesh(tank_head);
-    render.freeMesh(tank_rf_leg);
-    render.freeMesh(tank_lb_leg);
-    render.freeMesh(tank_lf_leg);
-    render.freeMesh(tank_rb_leg);
-
-    render.waitIdle();
-
-    render.cleanup();
+    // automatically frees all allocated blocks and meshes
+    lum.cleanup();
 }
 
-int findBlockUnderTank(Lum& lum, const ivec2& block_center, int block_under_body) {
+int findBlockUnderTank(Lum::Renderer& lum, const ivec2& block_center, int block_under_body) {
     int selected_block = 0;
     for (int i = -1; i <= 1; ++i) {
         if (lum.getWorldBlock(block_center.x, block_center.y, block_under_body + i) != 0) {
@@ -390,7 +401,7 @@ int findBlockUnderTank(Lum& lum, const ivec2& block_center, int block_under_body
     return selected_block;
 }
 
-void process_physics(Lum& lum) {
+void process_physics(Lum::Renderer& lum) {
      vec3 tank_body_center = tank_body_trans.rot * vec3(8.5,12.5, 0) + tank_body_trans.shift;
     ivec2 tank_body_center_in_blocks = ivec2(tank_body_center) / 16;
     int block_under_body = int(tank_body_center.z) / 16;
@@ -408,7 +419,7 @@ void process_physics(Lum& lum) {
         selected_block = block_under_body-1;
     } else {
         for(selected_block=lum.render.world_size.z-1; selected_block>=0; selected_block--){
-            BlockID_t blockId = lum.getWorldBlock(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, selected_block);
+            Lum::MeshBlock blockId = lum.getWorldBlock(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, selected_block);
 
             if (blockId != 0) break;
         }
@@ -427,18 +438,18 @@ quat find_quat(vec3 v1, vec3 v2){
 }
 
 // some inverse kinematics
-void process_animations(Lum& lum){
+void process_animations(Lum::Renderer& lum){
     vec3 tank_direction_forward = tank_body_trans.rot * vec3(0,1,0);
     vec3 tank_direction_right   = tank_body_trans.rot * vec3(1,0,0);
 
-    Particle p = {};
+    Lum::Particle p = {};
         p.lifeTime = 10.0 * (float(rand()) / float(RAND_MAX));
         p.pos = tank_head_trans.rot*vec3(17,42,27) + tank_head_trans.shift;
         p.vel = (rnVec3(0,1)*2.f - 1.f)*1.1f;
         p.matID = 79;
     lum.render.particles.push_back(p);
 
-    float interpolation = glm::clamp(float(lum.delt_time)*4.20f);
+    float interpolation = glm::clamp(float(lum.delta_time)*4.20f);
     tank_head_trans.rot = normalize(glm::mix(tank_head_trans.rot, quat(vec3(0,0,glm::pi<float>()))*tank_body_trans.rot, interpolation));
     interpolated_body_height = glm::mix(interpolated_body_height, physical_body_height, interpolation);
     tank_body_trans.shift.z = interpolated_body_height;

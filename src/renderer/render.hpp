@@ -1,19 +1,6 @@
 #pragma once
 
-// #include <optional>
 #include <vector>
-
-// #undef __STRICT_ANSI__
-// #define GLM_ENABLE_EXPERIMENTAL
-// #include <glm/glm.hpp>
-// #include <glm/gtx/quaternion.hpp>
-// #include <glm/ext/matrix_transform.hpp>
-
-// #include <volk.h>
-// #include <vulkan/vulkan.h>
-// #include <vk_enum_string_helper.h> //idk why but it is neither shipped with Linux Vulkan SDK nor bundled in vulkan-sdk-components
-// #include <vk_mem_alloc.h>
-// #include <GLFW/glfw3.h>
 
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
@@ -21,6 +8,8 @@
 #include "../../lum-al/src/al.hpp"
 #include <glm/gtx/quaternion.hpp>
 
+namespace LumInternal {
+// there are some conflicts in namespaces so have to do it like this
 using std::vector;
 using std::cout;
 using std::tuple;
@@ -103,8 +92,8 @@ typedef struct IndexedVertices {
 
 typedef struct FaceBuffers {
     IndexedVertices Pzz, Nzz, zPz, zNz, zzP, zzN;
-    Buffer vertexes;
-    Buffer indices;
+    Lumal::Buffer vertexes;
+    Lumal::Buffer indices;
 } FaceBuffers;
 
 // separate from Mesh so you can "instance" mesh
@@ -117,13 +106,18 @@ typedef struct InternalMeshModel {
     FaceBuffers triangles;
     //staged per frame in flight, so you can update it faster. But costs double the memory
     //3d image of voxels in this mesh, used to represent mesh to per-frame world voxel representation
-    ring<Image> voxels; 
+    ring<Lumal::Image> voxels; 
     ivec3 size; // integer because in voxels
 } InternalMeshModel;
 
 typedef struct InternalMeshFoliage {
-    //everything is Staged per frame in flight, so you can update it faster. But costs double the memory
-    RasterPipe pipe = {};
+    // foliage is defined as shader, not as vertices
+    // this might sound stupid, but otherwise it needs like 100 parameters
+    // and shader would still be faster and more extendable
+    // limitation is that all foliage has to be init-time defined
+    std::string vertex_shader_file = {};
+    Lumal::RasterPipe pipe = {};
+    // Staged per frame in flight, so you can update it faster. But costs double the memory
     int vertices;
     // ivec3 size; // integer because in voxels
     int dencity; // total dencity^2 foliage objects rendered as mesh
@@ -141,10 +135,10 @@ typedef struct InternalMeshVolumetric {
 } InternalMeshVolumetric;
 
 typedef struct InternalUiMesh {
-    Buffer vertexes;
-    Buffer indexes;
+    Lumal::Buffer vertexes;
+    Lumal::Buffer indexes;
     u32 icount;
-    Image* image;
+    Lumal::Image* image;
 } InternalUiMesh;
 
 typedef struct BlockVoxels {
@@ -217,22 +211,24 @@ typedef struct LumSpecificSettings {
     int static_block_palette_size = 15;
     int maxParticleCount = 8128;
 } LumSpecificSettings;
-typedef struct LumSettings : Settings, LumSpecificSettings {
+typedef struct LumSettings : Lumal::Settings, LumSpecificSettings {
     // wait for it
     // LumSettings(LumSpecificSettings s) : LumSpecificSettings(s) {};
     // LumSettings() = default;
 } LumSettings;
 
-struct LumRenderer {
-    Renderer render;
+struct LumInternalRenderer {
+    Lumal::Renderer render;
     
   public:
     void init (LumSettings settings);
+    void setupFoliageDescriptors();
     void setupDescriptors();
     void createImages();
     VkResult createSwapchainDependent();
     void createSwapchainDependentImages();
     VkResult cleanupSwapchainDependent();
+    void createFoliagePipilines();
     void createPipilines();
     void cleanup();
     void createSamplers();
@@ -308,7 +304,7 @@ struct LumRenderer {
             void update_particles();
             void raygen_map_particles();
             void raygen_start_grass();
-                void raygen_map_grass(InternalMeshFoliage grass, ivec3 pos);
+                void raygen_map_grass(InternalMeshFoliage* grass, ivec3 pos);
             // void raygen_end_grass();
             void raygen_start_water();
                 void raygen_map_water(InternalMeshLiquid water, ivec3 pos);
@@ -331,10 +327,10 @@ struct LumRenderer {
         void present();
     void end_frame();
 
-    template<class Vertex_T> vector<Buffer> createElemBuffers (Vertex_T* vertices, u32 count, u32 buffer_usage = 0);
-    template<class Vertex_T> vector<Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
+    template<class Vertex_T> vector<Lumal::Buffer> createElemBuffers (Vertex_T* vertices, u32 count, u32 buffer_usage = 0);
+    template<class Vertex_T> vector<Lumal::Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
 
-    ring<Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
+    ring<Lumal::Image> create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size);
     void updateBlockPalette (BlockWithMesh* blockPalette);
     void updateMaterialPalette (Material* materialPalette);
 
@@ -342,47 +338,47 @@ struct LumRenderer {
     // VkExtent2D raytraceExtent;
     VkExtent2D lightmapExtent;
 
-    RasterPipe lightmapBlocksPipe = {};
-    RasterPipe lightmapModelsPipe = {};
+    Lumal::RasterPipe lightmapBlocksPipe = {};
+    Lumal::RasterPipe lightmapModelsPipe = {};
 
-    RasterPipe raygenBlocksPipe = {};
-    RasterPipe raygenModelsPipe = {};
+    Lumal::RasterPipe raygenBlocksPipe = {};
+    Lumal::RasterPipe raygenModelsPipe = {};
     VkDescriptorSetLayout raygenModelsPushLayout;
-    RasterPipe raygenParticlesPipe = {};
-    RasterPipe raygenGrassPipe = {};
-    RasterPipe raygenWaterPipe = {};
+    Lumal::RasterPipe raygenParticlesPipe = {};
+    Lumal::RasterPipe raygenGrassPipe = {};
+    Lumal::RasterPipe raygenWaterPipe = {};
 
-    RasterPipe diffusePipe = {};
-    RasterPipe aoPipe = {};
-    RasterPipe fillStencilGlossyPipe = {};
-    RasterPipe fillStencilSmokePipe = {};
-    RasterPipe glossyPipe = {};
-    RasterPipe smokePipe = {};
-    RasterPipe tonemapPipe = {};
-    RasterPipe overlayPipe = {};
+    Lumal::RasterPipe diffusePipe = {};
+    Lumal::RasterPipe aoPipe = {};
+    Lumal::RasterPipe fillStencilGlossyPipe = {};
+    Lumal::RasterPipe fillStencilSmokePipe = {};
+    Lumal::RasterPipe glossyPipe = {};
+    Lumal::RasterPipe smokePipe = {};
+    Lumal::RasterPipe tonemapPipe = {};
+    Lumal::RasterPipe overlayPipe = {};
 
-    RenderPass lightmapRpass;
-    RenderPass gbufferRpass;
-    RenderPass shadeRpass; //for no downscaling
+    Lumal::RenderPass lightmapRpass;
+    Lumal::RenderPass gbufferRpass;
+    Lumal::RenderPass shadeRpass; //for no downscaling
 
     ring<VkCommandBuffer> computeCommandBuffers;
     ring<VkCommandBuffer> lightmapCommandBuffers;
     ring<VkCommandBuffer> graphicsCommandBuffers;
     ring<VkCommandBuffer> copyCommandBuffers; //runtime copies for ui. Also does first frame resources
 
-    ring<Image> lightmap;
-    ring<Image> swapchainImages;
-    ring<Image> highresFrame;
-    ring<Image> highresDepthStencil;
+    ring<Lumal::Image> lightmap;
+    ring<Lumal::Image> swapchainImages;
+    ring<Lumal::Image> highresFrame;
+    ring<Lumal::Image> highresDepthStencil;
     // Image highresStencils;
-    ring<Image> highresMatNorm;
+    ring<Lumal::Image> highresMatNorm;
     //downscaled version for memory coherence. TODO:TEST perfomance on tiled
     // ring<Image> lowresMatNorm;
     // ring<Image> lowresDepthStencil;
     ring<VkImageView> stencilViewForDS;
-    ring<Image> farDepth; //represents how much should smoke traversal for
-    ring<Image> nearDepth; //represents how much should smoke traversal for
-    ring<Image> maskFrame; //where lowres renders to. Blends with highres afterwards
+    ring<Lumal::Image> farDepth; //represents how much should smoke traversal for
+    ring<Lumal::Image> nearDepth; //represents how much should smoke traversal for
+    ring<Lumal::Image> maskFrame; //where lowres renders to. Blends with highres afterwards
 
     VkSampler nearestSampler;
     VkSampler linearSampler;
@@ -394,49 +390,51 @@ struct LumRenderer {
     VkSampler unnormNearest;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
-    ring<Buffer> stagingWorld;
+    ring<Lumal::Buffer> stagingWorld;
     // ring<void*> stagingWorldMapped;
-    ring<Image> world; //can i really use just one?
+    ring<Lumal::Image> world; //can i really use just one?
 
-    ring<Image> radianceCache;
+    ring<Lumal::Image> radianceCache;
 
-    ring<Image> originBlockPalette;
-    ring<Image> distancePalette;
-    ring<Image> bitPalette; //bitmask of originBlockPalette
-    ring<Image> materialPalette;
+    ring<Lumal::Image> originBlockPalette;
+    ring<Lumal::Image> distancePalette;
+    ring<Lumal::Image> bitPalette; //bitmask of originBlockPalette
+    ring<Lumal::Image> materialPalette;
 
-    ring<Buffer> lightUniform;
-    ring<Buffer> uniform;
-    ring<Buffer> aoLutUniform;
+    ring<Lumal::Buffer> lightUniform;
+    ring<Lumal::Buffer> uniform;
+    ring<Lumal::Buffer> aoLutUniform;
     vector<i8vec4> radianceUpdates;
     vector<i8vec4> specialRadianceUpdates;
-    ring<Buffer> gpuRadianceUpdates;
+    ring<Lumal::Buffer> gpuRadianceUpdates;
     // ring<void*> stagingRadianceUpdatesMapped;
-    ring<Buffer> stagingRadianceUpdates;
+    ring<Lumal::Buffer> stagingRadianceUpdates;
 
     vector<Particle> particles;
-    ring<Buffer> gpuParticles; //multiple because cpu-related work
+    ring<Lumal::Buffer> gpuParticles; //multiple because cpu-related work
     // ring<void* > gpuParticlesMapped; //multiple because cpu-related work
 
-    ring<Image> perlinNoise2d; //full-world grass shift (~direction) texture sampled in grass
-    ring<Image> grassState; //full-world grass shift (~direction) texture sampled in grass
-    ring<Image> waterState; //~same but water
+    ring<Lumal::Image> perlinNoise2d; //full-world grass shift (~direction) texture sampled in grass
+    ring<Lumal::Image> grassState; //full-world grass shift (~direction) texture sampled in grass
+    ring<Lumal::Image> waterState; //~same but water
 
-    ring<Image> perlinNoise3d; //4 channels of different tileable noise for volumetrics
+    ring<Lumal::Image> perlinNoise3d; //4 channels of different tileable noise for volumetrics
 
     VkDescriptorPool descriptorPool;
-    ComputePipe raytracePipe = {};
-    ComputePipe radiancePipe = {};
-    ComputePipe mapPipe = {};
+    Lumal::ComputePipe raytracePipe = {};
+    Lumal::ComputePipe radiancePipe = {};
+    Lumal::ComputePipe mapPipe = {};
     VkDescriptorSetLayout mapPushLayout;
-    ComputePipe updateGrassPipe = {};
-    ComputePipe updateWaterPipe = {};
-    ComputePipe genPerlin2dPipe = {}; //generate noise for grass
-    ComputePipe genPerlin3dPipe = {}; //generate noise for grass
-    ComputePipe dfxPipe = {};
-    ComputePipe dfyPipe = {};
-    ComputePipe dfzPipe = {};
-    ComputePipe bitmaskPipe = {};
+    Lumal::ComputePipe updateGrassPipe = {};
+    Lumal::ComputePipe updateWaterPipe = {};
+    Lumal::ComputePipe genPerlin2dPipe = {}; //generate noise for grass
+    Lumal::ComputePipe genPerlin3dPipe = {}; //generate noise for grass
+    Lumal::ComputePipe dfxPipe = {};
+    Lumal::ComputePipe dfyPipe = {};
+    Lumal::ComputePipe dfzPipe = {};
+    Lumal::ComputePipe bitmaskPipe = {};
+
+    vector<InternalMeshFoliage*> registered_foliage = {};
 
   private:
     int paletteCounter = 0;
@@ -504,10 +502,11 @@ class MyRenderInterface : public Rml::RenderInterface {
     void SetTransform (const Rml::Matrix4f* transform); //override;
 
     // Rml::Context* GetContext(); //override {};
-    LumRenderer* render;
-    Image* default_image = NULL;
+    LumInternalRenderer* render;
+    Lumal::Image* default_image = NULL;
 
     mat4 current_transform = glm::identity<mat4>();
     // bool has_scissors = true;
     VkRect2D last_scissors = {{0, 0}, {1, 1}};
 };
+}

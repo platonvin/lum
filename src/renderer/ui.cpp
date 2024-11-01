@@ -278,7 +278,7 @@ Rml::Input::KeyIdentifier RmlGLFW::ConvertKey (int glfw_key) {
     return Rml::Input::KI_UNKNOWN;
 }
 
-static LumRenderer* _renderer;
+static LumInternal::LumInternalRenderer* _renderer;
 int pre_counter_diff = 0;
 int post_counter_diff = 0;
 int final_counter_diff = 0;

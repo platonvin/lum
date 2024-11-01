@@ -6,8 +6,9 @@
 precision highp float;
 precision highp int;
 
-#include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(location = 0) out vec4 frame_color;
 

@@ -1,8 +1,10 @@
 #version 450
 
 precision highp float;
-// #include "common/ext.glsl"
-#include "common/ubo.glsl"
+// #extension GL_GOOGLE_include_directive : require
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(location = 0) in  vec3 posIn;
 layout(location = 1) in  vec3 velIn; //why not maybe effects

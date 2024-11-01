@@ -13,8 +13,9 @@ but 32 is clearly not multiply of 11, and sadly 11x3=33 is one more than 32
 *1) Measurements showed that i clearly was wrong. But strip still faster
 */
 
-#include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 layout(set = 0, binding = 1) uniform sampler2D state;
 
@@ -32,7 +33,6 @@ const int BLOCK_PALETTE_SIZE_X = 64;
 const int STATIC_BLOCK_COUNT = 15; // 0 + 1..static block count so >=STATIC_BLOCK_COUNT
 const float PI = 3.1415926535;
 const ivec3 world_size = ivec3(48,48,16);
-const int size = 10; //total size*size blades
 
 ivec3 voxel_in_palette(ivec3 relative_voxel_pos, int block_id) {
     int block_x = block_id % BLOCK_PALETTE_SIZE_X;
@@ -204,17 +204,18 @@ vec3 get_blade_vert(int iindex, out vec3 normal, in float rnd01, in vec2 pos){
 
     return vertex;
 }
+
 void main() {
     int sub_blade_id = gl_VertexIndex / VERTICES_PER_BLADE;
     int blade_id = gl_InstanceIndex*BLADES_PER_INSTANCE + sub_blade_id;    
     int blade_vertex_id = gl_VertexIndex % VERTICES_PER_BLADE;
-    int blade_x = blade_id % size;
-    int blade_y = blade_id / size;
+    int blade_x = blade_id % pco.size;
+    int blade_y = blade_id / pco.size;
     //for faster depth testing
-    if(pco.x_flip == 0) blade_x = size - blade_x;
-    if(pco.y_flip != 0) blade_y = size - blade_y;
+    if(pco.x_flip == 0) blade_x = pco.size - blade_x;
+    if(pco.y_flip != 0) blade_y = pco.size - blade_y;
     
-    vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(size));
+    vec2 relative_pos = ((vec2(blade_x, blade_y) + 0.5)/ vec2(pco.size));
 
     vec3 normal;
     float rand01 = rand(relative_pos + pco.shift.xy);

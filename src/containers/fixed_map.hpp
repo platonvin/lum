@@ -3,6 +3,9 @@
 #ifndef __FIXED_MAP_HPP__
 #define __FIXED_MAP_HPP__
 
+// extracted from [Circulli Bellum](https://github.com/platonvin/circuli-Bellum)
+// simple arena allocator with faster allocation time
+
 #include <string.h>
 // #include <macros.hpp>
 

@@ -15,8 +15,9 @@ layout(location = 0) in VS_OUT {
 // layout(location = 1) flat out float fmat;
 layout(location = 0) lowp flat out uvec4 mat_norm;
 
-// #include "common/ext.glsl"
-#include "common/ubo.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "common\ext.glsl"
+#include "common\ubo.glsl"
 
 const vec3 cube_strip[14] = {
     vec3(-1, +1, +1), // Front - top    - left

@@ -8,8 +8,9 @@ shaders/*.spv
 shaders/compiled/*.spv
 
 #generating compile commands without 10000 lines of cmake
-# compile_flags.txt
 *.txt
+# for clangd
+!compile_flags.txt
 # IDE things
 .vscode
 .idea
@@ -38,3 +39,4 @@ vcpkg_installed
 
 *.md
 !README.md
+/lib
