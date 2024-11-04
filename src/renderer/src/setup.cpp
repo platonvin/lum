@@ -1,4 +1,4 @@
-#include "render.hpp"
+#include "internal_render.hpp"
 #include "defines/macros.hpp"
 
 ring<Lumal::Image> LumInternal::LumInternalRenderer::create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size) {

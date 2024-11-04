@@ -1,16 +1,24 @@
 // #include "input/input.hpp"
-#include "clum.h"
+
+
+#include <crenderer.h>
 #include <assert.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <GLFW/glfw3.h>
 
 /*
-    This is C99 version of demo. It is incomplete, but still works as example
-    no animations / input / physics / etc.
-    i do not want to include cglm just for that
+    This is C99 version of demo. It is incomplete, but still works as example of lum usage
+    it's missing animations, input, physics, etc.
+    *i do not want to include cglm just for that*
 */
 
-void cleanup(LumInstance* lum);
+#define KEND  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define ATRACE(__s) printf(KGRN "%s:%d: Fun: %s\n" KEND, __FILE__, __LINE__, __FUNCTION__); __s
+#define TRACE(__s) __s
+void cleanup(LumRenderer lum);
 
 // in real world you would store them as ECS components / member in EntityClass
 // but for simplicity lets stick to just this
@@ -30,6 +38,7 @@ LumMeshTransform tank_lb_leg_trans = {};
 int main(){
     LumSettings settings = LUM_DEFAULT_SETTINGS;
         settings.fullscreen = false;
+        settings.debug = false;
         settings.vsync = false;
         settings.world_size[0] = 48;
         settings.world_size[1] = 48;
@@ -37,34 +46,45 @@ int main(){
         settings.static_block_palette_size = 15;
         settings.maxParticleCount = 8128;
 
-    LumInstance* lum = lum_create_instance(&settings);
+// ATRACE()
+    LumRenderer lum = lum_create_instance(&settings);
+// ATRACE()
     assert(lum);
+    LumMeshFoliage grass = lum_load_foliage(lum, "shaders/compiled/grass.vert.spv", 6, 10);
+// ATRACE()
     lum_init(lum, &settings);
+// ATRACE()
     lum_demo_load_scene(lum, "assets/scene");
+// ATRACE()
     
     // preparation stage. These functions also can be called in runtime
     // If no palette is found, first models defines it
         // this DOES set palette
+// ATRACE()
     tank_body = lum_load_mesh_file(lum, "assets/tank_body.vox", true);
+// ATRACE()
     tank_body_trans.shift[0] = 13.1f * 16.0f;
     tank_body_trans.shift[1] = 14.1f * 16.0f;
     tank_body_trans.shift[2] = 3.1f * 16.0f;
+// ATRACE()
         // this DOES NOT set palette cause already setten.
     tank_head = lum_load_mesh_file(lum, "assets/tank_head.vox", true);
         // material palette can also be loaded from alone
         // lum.loadPalette("my_magicavox_filescene_with_palette_i_want_to_extract.vox")
         // good way to handle this would be to have voxel for each material placed in scene to view them
+// ATRACE()
 
     tank_rf_leg = lum_load_mesh_file(lum, "assets/tank_rf_lb_leg.vox", false);
     tank_lb_leg = lum_load_mesh_file(lum, "assets/tank_rf_lb_leg.vox", false);
     tank_lf_leg = lum_load_mesh_file(lum, "assets/tank_lf_rb_leg.vox", false);
     tank_rb_leg = lum_load_mesh_file(lum, "assets/tank_lf_rb_leg.vox", false);
-    
-    LumMeshFoliage* grass = lum_load_foliage(lum, "", 6, 10);
+// ATRACE()
     LumMeshLiquid water = lum_load_liquid(lum, 69, 42);
     uint8_t color[] = {0, 0, 0};
     LumMeshVolumetric smoke = lum_load_volumetric(lum, 1.0f, 0.5f, color);
+// ATRACE()
 
+// ATRACE()
     lum_load_block_file(lum, 1, "assets/dirt.vox");
     lum_load_block_file(lum, 2, "assets/grass.vox");
     lum_load_block_file(lum, 3, "assets/grassNdirt.vox");
@@ -80,27 +100,34 @@ int main(){
     lum_load_block_file(lum, 13, "assets/wood.vox");
     lum_load_block_file(lum, 14, "assets/planks.vox");
     // total 15 max blocks specified, so loadBlock(15) is illegal
+// ATRACE()
 
     // literally uploads data to gpu. You can call them in runtime, but atm its not recommended (a lot of overhead curently, can be significantly reduced)
     lum_upload_block_palette_to_gpu(lum);
+// ATRACE()
     lum_upload_material_palette_to_gpu(lum);
+// ATRACE()
     
     lum_wait_idle(lum);
+// ATRACE()
 
     // callback functions for glfw action input system 
     // setup_input(input, lum);
 
     while (!lum_get_should_close(lum)) {
+// ATRACE()
         glfwPollEvents();
+// ATRACE()
         int should_close = lum_get_should_close(lum);
-        should_close |= glfwWindowShouldClose(lum_get_glfw_ptr(lum));
-        should_close |= (glfwGetKey(lum_get_glfw_ptr(lum), GLFW_KEY_ESCAPE) == GLFW_PRESS);
+        should_close |= glfwWindowShouldClose((GLFWwindow*)lum_get_glfw_ptr(lum));
+        should_close |= (glfwGetKey((GLFWwindow*)lum_get_glfw_ptr(lum), GLFW_KEY_ESCAPE) == GLFW_PRESS);
         lum_set_should_close(lum, should_close);
 
         lum_start_frame(lum);
         // could be impicit
         lum_draw_world(lum);
         lum_draw_particles(lum);
+// ATRACE()
 
         // draw tank model
         // It does not look correct, but C demo is not even trying. Whole point is to test if C99 API works
@@ -111,6 +138,7 @@ int main(){
         lum_draw_model(lum, tank_lf_leg, &tank_lf_leg_trans);
         lum_draw_model(lum, tank_rb_leg, &tank_rb_leg_trans);
         lum_draw_model(lum, tank_lb_leg, &tank_lb_leg_trans);
+// ATRACE()
 
         // literally procedural grass placement every frame. You probably want to store it as entities in your own structures
         for (int xx = 4; xx < 20; xx++) {
@@ -120,6 +148,7 @@ int main(){
                 lum_draw_foliage_block(lum, grass, pos);
             }
         }
+// ATRACE()
 
         // literally procedural water placement every frame. You probably want to store it as entities in your own structures
         for (int xx = 5; xx < 12; xx++) {
@@ -128,6 +157,7 @@ int main(){
                 lum_draw_liquid_block(lum, water, pos);
             }
         }
+// ATRACE()
 
         // literally procedural smoke placement every frame. You probably want to store it as entities in your own structures
         for (int xx = 8; xx < 10; xx++) {
@@ -136,9 +166,12 @@ int main(){
                 lum_draw_volumetric_block(lum, smoke, pos);
             }
         }
+// ATRACE()
 
         lum_prepare_frame(lum);
+// ATRACE()
         lum_submit_frame(lum);
+// ATRACE()
     }
 
     // prints GPU profile data
@@ -162,10 +195,11 @@ int main(){
     cleanup(lum);
 }
 
-void cleanup(LumInstance* lum){
+void cleanup(LumRenderer lum){
     // save_scene functions are not really supposed to be used, i implemented them for demo
     // and they are not ported to C++. Why would anyone use them?
 
     // automatically frees all allocated blocks and meshes
     lum_cleanup(lum);
+    lum_destroy_instance(lum);
 }

@@ -1,4 +1,4 @@
-#include "render.hpp"
+#include "internal_render.hpp"
 #include "defines/macros.hpp"
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -127,9 +127,13 @@ void LumInternal::LumInternalRenderer::updateMaterialPalette (Material* material
 
 // try to find shader in multiple places just in case if lum is launched incorrectly
 std::string find_asset(const std::string& asset_name) {
+    std::string unity_asset_name = "Assets/" + asset_name;
+    
     std::string paths[] = {
         asset_name,
-        "../" + asset_name // when in bin/
+        "../" + asset_name, // when in bin/
+        unity_asset_name,
+        "../" + unity_asset_name, // when in bin/
     };
 
     for (const auto& path : paths) {
@@ -139,7 +143,8 @@ std::string find_asset(const std::string& asset_name) {
         }
     }
 
-    assert(false && ("Asset file not found: " + asset_name).c_str());
+    std::cout << "Asset file not found: " << asset_name;
+    assert(false && "Asset file not found");
     std::unreachable();
 }
 

@@ -5,7 +5,7 @@
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
 
-#include "../../lum-al/src/al.hpp"
+#include "../../../lum-al/src/al.hpp"
 #include <glm/gtx/quaternion.hpp>
 
 namespace LumInternal {
@@ -380,14 +380,14 @@ struct LumInternalRenderer {
     ring<Lumal::Image> nearDepth; //represents how much should smoke traversal for
     ring<Lumal::Image> maskFrame; //where lowres renders to. Blends with highres afterwards
 
-    VkSampler nearestSampler;
-    VkSampler linearSampler;
-    VkSampler linearSampler_tiled;
-    VkSampler linearSampler_tiled_mirrored;
-    VkSampler overlaySampler;
-    VkSampler shadowSampler;
-    VkSampler unnormLinear;
-    VkSampler unnormNearest;
+    VkSampler nearestSampler = VK_NULL_HANDLE;
+    VkSampler linearSampler = VK_NULL_HANDLE;
+    VkSampler linearSampler_tiled = VK_NULL_HANDLE;
+    VkSampler linearSampler_tiled_mirrored = VK_NULL_HANDLE;
+    VkSampler overlaySampler = VK_NULL_HANDLE;
+    VkSampler shadowSampler = VK_NULL_HANDLE;
+    VkSampler unnormLinear = VK_NULL_HANDLE;
+    VkSampler unnormNearest = VK_NULL_HANDLE;
 
     //is or might be in use when cpu is recording new one. Is pretty cheap, so just leave it
     ring<Lumal::Buffer> stagingWorld;

@@ -16,6 +16,7 @@
 using glm::dvec2;
 using glm::ivec2;
 
+namespace Lum {
 /*
 general structure:
     glfwCallback is called on an input event
@@ -188,4 +189,6 @@ private:
     FixedMap<ActionEnum::LAST_ACTION, bool> currentActionStates;
     FixedMap<ActionEnum::LAST_ACTION, bool> previousActionStates;
 };
+} // namespace Lum
+
 #endif // __INPUT_HANDLER_HPP__

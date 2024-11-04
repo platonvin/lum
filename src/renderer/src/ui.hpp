@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render.hpp"
+#include "internal_render.hpp"
 
 #include <RmlUi/Debugger.h>
 #include "defines/macros.hpp"

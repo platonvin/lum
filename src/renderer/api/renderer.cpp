@@ -1,4 +1,4 @@
-#include "lum.hpp"
+#include "renderer.hpp"
 #include "defines/macros.hpp"
 
 #define let auto&
@@ -108,7 +108,7 @@ Lum::MeshFoliage Lum::Renderer::loadFoliage(const std::string& vertex_shader_fil
         // this is not creating pipe(line). Only queuing shader file for later pipe(line)
         // i just hope C++ is not fucked up and lifetime of string is whole main
         new_foliage->vertex_shader_file = vertex_shader_file;
-        LOG(new_foliage->vertex_shader_file)
+        // LOG(new_foliage->vertex_shader_file)
         new_foliage->vertices = vertices_per_foliage;
         new_foliage->dencity = density;
     // registering in internal renderer
@@ -116,19 +116,19 @@ Lum::MeshFoliage Lum::Renderer::loadFoliage(const std::string& vertex_shader_fil
     return new_foliage;
 }
 Lum::MeshVolumetric Lum::Renderer::loadVolumetric(float max_density, float density_deviation, const u8vec3& color) noexcept {
-    MeshVolumetric 
-        volumetric = {};
-        volumetric.max_dencity = max_density;
-        volumetric.variation = density_deviation;
-        volumetric.color = color;
-    return volumetric;
+    LumInternal::InternalMeshVolumetric* 
+        new_volumetric = mesh_volumetric_storage.allocate();
+        new_volumetric->max_dencity = max_density;
+        new_volumetric->variation = density_deviation;
+        new_volumetric->color = color;
+    return new_volumetric;
 }
 Lum::MeshLiquid Lum::Renderer::loadLiquid(LumInternal::MatID_t main_mat, LumInternal::MatID_t foam_mat) noexcept {
-    MeshLiquid 
-        liquid = {};
-        liquid.main = main_mat;
-        liquid.foam = foam_mat;
-    return liquid;
+    LumInternal::InternalMeshLiquid* 
+        new_liquid = mesh_liquid_storage.allocate();
+        new_liquid->main = main_mat;
+        new_liquid->foam = foam_mat;
+    return new_liquid;
 }
 
 static bool is_block_visible(dmat4 trans, dvec3 pos){
@@ -185,6 +185,7 @@ void Lum::Renderer::drawParticles() noexcept {
 }
 
 void Lum::Renderer::drawModel(const MeshModel& mesh, const MeshTransform& trans) noexcept {
+    assert(mesh != nullptr);
     ModelRenderRequest 
         mrr = {};
         mrr.mesh = mesh;
@@ -193,6 +194,7 @@ void Lum::Renderer::drawModel(const MeshModel& mesh, const MeshTransform& trans)
 }
 
 void Lum::Renderer::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& pos) noexcept {
+    assert(foliage != nullptr);
     FoliageRenderRequest 
         frr = {};
         frr.foliage = foliage;
@@ -200,14 +202,18 @@ void Lum::Renderer::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& po
     foliage_que.push_back(frr);
 }
 void Lum::Renderer::drawLiquidBlock(const MeshLiquid& liquid, const ivec3& pos) noexcept {
+    assert(liquid != nullptr);
     LiquidRenderRequest 
         lrr = {};
+        lrr.liquid = liquid;
         lrr.pos = pos;
     liquid_que.push_back(lrr);
 }
 void Lum::Renderer::drawVolumetricBlock(const MeshVolumetric& volumetric, const ivec3& pos) noexcept {
+    assert(volumetric != nullptr);
     VolumetricRenderRequest 
         vrr = {};
+        vrr.volumetric = volumetric;
         vrr.pos = pos;
     volumetric_que.push_back(vrr);
 }
@@ -262,13 +268,16 @@ void Lum::Renderer::prepareFrame() noexcept{
 }
 
 void Lum::Renderer::submitFrame() noexcept {
+// ATRACE()
     render.start_frame();
+// ATRACE()
 
         // render.start_compute();
             render.start_blockify();    
             for (let m : mesh_que){
                 render.blockify_mesh(m.mesh, &m.trans);
             }
+// ATRACE()
 
             render.end_blockify();
             render.update_radiance();
@@ -282,74 +291,106 @@ void Lum::Renderer::submitFrame() noexcept {
                     render.map_mesh(m.mesh, &m.trans);
                 }
                 render.end_map();
+// ATRACE()
             render.end_compute();
+// ATRACE()
                 // render.raytrace();
                 render.start_lightmap();
+// ATRACE()
                 //yeah its wrong
                 render.lightmap_start_blocks();
+// ATRACE()
                     for(let b : block_que){
                         render.lightmap_block(&block_palette[b.block].mesh, b.block, b.pos);
                     }
+// ATRACE()
                 render.lightmap_start_models();
+// ATRACE()
                     for (let m : mesh_que){
                         render.lightmap_model(m.mesh, &m.trans);
                     }
+// ATRACE()
                 render.end_lightmap();
+// ATRACE()
 
                 render.start_raygen();  
+// ATRACE()
                 // printl(block_que.size());
                 render.raygen_start_blocks();
+// ATRACE()
                     for(let b : block_que){
                         // DEBUG_LOG(b.block)
                         // DEBUG_LOG(&block_palette[b.block].mesh)
                         render.raygen_block(&block_palette[b.block].mesh, b.block, b.pos);
                     }  
+// ATRACE()
                     
                 render.raygen_start_models();
+// ATRACE()
                     for (let m : mesh_que){
                         render.raygen_model(m.mesh, &m.trans);
                     }
+// ATRACE()
                 render.update_particles();
+// ATRACE()
                 render.raygen_map_particles();      
+// ATRACE()
                 render.raygen_start_grass();
+// ATRACE()
                     for(let f : foliage_que){
                         render.raygen_map_grass(f.foliage, f.pos);
                     }
+// ATRACE()
 
                 render.raygen_start_water();
+// ATRACE()
                     for(let l : liquid_que){
-                        render.raygen_map_water(l.liquid, l.pos);
+                        render.raygen_map_water(*(l.liquid), l.pos);
                     }
+// ATRACE()
                 render.end_raygen();
+// ATRACE()
                 render.start_2nd_spass();
+// ATRACE()
                 render.diffuse();
+// ATRACE()
                 render.ambient_occlusion(); 
+// ATRACE()
                 render.glossy_raygen();
+// ATRACE()
                 render.raygen_start_smoke();
+// ATRACE()
                     for(let v : volumetric_que){
-                        render.raygen_map_smoke(v.volumetric, v.pos);
+                        render.raygen_map_smoke(*v.volumetric, v.pos);
                     }
+// ATRACE()
                 render.glossy();
+// ATRACE()
                 render.smoke();
+// ATRACE()
                 render.tonemap();
+// ATRACE()
             render.start_ui(); 
 //                 ui.update();
-// TRACE();
+// ATRACE()
 //                 ui.draw();
+// ATRACE()
         render.end_ui(); 
         render.end_2nd_spass();
+// ATRACE()
     render.end_frame();
+// ATRACE()
 }
 
 void Lum::Renderer::cleanup() noexcept {
     waitIdle();
-ATRACE();
+// ATRACE();
     for(int i=1; i<render.static_block_palette_size; i++){
         // frees the mesh buffers and voxel images
         render.free_block(&block_palette[i]);
     }
     waitIdle();
-ATRACE();
+// ATRACE();
     for(int i=0; i<mesh_models_storage.total_size(); i++){
         bool idx_is_free = mesh_models_storage.free_indices.contains(i);
         bool is_allocated = (not idx_is_free);
@@ -362,9 +403,9 @@ ATRACE();
         }
     }
     waitIdle();
-ATRACE();
+// ATRACE();
     render.cleanup();
-ATRACE();
+// ATRACE();
 }
 
 void Lum::Renderer::waitIdle() noexcept {

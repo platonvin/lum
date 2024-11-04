@@ -6,20 +6,20 @@
 C++ API for Lum
 */
 
-#include "../src/renderer/render.hpp"
-#include "../src/containers/arena.hpp"
+#include "../src/internal_render.hpp"
+#include "../../containers/arena.hpp"
 
 namespace Lum {
 // opaque ref-handlers that are supposed to be reused when possible (aka instancing):
-typedef LumInternal::InternalMeshModel*     MeshModel; // non-world-grid-aligned voxel models
-typedef LumInternal::BlockID_t              MeshBlock; // world-grid-aligned blocks of 16^3 voxels
-typedef LumInternal::InternalMeshFoliage*   MeshFoliage; // small non-voxel meshes, typically rendered in big groups. Mostly defined by vertex shader
-typedef LumInternal::InternalMeshLiquid     MeshLiquid; // cascaded DFT for liquids like water
-typedef LumInternal::InternalMeshVolumetric MeshVolumetric; // Lambert law smoke
-typedef LumInternal::InternalUiMesh*        MeshUi; // RmlUi interface thing
-typedef LumInternal::MeshTransform          MeshTransform; // namespace typedef 
-typedef LumInternal::Particle               Particle; // namespace typedef 
-typedef LumInternal::LumSettings            Settings; // namespace typedef 
+typedef LumInternal::InternalMeshModel*      MeshModel; // non-world-grid-aligned voxel models
+typedef LumInternal::BlockID_t               MeshBlock; // world-grid-aligned blocks of 16^3 voxels
+typedef LumInternal::InternalMeshFoliage*    MeshFoliage; // small non-voxel meshes, typically rendered in big groups. Mostly defined by vertex shader
+typedef LumInternal::InternalMeshLiquid*     MeshLiquid; // cascaded DFT for liquids like water
+typedef LumInternal::InternalMeshVolumetric* MeshVolumetric; // Lambert law smoke
+typedef LumInternal::InternalUiMesh*         MeshUi; // RmlUi interface thing
+typedef LumInternal::MeshTransform           MeshTransform; // namespace typedef 
+typedef LumInternal::Particle                Particle; // namespace typedef 
+typedef LumInternal::LumSettings             Settings; // namespace typedef 
 
 /*
     Lum::Renderer is a lightweight wrapper around LumInternalRenderer, with more stable and nicer API
@@ -30,9 +30,18 @@ typedef LumInternal::LumSettings            Settings; // namespace typedef
 */ // yep its 13 kbytes
 class Renderer {
 public:
-    Renderer(LumInternal::LumSettings settings) noexcept : Renderer(settings, 4096, 64, 256) {}
-    Renderer(LumInternal::LumSettings settings, size_t mesh_storage_size, size_t foliage_storage_size, size_t block_palette_size) noexcept
-        : mesh_models_storage(mesh_storage_size), mesh_foliage_storage(foliage_storage_size), block_palette(block_palette_size),
+    Renderer(LumInternal::LumSettings settings) noexcept : Renderer(settings, 1024, 1024, 64, 64, 64) {}
+    Renderer(LumInternal::LumSettings settings, 
+            size_t block_palette_size, 
+            size_t mesh_storage_size, 
+            size_t foliage_storage_size, 
+            size_t volumetric_storage_size, 
+            size_t liquid_storage_size) noexcept : 
+        block_palette(block_palette_size),
+        mesh_models_storage(mesh_storage_size), 
+        mesh_foliage_storage(foliage_storage_size), 
+        mesh_volumetric_storage(volumetric_storage_size), 
+        mesh_liquid_storage(liquid_storage_size), 
         curr_time(std::chrono::steady_clock::now()), settings(settings) 
         // {init();} // i do not like it being that impicit
         {}
@@ -97,6 +106,8 @@ public:
         // Arenas are not only faster to allocate and more coherent memory, but also auto-free is possible
         Arena<LumInternal::InternalMeshModel> mesh_models_storage;
         Arena<LumInternal::InternalMeshFoliage> mesh_foliage_storage;
+        Arena<LumInternal::InternalMeshVolumetric> mesh_volumetric_storage;
+        Arena<LumInternal::InternalMeshLiquid> mesh_liquid_storage;
 
     // queued requests to render different objects. They will be sorted by depth
     struct RenderRequest { float cam_dist {}; };

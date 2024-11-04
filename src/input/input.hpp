@@ -69,7 +69,7 @@ constexpr GameAction& operator--(GameAction& action) {
     return action;
 }
 
-class Input : public InputHandler<GameAction>{
+class Input : public Lum::InputHandler<GameAction>{
 public:
     Input(){};
     //  handler;

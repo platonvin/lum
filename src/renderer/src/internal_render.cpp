@@ -2,18 +2,16 @@
 #error Lum does not compile for web
 #endif
 
-#include "render.hpp"
+#include "internal_render.hpp"
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #include "defines/macros.hpp"
 
 #include <glm/gtx/quaternion.hpp>
 #include "ao_lut.hpp"
-#include "defines/cache.hpp"
 
 #include <fstream>
 
-using std::array;
 using std::vector;
 
 using glm::u8, glm::u16, glm::u16, glm::u32;
@@ -348,10 +346,15 @@ TRACE();
 
 // try to find shader in multiple places just in case if lum is launched incorrectly
 std::string find_shader(const std::string& shader_name) {
+    // unity places all assets into Assets/
     std::string paths[] = {
         shader_name,
+        "../" + shader_name,
         "shaders/compiled/" + shader_name,
         "../shaders/compiled/" + shader_name,
+        // for unity
+        "Assets/shaders/compiled/" + shader_name,
+        "Assets/Shaders/compiled/" + shader_name,
     };
 
     for (const auto& path : paths) {
@@ -708,6 +711,7 @@ TRACE();
 
 void LumInternal::LumInternalRenderer::cleanup() {
     delete ui_render_interface;
+TRACE();
     render.destroyImages (&radianceCache);
     render.destroyImages (&world);
     render.destroyImages (&originBlockPalette);
@@ -719,14 +723,23 @@ void LumInternal::LumInternalRenderer::cleanup() {
     render.destroyImages (&grassState);
     render.destroyImages (&waterState);
     render.destroyImages (&lightmap);
+TRACE();
     render.destroySampler (nearestSampler);
+TRACE();
     render.destroySampler (linearSampler);
+TRACE();
     render.destroySampler (linearSampler_tiled);
+TRACE();
     render.destroySampler (linearSampler_tiled_mirrored);
+TRACE();
     render.destroySampler (overlaySampler);
+TRACE();
     render.destroySampler (shadowSampler);
+TRACE();
     render.destroySampler (unnormLinear);
+TRACE();
     render.destroySampler (unnormNearest);
+TRACE();
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vmaUnmapMemory (render.VMAllocator, stagingWorld[i].alloc);
         vmaUnmapMemory (render.VMAllocator, gpuParticles[i].alloc);
@@ -740,11 +753,12 @@ void LumInternal::LumInternalRenderer::cleanup() {
         // render.deleteBuffers()
         vmaDestroyBuffer (render.VMAllocator, gpuRadianceUpdates[i].buffer, gpuRadianceUpdates[i].alloc);
     }
+TRACE();
     cleanupSwapchainDependent();
-ATRACE();
+TRACE();
 
     render.cleanup();
-ATRACE();
+TRACE();
 }
 
 VkResult LumInternal::LumInternalRenderer::cleanupSwapchainDependent() {
@@ -768,10 +782,12 @@ TRACE();
     // render.destroyComputePipeline(   &dfyPipe);
     // render.destroyComputePipeline(   &dfzPipe);
     // render.destroyComputePipeline(   &bitmaskPipe);
+TRACE();
     for (auto* fol : registered_foliage) {
         render.destroyRasterPipeline (&fol->pipe);
 TRACE();
     }
+TRACE();
     render.destroyRasterPipeline (&lightmapBlocksPipe);
     render.destroyRasterPipeline (&lightmapModelsPipe);
     vkDestroyDescriptorSetLayout (render.device, raygenModelsPushLayout, NULL);

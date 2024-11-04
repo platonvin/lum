@@ -1,41 +1,42 @@
 [![Build](https://github.com/platonvin/lum/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/c-cpp.yml)
 
 # Lum
-**Lum** is a voxel\* renderer\*\* I'm developing because none of the existing ones meet my needs\*\*\*. Currently, it's only available in a form of C++ API, but might (on request) be ported into Unity/Unreal/C
+**Lum** is a voxel\* renderer\*\* i'm developing. Currently, it's only available in a form of C99/C++ API, but might (on request) be ported into Unity / Unreal
 
-\* As any domain specific renderer, it has very limited usecase. By voxel i mean "small single-material cube, grid-aligned with its neighbours". Lum also wants you to unite voxels into blocks, and blocks into world. Non-world-grid aligned models are still alowed, but they have to be voxel too, and they also have some perfomance cost (~1 microsecond per model)
-\*\* technically, it also has input system, Ui, meshloader (and will have voxel physics engine), but it is stil mostly GPU code\
-\*\*\* my needs are high perfomance, dynamic GI, simplicity and very specific style (similar to Minecraft Dungeons). I did not find any perfomant engine i would enjoy and understand enough so i made Lum.\
-\*\*\*\* If you have any API suggestions, open an issue
+\* As any domain specific renderer, it has very limited usecase. By voxel i mean "small single-material cube, grid-aligned with its neighbours". Lum also wants you to unite voxels into blocks, and blocks into world. Non-world-grid aligned models are still alowed, but they have to be voxel too, and they also have some extra perfomance cost (~1 microsecond per model)\
+\*\* Lum also has ECS ([check it out!](src/engine/README.md)), input, Ui, meshloader (and will have voxel physics engine), but it's stil mostly GPU code
+
+If you have any API suggestions, open an issue
 
 ##### Some demo footage
 https://github.com/user-attachments/assets/ce7883c4-a706-406f-875c-fbf23d68020d
 
+#### Some (demo) benchmarks:
+ * Intel Iris XE (integrated gpu!) - <7 mspf in FullHD
+ * NVIDIA 1660s - ~1.6 mspf in FullHD 
 
 ## Feature-list
-[md file with features](FEATURES.md)
+[md file with Lum:Renderer features](FEATURES.md)
 
 ## Installation
 - ### Prerequisites
   - **C++ Compiler**: [MSYS2 MinGW](https://www.msys2.org/) recommended for Windows. For Linux prefer GNU C++
   - \[optional\] **Vcpkg**: follow instructions at [Vcpkg](https://vcpkg.io/en/getting-started). If no vcpkg found in PATH, it will be installed automatically
-  - \[optional, used to build demo / liblum.a\] **Make**: for Linux, typically installed by default. For Windows, install manually (shipped with MinGW)
+  - \[optional, used for build\] **Make**: for Linux, typically installed by default. For Windows, install manually (shipped with MinGW. Maybe shipped with VS)
   - **Vulkan support**
 
 - ### Steps  
-  - make sure you have C++20 compiler and Make (and optionally Vcpkg). If you want to use non-default triplet (compiler) for Vcpkg, set VCPKG_DEFAULT_TRIPLET environment variable to desired triplet
-  - get the repository: \
+ - make sure you have C++23 compiler and Make (and optionally Vcpkg). If you want to use non-default triplet (compiler) for Vcpkg, set VCPKG_DEFAULT_TRIPLET environment variable to desired triplet
+ - get the repository: \
 `$ git clone https://github.com/platonvin/lum.git` for *unstable* version or [download code from releases](https://github.com/platonvin/lum/releases)     
-  - navigate to the project directory:\
- - `$ cd lum` 
-
- - `$ make`
+ - navigate to the project directory: `$ cd lum` 
+ - build:  `$ make`
     - on Linux, GLFW will ask you to install multiple different packages, but you can do it in advance:\
      `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential`
 
- - There is `unity.cpp` file, that includes every used source file. You can use it for your own unity (single translation unit) build - just include `lum/unity.cpp` in your own
+ - There is `src/unity/unity_lib.cpp` file, that includes every used source file for the C++ API. You can use it for your own unity (single translation unit) build - just include `lum/unity/unity_lib.cpp` in your own. Same for C99 API - `src/unity/unity_c_lib.cpp` (it has to be compiled by C++23 compiler tho)
 
-You can also [download](https://github.com/platonvin/lum/releases) pre-built demo for Windows
+You can also [download](https://github.com/platonvin/lum/releases) pre-built demo's and libraries for Windows
 
 ## Engine frame overview
 ```mermaid

@@ -1,7 +1,7 @@
 .ONESHELL:
 
 # Directories for includes and libraries
-INCLUDE_DIRS = -Isrc -Icommon -Ilum-al/src -Iinclude
+INCLUDE_DIRS = -Isrc -Icommon -Ilum-al/src -Iinclude -I./
 LINK_DIRS = -Llum-al/lib
 
 # Linux is so good that static doesn't work
@@ -25,6 +25,7 @@ else
 	RUN_POSTFIX = 
 	SLASH = /
 endif
+
 # lumal is Lum's Abstraction Layer for vulkan
 REQUIRED_LIBS = $(EXTERNAL_LIBS) -llumal
 # default version. If native found, it overrides this one
@@ -34,7 +35,8 @@ VCPKG_EXEC := $(RUN_PREFIX)lum_vcpkg$(SLASH)vcpkg$(RUN_POSTFIX) --vcpkg-root=lum
 COMMON_INSTRUCTIONS = -mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul
 
 # Compiler flags
-COMMON_FLAGS = -Wuninitialized -std=c++23 -ftrivial-auto-var-init=zero
+# -ftrivial-auto-var-init=zero is somehow not supported by other compilers?
+COMMON_FLAGS = -Wuninitialized -std=c++23
 DEB_FLAGS = $(COMMON_FLAGS) -O0 -g 
 DEV_FLAGS = $(COMMON_FLAGS) -O2 -DVKNDEBUG $(COMMON_INSTRUCTIONS)
 REL_FLAGS = $(COMMON_FLAGS) -Ofast $(COMMON_INSTRUCTIONS) -s -Wl,--gc-sections
@@ -44,48 +46,28 @@ SHADER_FLAGS = -V --target-env vulkan1.1 -g
 SHADER_SRC_DIR = shaders
 SHADER_OUT_DIR = shaders/compiled
 SHADERS_EXTRA_DEPEND = \
+	shaders/common/ext.glsl\
+	shaders/common/ubo.glsl\
 
-# Source files, mostly for incremental build
-# src/cdemo.c
-
+# Source files, mostly for incremental build while developing
 LIB_CPP_SOURCES = \
-    src/lum.cpp \
-    src/renderer/render.cpp \
-    src/renderer/ao_lut.cpp \
-    src/renderer/setup.cpp \
-    src/renderer/load_stuff.cpp \
-    src/renderer/render_ui_interface.cpp \
-    src/renderer/ui.cpp \
+    src/renderer/api/renderer.cpp \
+    src/renderer/src/internal_render.cpp \
+    src/renderer/src/ao_lut.cpp \
+    src/renderer/src/setup.cpp \
+    src/renderer/src/load_stuff.cpp \
+    src/renderer/src/render_ui_interface.cpp \
+    src/renderer/src/ui.cpp \
     common/ogt_vox.cpp \
     common/ogt_voxel_meshify.cpp \
     common/meshopt.cpp
 
 LIB_C99_SOURCES = \
-    src/lum.cpp \
-    src/clum.cpp \
-    src/renderer/render.cpp \
-    src/renderer/ao_lut.cpp \
-    src/renderer/setup.cpp \
-    src/renderer/load_stuff.cpp \
-    src/renderer/render_ui_interface.cpp \
-    src/renderer/ui.cpp \
-    common/ogt_vox.cpp \
-    common/ogt_voxel_meshify.cpp \
-    common/meshopt.cpp
+    src/renderer/api/crenderer.cpp $(LIB_CPP_SOURCES)
 
 ALL_SOURCES = \
-    src/demo.cpp \
-    src/lum.cpp \
-    src/clum.cpp \
-    src/renderer/render.cpp \
-    src/renderer/ao_lut.cpp \
-    src/renderer/setup.cpp \
-    src/renderer/load_stuff.cpp \
-    src/renderer/render_ui_interface.cpp \
-    src/renderer/ui.cpp \
-    common/ogt_vox.cpp \
-    common/ogt_voxel_meshify.cpp \
-    common/meshopt.cpp
+    src/examples/demo.cpp \
+    src/examples/cdemo.c $(LIB_C99_SOURCES)
 
 #single-translation-unit build source files
 UNITY_FILE_LIB_CPP := src/unity/unity_lib.cpp
@@ -105,21 +87,12 @@ DEV_OBJECTS = $(patsubst src/%.cpp,obj/rel/%.o,$(filter src/%.cpp,$(ALL_SOURCES)
 COMMON_OBJECTS = $(patsubst common/%.cpp,obj/%.o,$(filter common/%.cpp,$(ALL_SOURCES))) \
                  $(patsubst common/%.c,obj/%.o,$(filter common/%.c,$(ALL_SOURCES)))
 
-# Default target
-all: init rel
+# Default target. Basically "compile all libs and demos"
+all: init only_build_unity
 
 # Rule for re-evaluation after vcpkg_installed created. 
 # Eval needed because vcpkg_installed does not exist when they initially evaluated
 .PHONY: vcpkg_installed_eval
-# OTHER_DIRS := vcpkg_installed/x64-lum-rel
-# INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS))
-# INCLUDE_LIST += $(addsuffix /include/vma, $(OTHER_DIRS))
-# INCLUDE_LIST += $(addsuffix /include/volk, $(OTHER_DIRS))
-# LIB_LIST := $(addsuffix /lib, $(OTHER_DIRS))
-# INCLUDE_DIRS += $(addprefix -I, $(INCLUDE_LIST))
-# LINK_DIRS += $(addprefix -L, $(LIB_LIST))
-# GLSLC := vcpkg_installed/x64-lum-rel/tools/glslang/glslang
-# GLSLC := $(strip $(GLSLC_DIR))/glslc
 vcpkg_installed_eval: vcpkg_installed | check_vcpkg_itself
 	$(eval OTHER_DIRS := $(filter-out vcpkg_installed/vcpkg, $(wildcard vcpkg_installed/*)) )
 	$(eval INCLUDE_LIST := $(addsuffix /include, $(OTHER_DIRS)) )
@@ -178,7 +151,7 @@ dev: setup compile_shaders $(COMMON_OBJECTS) $(DEV_OBJECTS) build_dev
 	$(RUN_PREFIX)bin/demo_dev$(RUN_POSTFIX)
 
 # Release also builds & runs cpp demo
-rel: setup compile_shaders build_unity_lib_cpp build_unity_lib_c99 build_unity_demo_cpp
+rel: setup compile_shaders build_unity_lib_static_cpp build_unity_lib_static_c99 build_unity_demo_cpp
 	$(RUN_PREFIX)bin/unity_demo_cpp$(RUN_POSTFIX)
 
 #not separate on purpose. make cleanr before usage
@@ -204,7 +177,7 @@ lum-al/lib/liblumal.a: vcpkg_installed | check_vcpkg_itself
 #mostly for testing
 only_build: init compile_shaders lum-al/lib/liblumal.a $(COMMON_OBJECTS) $(DEV_OBJECTS) build_dev
 
-only_build_unity: init compile_shaders build_unity_lib_cpp build_unity_lib_c99 build_demo_cpp build_demo_c99
+only_build_unity: init compile_shaders build_unity_lib_static_cpp build_unity_lib_static_c99 build_demo_stagic_cpp build_demo_stagic_c99 build_demo_dynamic_c99 build_demo_dynamic_cpp
 
 #i could not make it work without this. Maybe posssible with eval
 build_deb: setup $(DEBUG_OBJECTS) $(COMMON_OBJECTS)
@@ -218,31 +191,54 @@ obj/rel/unity/unity_lib.o: src/unity/unity_lib.cpp $(LIB_CPP_SOURCES) | setup
 	c++ $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
-build_unity_lib_cpp: obj/rel/unity/unity_lib.o
+build_unity_lib_static_cpp: obj/rel/unity/unity_lib.o
 	ar rvs lib/liblum.a obj/rel/unity/unity_lib.o
 # C99 API lib
 obj/rel/unity/unity_c_lib.o: src/unity/unity_c_lib.cpp $(LIB_C99_SOURCES) | setup
 	c++ $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
-build_unity_lib_c99: setup obj/rel/unity/unity_c_lib.o
+build_unity_lib_static_c99: setup obj/rel/unity/unity_c_lib.o
 	ar rvs lib/libclum.a obj/rel/unity/unity_c_lib.o
 
+# Windows DLL i used for Unity Game Engine bindings
+# for now this ugly script and Windows-only
+build_unity_lib_dynamic_c99: obj/rel/unity/unity_c_lib.o
+	c++ -shared -o lib/clum.dll obj/rel/unity/unity_c_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
+		-lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon \
+		-lpng16 -lz -lbz2 -lgdi32 -lstdc++ -Wl,--gc-sections
+	copy .\lib\clum.dll .\bin\clum.dll
+
+build_unity_lib_dynamic_cpp: obj/rel/unity/unity_lib.o
+	c++ -shared -o lib/lum.dll obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
+		-lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon \
+		-lpng16 -lz -lbz2 -lgdi32 -lstdc++ -Wl,--gc-sections
+	copy .\lib\lum.dll .\bin\lum.dll
+clean_dll:
+	rm -f lib/clum.dll
+	rm -f lib/lum.dll
+
 # example of full unity build for demos
-build_unity_demo_cpp: setup
+build_unity_demo_cpp: setup compile_shaders
 	c++ -o bin/unity_demo_cpp$(RUN_POSTFIX) $(UNITY_FILE_DEMO_CPP) $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 # yep, you will need to compile your C with C++ compiler if you want full unity build
-build_unity_demo_99: setup
+build_unity_demo_99: setup compile_shaders
 	c++ -o bin/unity_demo_c99$(RUN_POSTFIX) $(UNITY_FILE_DEMO_C99) $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 
 # example of unity library + separate (unity or not unity) app, linked with unity-built lib
 # note that you dont have to link with lumal
-build_demo_cpp: setup obj/rel/demo.o build_unity_lib_cpp
-	c++         -o bin/demo_cpp$(RUN_POSTFIX) obj/rel/demo.o  -Llib  -llum $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
+build_demo_stagic_cpp: setup compile_shaders obj/rel/examples/demo.o build_unity_lib_static_cpp
+	c++         -o bin/demo_static_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o  -Llib  -llum $(REL_FLAGS) -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 # (!) library was (& has to be) built with C++ compiler, but your code can be compiled and linked by C compiler
 # you still HAVE TO link against -lstdc++ (and put it last. Order matters)
-build_demo_c99: setup obj/rel/cdemo.o build_unity_lib_c99
-	cc -std=c99 -o bin/demo_c99$(RUN_POSTFIX) obj/rel/cdemo.o -Llib -lclum -Ofast $(common_instructions) -s -Wl,--gc-sections $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) -lstdc++ $(STATIC_OR_DYNAMIC)
+build_demo_stagic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_static_c99
+	cc -std=c99 -o bin/demo_static_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o -Llib -lclum -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) -lstdc++ $(STATIC_OR_DYNAMIC)
+
+build_demo_dynamic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_dynamic_c99
+	cc -std=c99 -o bin/demo_dynamic_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o lib/clum.dll -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude -Llib
+build_demo_dynamic_cpp: setup compile_shaders obj/rel/examples/demo.o build_unity_lib_dynamic_cpp
+	c++ -o bin/demo_dynamic_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o lib/lum.dll -Llib $(REL_FLAGS)
+
 
 fun:
 	@echo -e '\033[0;36m' fun was never an option '\033[0m'
@@ -297,31 +293,35 @@ else
 	-rm -R obj/rel/renderer/*.o
 endif
 
+CLEAN_PATHS = \
+	obj/*.o \
+	obj/deb/*.o \
+	obj/rel/*.o \
+	obj/deb/renderer/*.o \
+	obj/rel/renderer/*.o \
+	obj/deb/examples/*.o \
+	obj/rel/examples/*.o \
+	obj/deb/unity/*.o \
+	obj/rel/unity/*.o \
+	shaders/compiled/*.spv \
+	lum-al/lib/*.a \
+	lib/*.a \
+	bin/*$(RUN_POSTFIX)\
+	bin/*.dll
+
 clean: folders
 ifeq ($(OS),Windows_NT)
-	-del "obj\*.o"
-	-del "obj\deb\*.o"
-	-del "obj\rel\*.o"
-	-del "obj\deb\renderer\*.o"  
-	-del "obj\rel\renderer\*.o"  
-	-del "shaders\compiled\*.spv"
-	-del "lum-al\lib\*.a"
-	-del "lib\*.a"
-	-del "bin\*.exe"
+	$(foreach path, $(CLEAN_PATHS), -del "$(subst /,\,$(path))" ;)
 else
-	-rm -R obj/*.o
-	-rm -R obj/deb/*.o 
-	-rm -R obj/rel/*.o 
-	-rm -R obj/deb/renderer/*.o
-	-rm -R obj/rel/renderer/*.o
-	-rm -R shaders/compiled/*.spv 
-	-rm -R lum-al/lib/*.a
-	-rm -R lib/*.a
-	-rm -R bin/*
+	$(foreach path, $(CLEAN_PATHS), -rm -R $(path);)
 endif
 
 init: folders vcpkg_installed vcpkg_installed_eval lum-al/lib/liblumal.a
-folders: bin/ lib/ obj/ obj/deb/ obj/rel/ shaders/compiled/ obj/deb/renderer/ obj/rel/renderer/ obj/deb/unity/ obj/rel/unity/
+folders: bin/ lib/ obj/ obj/deb/ obj/rel/ shaders/compiled/\
+	 obj/deb/renderer/ obj/rel/renderer/\
+	 obj/deb/unity/ obj/rel/unity/\
+	 obj/deb/examples/ obj/rel/examples/\
+
 %/: #pattern rule to make all folders
 ifeq ($(OS),Windows_NT)
 	mkdir "$@"
