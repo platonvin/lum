@@ -34,6 +34,7 @@ void Lum::Renderer::init(LumInternal::LumSettings lum_settings) noexcept {
         lum_settings.deviceExtensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME); // aka zero-pain buffers
         // settings.deviceExtensions.push_back(VK_KHR_SHADER_EXPECT_ASSUME_EXTENSION_NAME); // GLSL's assumeEXT(statement)
 
+    settings = lum_settings;
     render.init(lum_settings);
         vkDeviceWaitIdle(render.render.device);
 
@@ -87,12 +88,12 @@ void Lum::Renderer::uploadMaterialPaletteToGPU() noexcept {
 void Lum::Renderer::loadPalette(const std::string& file) noexcept{
     render.extract_palette(file.c_str(), mat_palette.data());
 }
-Lum::MeshModel Lum::Renderer::loadMesh(const std::string& file, bool try_extract_palette) noexcept {
+Lum::MeshModel Lum::Renderer::loadModel(const std::string& file, bool try_extract_palette) noexcept {
     LumInternal::InternalMeshModel* new_mesh = mesh_models_storage.allocate();
     render.load_mesh(new_mesh, file.c_str(), true, /*extract palette if no found = */ try_extract_palette, mat_palette.data());
     return new_mesh;
 }
-Lum::MeshModel Lum::Renderer::loadMesh(LumInternal::Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept {
+Lum::MeshModel Lum::Renderer::loadModel(LumInternal::Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept {
     LumInternal::InternalMeshModel* new_mesh = mesh_models_storage.allocate();
     render.load_mesh(new_mesh, mesh_data, x_size,y_size,z_size, true);
     return new_mesh;

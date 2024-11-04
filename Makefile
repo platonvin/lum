@@ -265,7 +265,12 @@ ifeq ($(OS),Windows_NT)
 	-mkdir "package"
 	-mkdir "package\shaders\compiled"
 	-mkdir "package\assets"
-	-xcopy /s /i /y ".\bin\client_rel.exe" ".\package\client.exe*"
+	-mkdir "package\lib"
+	-mkdir "package\bin"
+	-xcopy /s /i /y ".\bin\*.exe" ".\package\bin\*.exe*"
+	-xcopy /s /i /y ".\lib\*.dll" ".\package\bin\*.dll*"
+	-xcopy /s /i /y ".\lib\*.dll" ".\package\lib\*.dll*"
+	-xcopy /s /i /y ".\lib\*.a" ".\package\lib\*.a*"
 	-xcopy /s /i /y "shaders\compiled" "package\shaders\compiled"
 	-xcopy /s /i /y "assets" "package\assets"
 # powershell Compress-Archive -Update ./package package.zip

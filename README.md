@@ -36,7 +36,13 @@ https://github.com/user-attachments/assets/ce7883c4-a706-406f-875c-fbf23d68020d
 
  - There is `src/unity/unity_lib.cpp` file, that includes every used source file for the C++ API. You can use it for your own unity (single translation unit) build - just include `lum/unity/unity_lib.cpp` in your own. Same for C99 API - `src/unity/unity_c_lib.cpp` (it has to be compiled by C++23 compiler tho)
 
-You can also [download](https://github.com/platonvin/lum/releases) pre-built demo's and libraries for Windows
+You can also [download](https://github.com/platonvin/lum/releases) pre-built demo's and libraries for Windows\
+After building, you will have both static and dynamic libraries for C99 and C++23 Lum::Renderer API
+
+## Usage:
+ - [Lum::Renderer](src/renderer/README.md)
+ - [Lum::ECSystem](src/engine/README.md)
+ - [Lum::InpuHandler](src/input/README.md)
 
 ## Engine frame overview
 ```mermaid

@@ -30,8 +30,8 @@ typedef LumInternal::LumSettings             Settings; // namespace typedef
 */ // yep its 13 kbytes
 class Renderer {
 public:
-    Renderer(LumInternal::LumSettings settings) noexcept : Renderer(settings, 1024, 1024, 64, 64, 64) {}
-    Renderer(LumInternal::LumSettings settings, 
+    Renderer() noexcept : Renderer(1024, 1024, 64, 64, 64) {}
+    Renderer(
             size_t block_palette_size, 
             size_t mesh_storage_size, 
             size_t foliage_storage_size, 
@@ -42,7 +42,7 @@ public:
         mesh_foliage_storage(foliage_storage_size), 
         mesh_volumetric_storage(volumetric_storage_size), 
         mesh_liquid_storage(liquid_storage_size), 
-        curr_time(std::chrono::steady_clock::now()), settings(settings) 
+        curr_time(std::chrono::steady_clock::now())
         // {init();} // i do not like it being that impicit
         {}
     ~Renderer() noexcept 
@@ -68,8 +68,8 @@ public:
     // loads palette no matter what
     void loadPalette(const std::string& file) noexcept;
     // loads palette if no palette loaded
-    [[nodiscard]] MeshModel loadMesh(const std::string& file, bool try_extract_palette = true) noexcept;
-    [[nodiscard]] MeshModel loadMesh(LumInternal::Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept;
+    [[nodiscard]] MeshModel loadModel(const std::string& file, bool try_extract_palette = true) noexcept;
+    [[nodiscard]] MeshModel loadModel(LumInternal::Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept;
     // Only mesh can be freed
     void freeMesh(MeshModel model) noexcept;
 

@@ -38,34 +38,6 @@ void init (Lum::MeshModel&, Lum::MeshTransform&, leg_point&, leg_joint_shift&, t
 // function called on entity when its destroyed. Aka destructor
 void destroy (Lum::MeshModel&, Lum::MeshTransform&, leg_point&, leg_joint_shift&, target_leg_point&, physical_leg_point&, interpolated_leg_point&, leg_center&, rotation_mul&) {}
 
-
-// void calculateLegJoints(leg_point& leg, leg_center& center) {
-//     leg.pos = tank_body_trans.shift + tank_body_trans.rot * center.pos;
-// }
-// void calculateLegRotiations(Lum::MeshTransform& trans, rotation_mul& mul){
-//     trans.rot = mul.rot * tank_body_trans.rot;
-// }
-// void calculateTargetLegPoints(leg_point& leg, target_leg_point& target, leg_center& center) {
-//     vec3 joint_pos = leg.pos;
-//     target.pos = vec2(joint_pos) + vec2(tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-// }
-// void updatePhysicalLegPoints(physical_leg_point& physical, target_leg_point& target) {
-//     if (distance(physical.pos, target.pos) > 6.0f) {
-//         physical.pos = target.pos;
-//     }
-// }
-// void interpolateLegPoints(interpolated_leg_point& interpolated, physical_leg_point& physical) {
-//     interpolated.pos = mix(interpolated.pos, physical.pos, 0.6f);
-// }
-// void calculateLegRotation(Lum::MeshTransform& leg_trans, interpolated_leg_point& interpolated, leg_point& leg) {
-//     vec2 leg_direction = normalize(interpolated.pos - vec2(leg.pos));
-//     leg_trans.rot *= find_quat(tank_direction_right, vec3(leg_direction, 0));
-// }
-// void applyLegJointShift(Lum::MeshTransform& leg_trans, leg_point& leg, leg_joint_shift& shift) {
-//     vec3 leg_joint_shift = leg_trans.rot * shift.pos;
-//     leg_trans.shift = leg.pos - leg_joint_shift;
-// }
-
 void calculateLegJointsAndRotations(leg_point& leg, leg_center& center, Lum::MeshTransform& trans, rotation_mul& mul) {
     leg.pos = tank_body_trans.shift + tank_body_trans.rot * center.pos;
     trans.rot = mul.rot * tank_body_trans.rot;
@@ -126,7 +98,6 @@ int main(){
     anim_system.getEntityComponent<leg_joint_shift&>(lb_leg) = {vec3(10.0, 6.5, 12.5)};
     anim_system.getEntityComponent<leg_joint_shift&>(lf_leg) = {vec3( 0.0, 6.5, 12.5)};
     anim_system.getEntityComponent<leg_joint_shift&>(rb_leg) = {vec3( 0.0, 6.5, 12.5)};
-
     anim_system.getEntityComponent<rotation_mul&>(rf_leg) = {quat(-vec3(0,0,glm::pi<float>()))};
     anim_system.getEntityComponent<rotation_mul&>(lb_leg) = {glm::quat_identity<float, defaultp>()};
     anim_system.getEntityComponent<rotation_mul&>(lf_leg) = {quat(-vec3(0,0,glm::pi<float>()))};
@@ -138,7 +109,7 @@ int main(){
         settings.world_size = ivec3(48, 48, 16);
         settings.static_block_palette_size = 15;
         settings.maxParticleCount = 8128;
-    Lum::Renderer lum(settings, 15, 4096, 64, 64, 64);
+    Lum::Renderer lum(15, 4096, 64, 64, 64);
     lum_ptr = &lum;
 
     // ATTENTION: all foliage has to be declared BEFORE init()
@@ -153,17 +124,17 @@ int main(){
     // preparation stage. These functions also can be called in runtime
     // If no palette is found, first models defines it
         // this DOES set palette
-    tank_body = lum.loadMesh("assets/tank_body.vox", /*extract palette if no found = */ true);
+    tank_body = lum.loadModel("assets/tank_body.vox", /*extract palette if no found = */ true);
     tank_body_trans.shift += vec3(13.1,14.1,3.1)*16.0f;
         // this DOES NOT set palette cause already setten.
-    tank_head = lum.loadMesh("assets/tank_head.vox", /*extract palette if no found = */ true);
+    tank_head = lum.loadModel("assets/tank_head.vox", /*extract palette if no found = */ true);
         // material palette can also be loaded from alone
         // lum.loadPalette("my_magicavox_filescene_with_palette_i_want_to_extract.vox")
         // good way to handle this would be to have voxel for each material placed in scene to view them
-    anim_system.getEntityComponent<Lum::MeshModel&>(rf_leg) = lum.loadMesh("assets/tank_rf_lb_leg.vox");
-    anim_system.getEntityComponent<Lum::MeshModel&>(lf_leg) = lum.loadMesh("assets/tank_lf_rb_leg.vox");
-    anim_system.getEntityComponent<Lum::MeshModel&>(rb_leg) = lum.loadMesh("assets/tank_lf_rb_leg.vox");
-    anim_system.getEntityComponent<Lum::MeshModel&>(lb_leg) = lum.loadMesh("assets/tank_rf_lb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(rf_leg) = lum.loadModel("assets/tank_rf_lb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(lf_leg) = lum.loadModel("assets/tank_lf_rb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(rb_leg) = lum.loadModel("assets/tank_lf_rb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(lb_leg) = lum.loadModel("assets/tank_rf_lb_leg.vox");
     
     Lum::MeshLiquid  water = lum.loadLiquid(69, 42);
     Lum::MeshVolumetric smoke = lum.loadVolumetric(1, .5, {});
@@ -534,7 +505,7 @@ quat find_quat(vec3 v1, vec3 v2){
         return normalize(q);
 }
 
-// some inverse kinematics
+// some inverse kinematics for body&head
 void process_animations(Lum::Renderer& lum){
     tank_direction_forward = tank_body_trans.rot * vec3(0,1,0);
     tank_direction_right   = tank_body_trans.rot * vec3(1,0,0);
@@ -556,53 +527,4 @@ void process_animations(Lum::Renderer& lum){
     vec3 head_joint = tank_body_trans.shift + body_head_joint_shift;
 
     tank_head_trans.shift = head_joint - head_joint_shift;
-
-    // vec3 body_rf_leg_joint = tank_body_trans.shift + tank_body_trans.rot * vec3(14.0, 19.5, 6.5);
-    // vec3 body_lb_leg_joint = tank_body_trans.shift + tank_body_trans.rot * vec3( 3.0,  3.5, 6.5);
-    // vec3 body_lf_leg_joint = tank_body_trans.shift + tank_body_trans.rot * vec3( 3.0, 19.5, 6.5);
-    // vec3 body_rb_leg_joint = tank_body_trans.shift + tank_body_trans.rot * vec3(14.0,  3.5, 6.5);
-    
-    // tank_rf_leg_trans.rot = quat(-vec3(0,0,glm::pi<float>())) * tank_body_trans.rot;
-    // tank_lb_leg_trans.rot = tank_body_trans.rot;
-    // tank_lf_leg_trans.rot = quat(-vec3(0,0,glm::pi<float>())) * tank_body_trans.rot;
-    // tank_rb_leg_trans.rot = tank_body_trans.rot;
-
-    // target_leg_points[0] = vec2(body_rf_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-    // target_leg_points[1] = vec2(body_lb_leg_joint) + vec2(-tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-    // target_leg_points[2] = vec2(body_lf_leg_joint) + vec2(-tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-    // target_leg_points[3] = vec2(body_rb_leg_joint) + vec2( tank_direction_right) + vec2(tank_direction_forward) * 3.0f * (float(rand()) / float(RAND_MAX));
-
-    // for (int i=0; i<4; i++){
-    //     if(distance(physical_points[i], target_leg_points[i]) > 6.f) {
-    //         physical_points[i] = target_leg_points[i];
-    //     };
-    //     interpolated_leg_points[i] = mix(interpolated_leg_points[i], physical_points[i], 0.6);
-    // }
-    
-    // vec2 rf_direction = normalize(interpolated_leg_points[0] - vec2(body_rf_leg_joint));
-    // vec2 lb_direction = normalize(interpolated_leg_points[1] - vec2(body_lb_leg_joint));
-    // vec2 lf_direction = normalize(interpolated_leg_points[2] - vec2(body_lf_leg_joint));
-    // vec2 rb_direction = normalize(interpolated_leg_points[3] - vec2(body_rb_leg_joint));
-    // //now legs are attached
-    // //to make them animated, we need to pick a point and try to follow it for while
-    // //we know tank direction
-    // quat rf_quat = find_quat(vec3( tank_direction_right), vec3(rf_direction,0));
-    // quat lb_quat = find_quat(vec3(-tank_direction_right), vec3(lb_direction,0));
-    // quat lf_quat = find_quat(vec3(-tank_direction_right), vec3(lf_direction,0));
-    // quat rb_quat = find_quat(vec3( tank_direction_right), vec3(rb_direction,0));
-
-    // tank_rf_leg_trans.rot *= rf_quat;
-    // tank_lb_leg_trans.rot *= lb_quat;
-    // tank_lf_leg_trans.rot *= lf_quat;
-    // tank_rb_leg_trans.rot *= rb_quat;
-
-    // vec3 rf_leg_joint_shift = tank_rf_leg_trans.rot * vec3(10.0, 6.5, 12.5);
-    // vec3 lb_leg_joint_shift = tank_lb_leg_trans.rot * vec3(10.0, 6.5, 12.5);
-    // vec3 lf_leg_joint_shift = tank_lf_leg_trans.rot * vec3( 0.0, 6.5, 12.5);
-    // vec3 rb_leg_joint_shift = tank_rb_leg_trans.rot * vec3( 0.0, 6.5, 12.5);
-
-    // tank_rf_leg_trans.shift = body_rf_leg_joint - rf_leg_joint_shift;
-    // tank_lb_leg_trans.shift = body_lb_leg_joint - lb_leg_joint_shift;
-    // tank_lf_leg_trans.shift = body_lf_leg_joint - lf_leg_joint_shift;
-    // tank_rb_leg_trans.shift = body_rb_leg_joint - rb_leg_joint_shift; 
 }

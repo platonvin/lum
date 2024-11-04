@@ -11,20 +11,8 @@ extern "C" {
 
 LumRenderer lum_create_instance(const LumSettings* settings) {
     LumRenderer instance = nullptr;
-    Lum::Settings _settings = {};
-    _settings.world_size.x = settings->world_size[0];
-    _settings.world_size.y = settings->world_size[1];
-    _settings.world_size.z = settings->world_size[2];
-    _settings.static_block_palette_size = settings->static_block_palette_size;
-    _settings.maxParticleCount = settings->maxParticleCount;
-    _settings.timestampCount = settings->timestampCount;
-    _settings.fif = settings->fif;
-    _settings.vsync = settings->vsync;
-    _settings.fullscreen = settings->fullscreen;
-    _settings.debug = settings->debug;
-    _settings.profile = settings->profile;
     // allocate because opaque types thing
-    instance = new Lum::Renderer(_settings);
+    instance = new Lum::Renderer();
     return instance;
 }
 
@@ -90,13 +78,13 @@ void lum_upload_material_palette_to_gpu(LumRenderer instance) {
 
 // Mesh loading and management
 LumMeshModel lum_load_mesh_file(LumRenderer instance, const char* file, bool try_extract_palette) {
-    LumMeshModel model = ((Lum::Renderer*)instance)->loadMesh(std::string(file), try_extract_palette);
+    LumMeshModel model = ((Lum::Renderer*)instance)->loadModel(std::string(file), try_extract_palette);
     assert(model);
     return model;
 }
 
 LumMeshModel lum_load_mesh_data(LumRenderer instance, void* mesh_data, int x_size, int y_size, int z_size) {
-    LumMeshModel model = ((Lum::Renderer*)instance)->loadMesh(reinterpret_cast<LumInternal::Voxel*>(mesh_data), x_size, y_size, z_size);
+    LumMeshModel model = ((Lum::Renderer*)instance)->loadModel(reinterpret_cast<LumInternal::Voxel*>(mesh_data), x_size, y_size, z_size);
     assert(model);
     return model;
 }
