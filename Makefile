@@ -212,7 +212,7 @@ build_unity_lib_dynamic_c99: obj/rel/unity/unity_c_lib.o
 build_unity_lib_dynamic_cpp: obj/rel/unity/unity_lib.o
 	c++ -shared -o lib/lum.dll obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
 		-lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon \
-		-lpng16 -lz -lbz2 -lgdi32 -lstdc++ -Wl,--gc-sections
+		-lpng16 -lz -lbz2 -lgdi32 -lstdc++ -lm -Wl,--gc-sections
 	copy .\lib\lum.dll .\bin\lum.dll
 clean_dll:
 	rm -f lib/clum.dll
@@ -232,7 +232,7 @@ build_demo_stagic_cpp: setup compile_shaders obj/rel/examples/demo.o build_unity
 # (!) library was (& has to be) built with C++ compiler, but your code can be compiled and linked by C compiler
 # you still HAVE TO link against -lstdc++ (and put it last. Order matters)
 build_demo_stagic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_static_c99
-	cc -std=c99 -o bin/demo_static_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o -Llib -lclum -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) -lstdc++ $(STATIC_OR_DYNAMIC)
+	cc -std=c99 -o bin/demo_static_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o -Llib -lclum -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) -lstdc++ -lm $(STATIC_OR_DYNAMIC)
 
 build_demo_dynamic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_dynamic_c99
 	cc -std=c99 -o bin/demo_dynamic_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o lib/clum.dll -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude -Llib
