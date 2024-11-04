@@ -22,18 +22,18 @@ void cleanup(LumRenderer lum);
 
 // in real world you would store them as ECS components / member in EntityClass
 // but for simplicity lets stick to just this
-LumMeshModel tank_body = {};
-LumMeshTransform tank_body_trans = {};
-LumMeshModel tank_head = {};
-LumMeshTransform tank_head_trans = {};
-LumMeshModel tank_rf_leg = {};
-LumMeshTransform tank_rf_leg_trans = {};
-LumMeshModel tank_lf_leg = {};
-LumMeshTransform tank_lf_leg_trans = {};
-LumMeshModel tank_rb_leg = {};
-LumMeshTransform tank_rb_leg_trans = {};
-LumMeshModel tank_lb_leg = {};
-LumMeshTransform tank_lb_leg_trans = {};
+LumMeshModel tank_body = 0;
+LumMeshTransform tank_body_trans = LUM_DEFAULT_MESH_TRANSFORM;
+LumMeshModel tank_head = 0;
+LumMeshTransform tank_head_trans = LUM_DEFAULT_MESH_TRANSFORM;
+LumMeshModel tank_rf_leg = 0;
+LumMeshTransform tank_rf_leg_trans = LUM_DEFAULT_MESH_TRANSFORM;
+LumMeshModel tank_lf_leg = 0;
+LumMeshTransform tank_lf_leg_trans = LUM_DEFAULT_MESH_TRANSFORM;
+LumMeshModel tank_rb_leg = 0;
+LumMeshTransform tank_rb_leg_trans = LUM_DEFAULT_MESH_TRANSFORM;
+LumMeshModel tank_lb_leg = 0;
+LumMeshTransform tank_lb_leg_trans = LUM_DEFAULT_MESH_TRANSFORM;
 
 int main(){
     LumSettings settings = LUM_DEFAULT_SETTINGS;

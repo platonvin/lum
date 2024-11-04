@@ -54,7 +54,10 @@ typedef struct LumMeshTransform {
     float rot[4];   // rotation quaternion
     float shift[3]; // float because not necessarily snapped to grid
 } LumMeshTransform;  // to avoid pointer
-
+const LumMeshTransform LUM_DEFAULT_MESH_TRANSFORM = {
+    {1,0,0,0},
+    {0,0,0},
+};
 // Function prototypes
 LumRenderer lum_create_instance(const LumSettings* settings);
 void lum_destroy_instance(LumRenderer instance);
