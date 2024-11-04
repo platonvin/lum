@@ -15,7 +15,9 @@ ifeq ($(OS),Windows_NT)
 	STATIC_OR_DYNAMIC += -static
 	WHICH_WHERE = where
 	RUN_POSTFIX = .exe
+	DYN_LIB_POSTFIX = .dll
 	RUN_PREFIX = .\\
+	COPY_COMMAND = copy
 	SLASH = \\
 
 else
@@ -23,6 +25,8 @@ else
 	RUN_PREFIX = ./
 	WHICH_WHERE = which
 	RUN_POSTFIX = 
+	DYN_LIB_POSTFIX = .so
+	COPY_COMMAND = cp
 	SLASH = /
 endif
 
@@ -204,19 +208,17 @@ build_unity_lib_static_c99: setup obj/rel/unity/unity_c_lib.o
 # Windows DLL i used for Unity Game Engine bindings
 # for now this ugly script and Windows-only
 build_unity_lib_dynamic_c99: obj/rel/unity/unity_c_lib.o
-	c++ -shared -o lib/clum.dll obj/rel/unity/unity_c_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
-		-lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon \
-		-lpng16 -lz -lbz2 -lgdi32 -lstdc++ -Wl,--gc-sections
-	copy .\lib\clum.dll .\bin\clum.dll
+	c++ -shared -o lib/clum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_c_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
+		$(EXTERNAL_LIBS) -lstdc++ -Wl,--gc-sections
+	$(COPY_COMMAND) .\lib\clum$(DYN_LIB_POSTFIX) .\bin\clum$(DYN_LIB_POSTFIX)
 
 build_unity_lib_dynamic_cpp: obj/rel/unity/unity_lib.o
-	c++ -shared -o lib/lum.dll obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
-		-lglfw3 -lvolk -lRmlDebugger -lRmlCore -lfreetype -lpng -lbrotlienc -lbrotlidec -lbrotlicommon \
-		-lpng16 -lz -lbz2 -lgdi32 -lstdc++ -lm -Wl,--gc-sections
-	copy .\lib\lum.dll .\bin\lum.dll
+	c++ -shared -o lib/lum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
+		$(EXTERNAL_LIBS) -lstdc++ -lm -Wl,--gc-sections
+	$(COPY_COMMAND) .\lib\lum$(DYN_LIB_POSTFIX) .\bin\lum$(DYN_LIB_POSTFIX)
 clean_dll:
-	rm -f lib/clum.dll
-	rm -f lib/lum.dll
+	rm -f lib/clum$(DYN_LIB_POSTFIX)
+	rm -f lib/lum$(DYN_LIB_POSTFIX)
 
 # example of full unity build for demos
 build_unity_demo_cpp: setup compile_shaders
@@ -235,9 +237,9 @@ build_demo_stagic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unit
 	cc -std=c99 -o bin/demo_static_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o -Llib -lclum -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) -lstdc++ -lm $(STATIC_OR_DYNAMIC)
 
 build_demo_dynamic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_dynamic_c99
-	cc -std=c99 -o bin/demo_dynamic_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o lib/clum.dll -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude -Llib
+	cc -std=c99 -o bin/demo_dynamic_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o lib/clum$(DYN_LIB_POSTFIX) -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude -Llib
 build_demo_dynamic_cpp: setup compile_shaders obj/rel/examples/demo.o build_unity_lib_dynamic_cpp
-	c++ -o bin/demo_dynamic_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o lib/lum.dll -Llib $(REL_FLAGS)
+	c++ -o bin/demo_dynamic_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o lib/lum$(DYN_LIB_POSTFIX) -Llib $(REL_FLAGS)
 
 
 fun:
@@ -307,7 +309,7 @@ CLEAN_PATHS = \
 	lum-al/lib/*.a \
 	lib/*.a \
 	bin/*$(RUN_POSTFIX)\
-	bin/*.dll
+	bin/*$(DYN_LIB_POSTFIX)
 
 clean: folders
 ifeq ($(OS),Windows_NT)
