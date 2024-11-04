@@ -18,6 +18,7 @@ ifeq ($(OS),Windows_NT)
 	DYN_LIB_POSTFIX = .dll
 	RUN_PREFIX = .\\
 	COPY_COMMAND = copy
+	FPIC = 
 	SLASH = \\
 
 else
@@ -28,6 +29,7 @@ else
 	DYN_LIB_POSTFIX = .so
 	COPY_COMMAND = cp
 	SLASH = /
+	FPIC = -fPIC
 endif
 
 # lumal is Lum's Abstraction Layer for vulkan
@@ -192,14 +194,14 @@ build_dev: setup $(COMMON_OBJECTS) $(DEV_OBJECTS)
 # build libs objects and ar them
 # C++ API lib
 obj/rel/unity/unity_lib.o: src/unity/unity_lib.cpp $(LIB_CPP_SOURCES) | setup
-	c++ $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	c++ $(FPIC) $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
 build_unity_lib_static_cpp: obj/rel/unity/unity_lib.o
 	ar rvs lib/liblum.a obj/rel/unity/unity_lib.o
 # C99 API lib
 obj/rel/unity/unity_c_lib.o: src/unity/unity_c_lib.cpp $(LIB_C99_SOURCES) | setup
-	c++ $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	c++ $(FPIC) $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
 build_unity_lib_static_c99: setup obj/rel/unity/unity_c_lib.o
@@ -210,15 +212,24 @@ build_unity_lib_static_c99: setup obj/rel/unity/unity_c_lib.o
 build_unity_lib_dynamic_c99: obj/rel/unity/unity_c_lib.o
 	c++ -shared -o lib/clum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_c_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
 		$(EXTERNAL_LIBS) -lstdc++ -Wl,--gc-sections
-	$(COPY_COMMAND) .\lib\clum$(DYN_LIB_POSTFIX) .\bin\clum$(DYN_LIB_POSTFIX)
+ifeq ($(OS),Windows_NT)
+	$(COPY_COMMAND) lib\clum$(DYN_LIB_POSTFIX) bin\clum$(DYN_LIB_POSTFIX)
+else
+	$(COPY_COMMAND) lib/clum$(DYN_LIB_POSTFIX) bin/clum$(DYN_LIB_POSTFIX)
+endif
+
 
 build_unity_lib_dynamic_cpp: obj/rel/unity/unity_lib.o
 	c++ -shared -o lib/lum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
 		$(EXTERNAL_LIBS) -lstdc++ -lm -Wl,--gc-sections
-	$(COPY_COMMAND) .\lib\lum$(DYN_LIB_POSTFIX) .\bin\lum$(DYN_LIB_POSTFIX)
-clean_dll:
-	rm -f lib/clum$(DYN_LIB_POSTFIX)
-	rm -f lib/lum$(DYN_LIB_POSTFIX)
+ifeq ($(OS),Windows_NT)
+	$(COPY_COMMAND) lib\lum$(DYN_LIB_POSTFIX) bin\lum$(DYN_LIB_POSTFIX)
+else
+	$(COPY_COMMAND) lib/lum$(DYN_LIB_POSTFIX) bin/lum$(DYN_LIB_POSTFIX)
+endif	
+# clean_dll:
+# 	rm -f lib/clum$(DYN_LIB_POSTFIX)
+# 	rm -f lib/lum$(DYN_LIB_POSTFIX)
 
 # example of full unity build for demos
 build_unity_demo_cpp: setup compile_shaders
