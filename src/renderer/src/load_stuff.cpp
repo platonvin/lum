@@ -145,7 +145,7 @@ std::string find_asset(const std::string& asset_name) {
 
     std::cout << "Asset file not found: " << asset_name;
     assert(false && "Asset file not found");
-    std::unreachable();
+    // std::unreachable();
 }
 
 std::vector<char> readFileBuffer(const std::string& asset_name) {

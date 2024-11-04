@@ -367,7 +367,7 @@ std::string find_shader(const std::string& shader_name) {
 
     std::cout << "Shader file not found: " << shader_name << std::endl;
     crash();
-    std::unreachable();
+    // std::unreachable();
 }
 
 void LumInternal::LumInternalRenderer::createFoliagePipilines() {
