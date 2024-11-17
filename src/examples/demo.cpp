@@ -1,9 +1,14 @@
 #include "renderer.hpp"
 #include "../input/input.hpp"
-// #include "defines/macros.hpp"
 #include "../engine/engine.hpp"
-#include <glm/gtx/quaternion.hpp>
+#include "renderer/api/opaque_renderer_members.hpp"
 #include <random>
+// #include "defines/macros.hpp"
+
+using glm::vec2 , glm::vec3;
+using glm::dvec3, glm::dvec4;
+using glm::dmat4, glm::ivec3, glm::quat;
+using glm::defaultp;
 
 vec3 rnVec3(float minValue, float maxValue);
 void printFPS();
@@ -167,8 +172,8 @@ int main(){
     while(not lum.should_close){
         input.pollUpdates();
         glfwPollEvents();
-        lum.should_close |= glfwWindowShouldClose(lum.getGLFWptr());
-        lum.should_close |= (glfwGetKey(lum.getGLFWptr(), GLFW_KEY_ESCAPE) == GLFW_PRESS);
+        lum.should_close |= glfwWindowShouldClose((GLFWwindow*)lum.getGLFWptr());
+        lum.should_close |= (glfwGetKey((GLFWwindow*)lum.getGLFWptr(), GLFW_KEY_ESCAPE) == GLFW_PRESS);
 
         process_physics(lum);
         process_animations(lum);
@@ -201,8 +206,8 @@ int main(){
         for(int yy=6; yy<16; yy++){
             ivec3 pos = ivec3(xx*16, yy*16, 14);
             lum.drawLiquidBlock(water, pos);
-            lum.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
-            lum.render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
+            lum.opaque_members->render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,2),0));
+            lum.opaque_members->render.specialRadianceUpdates.push_back(i8vec4(ivec3(xx,yy,1),0));
         }}
 
         // literally procedural smoke placement every frame. You probably want to store it as entities in your own structures
@@ -219,20 +224,20 @@ int main(){
     }
 
     // prints GPU profile data
-    if (lum.render.render.settings.profile){
-        printf("%-22s: %7.3f: %7.3f\n", lum.render.render.timestampNames[0], 0.0, 0.0);    
-        for (int i=1; i<lum.render.render.currentTimestamp; i++){
-            double time_point = double(lum.render.render.average_ftimestamps[i] - lum.render.render.average_ftimestamps[0]);
-            double time_diff = double(lum.render.render.average_ftimestamps[i] - lum.render.render.average_ftimestamps[i-1]);
-            printf("%3d %-22s: %7.3f: %7.3f\n", i, lum.render.render.timestampNames[i], time_point, time_diff);
-        }
-    }
+    // if (lum.lumal.render.settings.profile){
+    //     printf("%-22s: %7.3f: %7.3f\n", lum.lumal.render.timestampNames[0], 0.0, 0.0);    
+    //     for (int i=1; i<lum.lumal.render.currentTimestamp; i++){
+    //         double time_point = double(lum.lumal.render.average_ftimestamps[i] - lum.lumal.render.average_ftimestamps[0]);
+    //         double time_diff = double(lum.lumal.render.average_ftimestamps[i] - lum.lumal.render.average_ftimestamps[i-1]);
+    //         printf("%3d %-22s: %7.3f: %7.3f\n", i, lum.lumal.render.timestampNames[i], time_point, time_diff);
+    //     }
+    // }
     cleanup(lum);
 }
 
 // binding keys to some functions
 void setup_input(Input& input, Lum::Renderer& render) {
-    input.setup(render.getGLFWptr());
+    input.setup((GLFWwindow*)render.getGLFWptr());
     
     input.rebindKey(GameAction::MOVE_CAMERA_FORWARD, GLFW_KEY_W);
     input.rebindKey(GameAction::MOVE_CAMERA_BACKWARD, GLFW_KEY_S);
@@ -286,29 +291,29 @@ void setup_input(Input& input, Lum::Renderer& render) {
 
     // bind action callbacks
     input.setActionCallback(GameAction::MOVE_CAMERA_FORWARD, [&](GameAction action) {
-        render.render.camera.cameraPos += render.delta_time * dvec3(dvec2(render.render.camera.cameraDir), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        render.getCamera().cameraPos += render.delta_time * dvec3(dvec2(render.getCamera().cameraDir), 0) * 400.5 / render.getCamera().pixelsInVoxel;
     });
 
     input.setActionCallback(GameAction::MOVE_CAMERA_BACKWARD, [&](GameAction action) {
-        render.render.camera.cameraPos -= render.delta_time * dvec3(dvec2(render.render.camera.cameraDir), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        render.getCamera().cameraPos -= render.delta_time * dvec3(dvec2(render.getCamera().cameraDir), 0) * 400.5 / render.getCamera().pixelsInVoxel;
     });
 
     input.setActionCallback(GameAction::MOVE_CAMERA_LEFT, [&](GameAction action) {
-        dvec3 camera_direction_to_right = glm::dquat(dvec3(0.0, 0.0, glm::pi<double>() / 2.0)) * render.render.camera.cameraDir;
-        render.render.camera.cameraPos += render.delta_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        dvec3 camera_direction_to_right = glm::dquat(dvec3(0.0, 0.0, glm::pi<double>() / 2.0)) * render.getCamera().cameraDir;
+        render.getCamera().cameraPos += render.delta_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.getCamera().pixelsInVoxel;
     });
     input.setActionCallback(GameAction::MOVE_CAMERA_RIGHT, [&](GameAction action) {
-        dvec3 camera_direction_to_right = glm::dquat(dvec3(0.0, 0.0, glm::pi<double>() / 2.0)) * render.render.camera.cameraDir;
-        render.render.camera.cameraPos -= render.delta_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.render.camera.pixelsInVoxel;
+        dvec3 camera_direction_to_right = glm::dquat(dvec3(0.0, 0.0, glm::pi<double>() / 2.0)) * render.getCamera().cameraDir;
+        render.getCamera().cameraPos -= render.delta_time * dvec3(dvec2(camera_direction_to_right), 0) * 400.5 / render.getCamera().pixelsInVoxel;
     });
 
     input.setActionCallback(GameAction::TURN_CAMERA_LEFT, [&](GameAction action) {
-        render.render.camera.cameraDir = rotate(glm::identity<dmat4>(), +0.60 * render.delta_time, dvec3(0, 0, 1)) * dvec4(render.render.camera.cameraDir, 0);
-        render.render.camera.cameraDir = normalize(render.render.camera.cameraDir);
+        render.getCamera().cameraDir = rotate(glm::identity<dmat4>(), +0.60 * render.delta_time, dvec3(0, 0, 1)) * dvec4(render.getCamera().cameraDir, 0);
+        render.getCamera().cameraDir = normalize(render.getCamera().cameraDir);
     });
     input.setActionCallback(GameAction::TURN_CAMERA_RIGHT, [&](GameAction action) {
-        render.render.camera.cameraDir = rotate(glm::identity<dmat4>(), -0.60 * render.delta_time, dvec3(0, 0, 1)) * dvec4(render.render.camera.cameraDir, 0);
-        render.render.camera.cameraDir = normalize(render.render.camera.cameraDir);
+        render.getCamera().cameraDir = rotate(glm::identity<dmat4>(), -0.60 * render.delta_time, dvec3(0, 0, 1)) * dvec4(render.getCamera().cameraDir, 0);
+        render.getCamera().cameraDir = normalize(render.getCamera().cameraDir);
     });
 
     input.setActionCallback(GameAction::MOVE_TANK_FORWARD, [&](GameAction action) {
@@ -328,8 +333,8 @@ void setup_input(Input& input, Lum::Renderer& render) {
         tank_body_trans.rot *= quat(vec3(0, 0, +0.05f * 50.0f * render.delta_time));
         quat new_rot = tank_body_trans.rot;
 
-        vec3 old_center = old_rot * vec3(tank_body->size) / 2.0f;
-        vec3 new_center = new_rot * vec3(tank_body->size) / 2.0f;
+        vec3 old_center = old_rot * vec3(tank_body.getSize()) / 2.0f;
+        vec3 new_center = new_rot * vec3(tank_body.getSize()) / 2.0f;
 
         vec3 difference = new_center - old_center;
         tank_body_trans.shift -= difference;
@@ -342,8 +347,8 @@ void setup_input(Input& input, Lum::Renderer& render) {
         tank_body_trans.rot *= quat(vec3(0, 0, -0.05f * 50.0f * render.delta_time));
         quat new_rot = tank_body_trans.rot;
 
-        vec3 old_center = old_rot * vec3(tank_body->size) / 2.0f;
-        vec3 new_center = new_rot * vec3(tank_body->size) / 2.0f;
+        vec3 old_center = old_rot * vec3(tank_body.getSize()) / 2.0f;
+        vec3 new_center = new_rot * vec3(tank_body.getSize()) / 2.0f;
 
         vec3 difference = new_center - old_center;
         tank_body_trans.shift -= difference;
@@ -353,8 +358,8 @@ void setup_input(Input& input, Lum::Renderer& render) {
 
     for (int i = 1; i < 10; ++i) {
         input.setActionCallback(static_cast<GameAction>(GameAction::SET_BLOCK_1 + (i - 1)), [&, i](GameAction action) {
-            ivec3 block_to_set = ivec3(vec3(tank_body_trans.shift) + tank_body_trans.rot*(vec3(tank_body->size)/2.0f))/16;
-                block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.render.world_size)-ivec3(1));
+            ivec3 block_to_set = ivec3(vec3(tank_body_trans.shift) + tank_body_trans.rot*(vec3(tank_body.getSize())/2.0f))/16;
+                block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.getWorldSize())-ivec3(1));
             render.setWorldBlock(block_to_set.x, block_to_set.y, block_to_set.z, i);
         });
         input.rebindKey(static_cast<GameAction>(GameAction::SET_BLOCK_1 + (i - 1)), GLFW_KEY_0 + i);
@@ -362,8 +367,8 @@ void setup_input(Input& input, Lum::Renderer& render) {
 
     // for 0 key (special case for air block)
     input.setActionCallback(GameAction::SET_BLOCK_0, [&](GameAction action) {
-        ivec3 block_to_set = ivec3(vec3(tank_body_trans.shift) + tank_body_trans.rot*(vec3(tank_body->size)/2.0f))/16;
-            block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.render.world_size)-ivec3(1));
+        ivec3 block_to_set = ivec3(vec3(tank_body_trans.shift) + tank_body_trans.rot*(vec3(tank_body.getSize())/2.0f))/16;
+            block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.getWorldSize())-ivec3(1));
         render.setWorldBlock(block_to_set.x, block_to_set.y, block_to_set.z - 1, 0);
     });
     input.rebindKey(GameAction::SET_BLOCK_0, GLFW_KEY_0);
@@ -371,8 +376,8 @@ void setup_input(Input& input, Lum::Renderer& render) {
     // For F1-F5 keys (GLFW_KEY_F1 to GLFW_KEY_F5)
     for (int i = 0; i < 5; ++i) {
         input.setActionCallback(static_cast<GameAction>(GameAction::SET_BLOCK_F1 + i), [&, i](GameAction action) {
-            ivec3 block_to_set = ivec3(vec3(tank_body_trans.shift) + tank_body_trans.rot*(vec3(tank_body->size)/2.0f))/16;
-                block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.render.world_size)-ivec3(1));
+            ivec3 block_to_set = ivec3(vec3(tank_body_trans.shift) + tank_body_trans.rot*(vec3(tank_body.getSize())/2.0f))/16;
+                block_to_set = clamp(block_to_set, ivec3(0), ivec3(render.getWorldSize())-ivec3(1));
             render.setWorldBlock(block_to_set.x, block_to_set.y, block_to_set.z, 10 + i);
         });
         input.rebindKey(static_cast<GameAction>(GameAction::SET_BLOCK_F1 + i), GLFW_KEY_F1 + i);
@@ -386,21 +391,21 @@ void setup_input(Input& input, Lum::Renderer& render) {
             p.pos = tank_head_trans.rot*vec3(16.5,3,9.5) + tank_head_trans.shift;
             p.matID = 249;
             p.vel = (rnVec3(0,1)*2.f - 1.f)*.5f + tank_head_trans.rot*vec3(0,-1,0)*100.f;
-        render.render.particles.push_back(p);
+        render.addParticle(p);
 
         p.lifeTime = 2.5;
         p.matID = 19;
         for(int i=0; i< 30; i++){
             p.vel = (rnVec3(0,1)*2.f - 1.f)*25.f;
-        render.render.particles.push_back(p);
+        render.addParticle(p);
         }
     });
 
     input.setActionCallback(GameAction::INCREASE_ZOOM, [&](GameAction action){
-            render.render.camera.pixelsInVoxel *= 1.0 + render.delta_time;
+            render.getCamera().pixelsInVoxel *= 1.0 + render.delta_time;
     });
     input.setActionCallback(GameAction::DECREASE_ZOOM, [&](GameAction action){
-            render.render.camera.pixelsInVoxel /= 1.0 + render.delta_time;
+            render.getCamera().pixelsInVoxel /= 1.0 + render.delta_time;
     });
 }
 
@@ -448,7 +453,8 @@ vec3 rnVec3(float minValue, float maxValue) {
 
 void cleanup(Lum::Renderer& lum){
     // save_scene functions are not really supposed to be used, i implemented them for demo
-    lum.render.save_scene("assets/scene");
+    // this is not api.
+    lum.opaque_members->render.save_scene("assets/scene");
 
     // automatically frees all allocated blocks and meshes
     lum.cleanup();
@@ -461,7 +467,7 @@ int findBlockUnderTank(Lum::Renderer& lum, const ivec2& block_center, int block_
             return block_under_body + i;
         }
     }
-    for (selected_block = lum.render.world_size.z - 1; selected_block >= 0; --selected_block) {
+    for (selected_block = lum.getWorldSize().z - 1; selected_block >= 0; --selected_block) {
         if (lum.getWorldBlock(block_center.x, block_center.y, selected_block) != 0) {
             break;
         }
@@ -475,7 +481,7 @@ void process_physics(Lum::Renderer& lum) {
     int block_under_body = int(tank_body_center.z) / 16;
 
     if(any(lessThan(tank_body_center_in_blocks, ivec2(0)))) return;
-    if(any(greaterThanEqual(tank_body_center_in_blocks, ivec2(lum.render.world_size)))) return;
+    if(any(greaterThanEqual(tank_body_center_in_blocks, ivec2(lum.getWorldSize())))) return;
 
     int selected_block = 0;
     
@@ -486,7 +492,7 @@ void process_physics(Lum::Renderer& lum) {
     }else if(lum.getWorldBlock(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, block_under_body-1) != 0){
         selected_block = block_under_body-1;
     } else {
-        for(selected_block=lum.render.world_size.z-1; selected_block>=0; selected_block--){
+        for(selected_block=lum.getWorldSize().z-1; selected_block>=0; selected_block--){
             Lum::MeshBlock blockId = lum.getWorldBlock(tank_body_center_in_blocks.x, tank_body_center_in_blocks.y, selected_block);
 
             if (blockId != 0) break;
@@ -515,14 +521,14 @@ void process_animations(Lum::Renderer& lum){
         p.pos = tank_head_trans.rot*vec3(17,42,27) + tank_head_trans.shift;
         p.vel = (rnVec3(0,1)*2.f - 1.f)*1.1f;
         p.matID = 79;
-    lum.render.particles.push_back(p);
+    lum.addParticle(p);
 
     float interpolation = glm::clamp(float(lum.delta_time)*4.20f);
     tank_head_trans.rot = normalize(glm::mix(tank_head_trans.rot, quat(vec3(0,0,glm::pi<float>()))*tank_body_trans.rot, interpolation));
     interpolated_body_height = glm::mix(interpolated_body_height, physical_body_height, interpolation);
     tank_body_trans.shift.z = interpolated_body_height;
         
-    vec3 body_head_joint_shift = tank_body_trans.rot * vec3(8.5,12.5, tank_body->size.z);
+    vec3 body_head_joint_shift = tank_body_trans.rot * vec3(8.5,12.5, tank_body.getSize().z);
     vec3 head_joint_shift = tank_head_trans.rot * vec3(33/2.0,63/2.0, 0);
     vec3 head_joint = tank_body_trans.shift + body_head_joint_shift;
 

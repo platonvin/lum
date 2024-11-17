@@ -4,6 +4,8 @@
 INCLUDE_DIRS = -Isrc -Icommon -Ilum-al/src -Iinclude -I./
 LINK_DIRS = -Llum-al/lib
 
+CPP_COMPILER = clang++ -ftime-trace
+
 # Linux is so good that static doesn't work
 STATIC_OR_DYNAMIC = 
 # libs that i do not include in internal-unity-build
@@ -71,6 +73,13 @@ LIB_CPP_SOURCES = \
 LIB_C99_SOURCES = \
     src/renderer/api/crenderer.cpp $(LIB_CPP_SOURCES)
 
+DEMO_CPP_SOURCES = \
+    src/examples/demo.cpp \
+	$(LIB_CPP_SOURCES)
+DEMO_C99_SOURCES = \
+    src/examples/cdemo.c \
+	$(LIB_CPP_SOURCES)
+
 ALL_SOURCES = \
     src/examples/demo.cpp \
     src/examples/cdemo.c $(LIB_C99_SOURCES)
@@ -82,11 +91,11 @@ UNITY_FILE_DEMO_CPP := src/unity/unity_demo.cpp
 UNITY_FILE_DEMO_C99 := src/unity/unity_c_demo.cpp
 
 # Object files by build type
-DEBUG_OBJECTS = $(patsubst src/%.cpp,obj/deb/%.o,$(filter src/%.cpp,$(ALL_SOURCES))) \
-                $(patsubst src/%.c,obj/deb/%.o,$(filter src/%.c,$(ALL_SOURCES)))
+DEBUG_OBJECTS = $(patsubst src/%.cpp,obj/deb/%.o,$(filter src/%.cpp,$(DEMO_CPP_SOURCES))) \
+                $(patsubst src/%.c,obj/deb/%.o,$(filter src/%.c,$(DEMO_CPP_SOURCES)))
 
-DEV_OBJECTS = $(patsubst src/%.cpp,obj/rel/%.o,$(filter src/%.cpp,$(ALL_SOURCES))) \
-              $(patsubst src/%.c,obj/rel/%.o,$(filter src/%.c,$(ALL_SOURCES)))
+DEV_OBJECTS = $(patsubst src/%.cpp,obj/rel/%.o,$(filter src/%.cpp,$(DEMO_CPP_SOURCES))) \
+              $(patsubst src/%.c,obj/rel/%.o,$(filter src/%.c,$(DEMO_CPP_SOURCES)))
 
 # No release objects - release is unity build
 
@@ -116,11 +125,11 @@ setup: init vcpkg_installed_eval lum-al/lib/liblumal.a
 # Compilation pattern rules for different build types
 # If someone knows a way to simplify this, please tell me 
 obj/%.o: common/%.cpp | setup
-	c++ $(DEV_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	$(CPP_COMPILER) $(DEV_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 -include $(COMMON_OBJECTS:.o=.d)
 
 obj/rel/%.o: src/%.cpp | setup
-	c++ $(DEV_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	$(CPP_COMPILER) $(DEV_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 -include $(DEV_OBJECTS:.o=.d)
 
 obj/rel/%.o: src/%.c | setup
@@ -128,7 +137,7 @@ obj/rel/%.o: src/%.c | setup
 -include $(DEV_OBJECTS:.o=.d)
 
 obj/deb/%.o: src/%.cpp | setup
-	c++ $(DEB_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	$(CPP_COMPILER) $(DEB_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 -include $(DEBUG_OBJECTS:.o=.d)
 
 # Shader compilation
@@ -187,21 +196,21 @@ only_build_unity: init compile_shaders build_unity_lib_static_cpp build_unity_li
 
 #i could not make it work without this. Maybe posssible with eval
 build_deb: setup $(DEBUG_OBJECTS) $(COMMON_OBJECTS)
-	c++ -o bin/demo_deb $(DEBUG_OBJECTS) $(COMMON_OBJECTS) $(DEB_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	$(CPP_COMPILER) -o bin/demo_deb $(DEBUG_OBJECTS) $(COMMON_OBJECTS) $(DEB_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 build_dev: setup $(COMMON_OBJECTS) $(DEV_OBJECTS) 
-	c++ -o bin/demo_dev $(COMMON_OBJECTS) $(DEV_OBJECTS) $(DEV_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
+	$(CPP_COMPILER) -o bin/demo_dev $(COMMON_OBJECTS) $(DEV_OBJECTS) $(DEV_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(REQUIRED_LIBS) $(STATIC_OR_DYNAMIC)
 
 # build libs objects and ar them
 # C++ API lib
 obj/rel/unity/unity_lib.o: src/unity/unity_lib.cpp $(LIB_CPP_SOURCES) | setup
-	c++ $(FPIC) $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	$(CPP_COMPILER) $(FPIC) $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
 build_unity_lib_static_cpp: obj/rel/unity/unity_lib.o
 	ar rvs lib/liblum.a obj/rel/unity/unity_lib.o
 # C99 API lib
 obj/rel/unity/unity_c_lib.o: src/unity/unity_c_lib.cpp $(LIB_C99_SOURCES) | setup
-	c++ $(FPIC) $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
+	$(CPP_COMPILER) $(FPIC) $(REL_FLAGS) $(INCLUDE_DIRS) $(args) -MMD -MP -c $< -o $@
 DEPS = $(DEV_OBJECTS:.o=.d)
 -include $(DEPS)
 build_unity_lib_static_c99: setup obj/rel/unity/unity_c_lib.o
@@ -210,7 +219,7 @@ build_unity_lib_static_c99: setup obj/rel/unity/unity_c_lib.o
 # Windows DLL i used for Unity Game Engine bindings
 # for now this ugly script and Windows-only
 build_unity_lib_dynamic_c99: obj/rel/unity/unity_c_lib.o
-	c++ -shared -o lib/clum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_c_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
+	$(CPP_COMPILER) -shared -o lib/clum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_c_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
 		$(EXTERNAL_LIBS) -lstdc++ -Wl,--gc-sections
 ifeq ($(OS),Windows_NT)
 	$(COPY_COMMAND) lib\clum$(DYN_LIB_POSTFIX) bin\clum$(DYN_LIB_POSTFIX)
@@ -220,7 +229,7 @@ endif
 
 
 build_unity_lib_dynamic_cpp: obj/rel/unity/unity_lib.o
-	c++ -shared -o lib/lum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
+	$(CPP_COMPILER) -shared -o lib/lum$(DYN_LIB_POSTFIX) obj/rel/unity/unity_lib.o $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) \
 		$(EXTERNAL_LIBS) -lstdc++ -lm -Wl,--gc-sections
 ifeq ($(OS),Windows_NT)
 	$(COPY_COMMAND) lib\lum$(DYN_LIB_POSTFIX) bin\lum$(DYN_LIB_POSTFIX)
@@ -233,15 +242,15 @@ endif
 
 # example of full unity build for demos
 build_unity_demo_cpp: setup compile_shaders
-	c++ -o bin/unity_demo_cpp$(RUN_POSTFIX) $(UNITY_FILE_DEMO_CPP) $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
+	$(CPP_COMPILER) -o bin/unity_demo_cpp$(RUN_POSTFIX) $(UNITY_FILE_DEMO_CPP) $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 # yep, you will need to compile your C with C++ compiler if you want full unity build
 build_unity_demo_99: setup compile_shaders
-	c++ -o bin/unity_demo_c99$(RUN_POSTFIX) $(UNITY_FILE_DEMO_C99) $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
+	$(CPP_COMPILER) -o bin/unity_demo_c99$(RUN_POSTFIX) $(UNITY_FILE_DEMO_C99) $(REL_FLAGS) $(INCLUDE_DIRS) $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 
 # example of unity library + separate (unity or not unity) app, linked with unity-built lib
 # note that you dont have to link with lumal
 build_demo_stagic_cpp: setup compile_shaders obj/rel/examples/demo.o build_unity_lib_static_cpp
-	c++         -o bin/demo_static_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o  -Llib  -llum $(REL_FLAGS) -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
+	$(CPP_COMPILER)         -o bin/demo_static_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o  -Llib  -llum $(REL_FLAGS) -Iinclude $(LINK_DIRS) $(EXTERNAL_LIBS) $(STATIC_OR_DYNAMIC)
 # (!) library was (& has to be) built with C++ compiler, but your code can be compiled and linked by C compiler
 # you still HAVE TO link against -lstdc++ (and put it last. Order matters)
 build_demo_stagic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_static_c99
@@ -250,13 +259,13 @@ build_demo_stagic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unit
 build_demo_dynamic_c99: setup compile_shaders obj/rel/examples/cdemo.o build_unity_lib_dynamic_c99
 	cc -std=c99 -o bin/demo_dynamic_c99$(RUN_POSTFIX) obj/rel/examples/cdemo.o lib/clum$(DYN_LIB_POSTFIX) -Ofast $(common_instructions) -s -Wl,--gc-sections -Iinclude -Llib
 build_demo_dynamic_cpp: setup compile_shaders obj/rel/examples/demo.o build_unity_lib_dynamic_cpp
-	c++ -o bin/demo_dynamic_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o lib/lum$(DYN_LIB_POSTFIX) -Llib $(REL_FLAGS)
+	$(CPP_COMPILER) -o bin/demo_dynamic_cpp$(RUN_POSTFIX) obj/rel/examples/demo.o lib/lum$(DYN_LIB_POSTFIX) -Llib $(REL_FLAGS)
 
 
 fun:
 	@echo -e '\033[0;36m' fun was never an option '\033[0m'
 test:
-	c++ -pg test.cpp -o test -Wl,--stack,1000000
+	$(CPP_COMPILER) -pg test.cpp -o test -Wl,--stack,1000000
 	test
 
 # tested on Windows only
@@ -337,6 +346,8 @@ endif
 init: folders vcpkg_installed vcpkg_installed_eval lum-al/lib/liblumal.a
 folders: bin/ lib/ obj/ obj/deb/ obj/rel/ shaders/compiled/\
 	 obj/deb/renderer/ obj/rel/renderer/\
+	 obj/deb/renderer/src/ obj/rel/renderer/src/\
+	 obj/deb/renderer/api/ obj/rel/renderer/api/\
 	 obj/deb/unity/ obj/rel/unity/\
 	 obj/deb/examples/ obj/rel/examples/\
 

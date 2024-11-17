@@ -1,25 +1,76 @@
-#include "renderer.hpp"
+#include "renderer/src/internal_render.hpp"
+#include "renderer.hpp" //opaque
+#include "opaque_renderer_members.hpp"
+
 #include "defines/macros.hpp"
 
+// am i getting canceled?
 #define let auto&
 
-void Lum::Renderer::init(LumInternal::LumSettings lum_settings) noexcept {
-    // LumSettings lum_settings(settings); 
-        lum_settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
-        lum_settings.timestampCount = 48;
-        lum_settings.profile = true; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
-        // currently fif has bug in it, do not change for now 
-        lum_settings.fif = LumInternal::MAX_FRAMES_IN_FLIGHT; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
+// just a shortcut for later
+#define transparent (*((Lum::OpaqueRendererMembers*)(&this->promised_opaque_members)))
 
-        lum_settings.deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
-        lum_settings.deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
-        lum_settings.deviceFeatures.geometryShader = VK_TRUE;
-        lum_settings.deviceFeatures.independentBlend = VK_TRUE;
-        lum_settings.deviceFeatures.shaderInt16 = VK_TRUE;
-        lum_settings.deviceFeatures11.storagePushConstant16 = VK_TRUE;
-        lum_settings.deviceFeatures12.storagePushConstant8 = VK_TRUE;
-        lum_settings.deviceFeatures12.shaderInt8 = VK_TRUE;
-        lum_settings.deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
+Lum::Renderer::Renderer() noexcept : Renderer(1024, 1024, 64, 64, 64) {}
+Lum::Renderer::Renderer(
+        size_t block_palette_size, 
+        size_t mesh_storage_size, 
+        size_t foliage_storage_size, 
+        size_t volumetric_storage_size, 
+        size_t liquid_storage_size) noexcept 
+        : curr_time(std::chrono::steady_clock::now()), 
+        block_que(),
+        mesh_que(),
+        foliage_que(),
+        liquid_que(),
+        volumetric_que()
+    {
+        // this calls constructors on memory that is visible to Renderer as just bytes, but in fact represents Lum::OpaqueRendererMembers
+        opaque_members = new Lum::OpaqueRendererMembers(
+            block_palette_size, 
+            mesh_storage_size,
+            foliage_storage_size,
+            volumetric_storage_size,
+            liquid_storage_size
+        );
+    }
+Lum::Renderer::~Renderer() noexcept 
+    // {cleanup();} // i do not like it being that impicit
+    {
+        delete opaque_members;
+    }
+
+void Lum::Renderer::init(Lum::Settings lum_settings) noexcept {
+    // sizeof(psAccessor);
+
+    LumInternal::LumSettings 
+        internal_settings = {}; 
+        //copying from external
+        internal_settings.world_size                = lum_settings.world_size;
+        internal_settings.static_block_palette_size = lum_settings.static_block_palette_size;
+        internal_settings.maxParticleCount          = lum_settings.maxParticleCount;
+        internal_settings.timestampCount            = lum_settings.timestampCount;
+        internal_settings.fif                       = lum_settings.fif;
+        internal_settings.vsync                     = lum_settings.vsync;
+        internal_settings.fullscreen                = lum_settings.fullscreen;
+        internal_settings.debug                     = lum_settings.debug;
+        internal_settings.profile                   = lum_settings.profile;
+    
+        //this has to be managed better but works for now
+        internal_settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
+        internal_settings.timestampCount = 48;
+        internal_settings.profile = true; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
+        // currently fif has bug in it, do not change for now 
+        internal_settings.fif = LumInternal::MAX_FRAMES_IN_FLIGHT; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less
+
+        internal_settings.deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
+        internal_settings.deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
+        internal_settings.deviceFeatures.geometryShader = VK_TRUE;
+        internal_settings.deviceFeatures.independentBlend = VK_TRUE;
+        internal_settings.deviceFeatures.shaderInt16 = VK_TRUE;
+        internal_settings.deviceFeatures11.storagePushConstant16 = VK_TRUE;
+        internal_settings.deviceFeatures12.storagePushConstant8 = VK_TRUE;
+        internal_settings.deviceFeatures12.shaderInt8 = VK_TRUE;
+        internal_settings.deviceFeatures12.storageBuffer8BitAccess = VK_TRUE;
         // for assumeEXT, currently disabled and will be brought back with new shader system
         // VkPhysicalDeviceShaderExpectAssumeFeaturesKHR 
         //     expect;
@@ -27,16 +78,17 @@ void Lum::Renderer::init(LumInternal::LumSettings lum_settings) noexcept {
         //     expect.shaderExpectAssume = VK_TRUE;
         // settings.addExtraFeaturesPnext(&expect);
         
-        lum_settings.deviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME); //simplifies renderer for negative cost lol
-        lum_settings.deviceExtensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME); //pco / ubo +perfomance
-        lum_settings.deviceExtensions.push_back(VK_KHR_16BIT_STORAGE_EXTENSION_NAME); //just explicit control
-        lum_settings.deviceExtensions.push_back(VK_KHR_8BIT_STORAGE_EXTENSION_NAME); //just explicit control
-        lum_settings.deviceExtensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME); // aka zero-pain buffers
+        internal_settings.deviceExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME); //simplifies renderer for negative cost lol
+        internal_settings.deviceExtensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME); //pco / ubo +perfomance
+        internal_settings.deviceExtensions.push_back(VK_KHR_16BIT_STORAGE_EXTENSION_NAME); //just explicit control
+        internal_settings.deviceExtensions.push_back(VK_KHR_8BIT_STORAGE_EXTENSION_NAME); //just explicit control
+        internal_settings.deviceExtensions.push_back(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME); // aka zero-pain buffers
         // settings.deviceExtensions.push_back(VK_KHR_SHADER_EXPECT_ASSUME_EXTENSION_NAME); // GLSL's assumeEXT(statement)
 
-    settings = lum_settings;
-    render.init(lum_settings);
-        vkDeviceWaitIdle(render.render.device);
+    // settings = lum_settings;
+    opaque_members->settings = lum_settings;
+    opaque_members->render.init(internal_settings);
+        vkDeviceWaitIdle(opaque_members->render.lumal.device);
 
     should_close = false; // just in case, idk
 }
@@ -44,68 +96,68 @@ void Lum::Renderer::init(LumInternal::LumSettings lum_settings) noexcept {
 void Lum::Renderer::loadWorld(const LumInternal::BlockID_t* world_data) noexcept {
     assert(world_data);
     // TODO
-    render.load_scene("assets/scene");
+    opaque_members->render.load_scene("assets/scene");
 }
 void Lum::Renderer::loadWorld(const std::string& file) noexcept {
     // TODO
-    render.load_scene(file.c_str());
+    opaque_members->render.load_scene(file.c_str());
 }
 
 void Lum::Renderer::setWorldBlock(const ivec3& pos, MeshBlock block) noexcept {
     // yep, CPU-side structure
     // it is copied to gpu every frame for internal reasons
     // in some sence, this is a cache
-    render.origin_world(pos) = block;
+    opaque_members->render.origin_world(pos) = block;
 }
 void Lum::Renderer::setWorldBlock(int x, int y, int z, MeshBlock block) noexcept {
-    render.origin_world(x,y,z) = block;
+    opaque_members->render.origin_world(x,y,z) = block;
 }
 
 LumInternal::BlockID_t Lum::Renderer::getWorldBlock(const ivec3& pos) const noexcept {
-    LumInternal::BlockID_t block = render.origin_world(pos);
+    LumInternal::BlockID_t block = opaque_members->render.origin_world(pos);
     return block;
 }
 LumInternal::BlockID_t Lum::Renderer::getWorldBlock(int x, int y, int z) const noexcept {
-    LumInternal::BlockID_t block = render.origin_world(x,y,z);
+    LumInternal::BlockID_t block = opaque_members->render.origin_world(x,y,z);
     return block;  
 }
 
-void Lum::Renderer::loadBlock(MeshBlock block, LumInternal::BlockWithMesh* block_data) noexcept {
-    memcpy(&block_palette[block], block_data, sizeof(LumInternal::BlockWithMesh));
-    // render.updateMaterialPalette(mat_palette);
+void Lum::Renderer::loadBlock(MeshBlock block, LumInternal::BlockVoxels* block_data) noexcept {
+    memcpy(&opaque_members->block_palette[block], block_data, sizeof(LumInternal::BlockVoxels));
+    // opaque_members->render.updateMaterialPalette(mat_palette);
 }
 void Lum::Renderer::loadBlock(MeshBlock block, const std::string& file) noexcept {
-    render.load_block(&block_palette[block], file.c_str());
+    opaque_members->render.load_block(&opaque_members->block_palette[block], file.c_str());
 }
 
 void Lum::Renderer::uploadBlockPaletteToGPU() noexcept {
-    render.updateBlockPalette(block_palette.data());
+    opaque_members->render.updateBlockPalette(opaque_members->block_palette.data());
 }
 
 void Lum::Renderer::uploadMaterialPaletteToGPU() noexcept {
-    render.updateMaterialPalette(mat_palette.data());
+    opaque_members->render.updateMaterialPalette(opaque_members->mat_palette.data());
 }
 void Lum::Renderer::loadPalette(const std::string& file) noexcept{
-    render.extract_palette(file.c_str(), mat_palette.data());
+    opaque_members->render.extract_palette(file.c_str(), opaque_members->mat_palette.data());
 }
 Lum::MeshModel Lum::Renderer::loadModel(const std::string& file, bool try_extract_palette) noexcept {
-    LumInternal::InternalMeshModel* new_mesh = mesh_models_storage.allocate();
-    render.load_mesh(new_mesh, file.c_str(), true, /*extract palette if no found = */ try_extract_palette, mat_palette.data());
+    LumInternal::InternalMeshModel* new_mesh = opaque_members->mesh_models_storage.allocate();
+    opaque_members->render.load_mesh(new_mesh, file.c_str(), true, /*extract palette if no found = */ try_extract_palette, opaque_members->mat_palette.data());
     return new_mesh;
 }
 Lum::MeshModel Lum::Renderer::loadModel(LumInternal::Voxel* mesh_data, int x_size, int y_size, int z_size) noexcept {
-    LumInternal::InternalMeshModel* new_mesh = mesh_models_storage.allocate();
-    render.load_mesh(new_mesh, mesh_data, x_size,y_size,z_size, true);
+    LumInternal::InternalMeshModel* new_mesh = opaque_members->mesh_models_storage.allocate();
+    opaque_members->render.load_mesh(new_mesh, mesh_data, x_size,y_size,z_size, true);
     return new_mesh;
 }
 void Lum::Renderer::freeMesh(MeshModel model) noexcept {
-    LumInternal::InternalMeshModel* mesh_ptr = model;
-    render.free_mesh(mesh_ptr);
+    LumInternal::InternalMeshModel* mesh_ptr = (LumInternal::InternalMeshModel*) model.ptr;
+    opaque_members->render.free_mesh(mesh_ptr);
 }
 
 Lum::MeshFoliage Lum::Renderer::loadFoliage(const std::string& vertex_shader_file, int vertices_per_foliage, int density) noexcept {
     LumInternal::InternalMeshFoliage* 
-        new_foliage = mesh_foliage_storage.allocate();
+        new_foliage = opaque_members->mesh_foliage_storage.allocate();
         // this is not creating pipe(line). Only queuing shader file for later pipe(line)
         // i just hope C++ is not fucked up and lifetime of string is whole main
         new_foliage->vertex_shader_file = vertex_shader_file;
@@ -113,12 +165,12 @@ Lum::MeshFoliage Lum::Renderer::loadFoliage(const std::string& vertex_shader_fil
         new_foliage->vertices = vertices_per_foliage;
         new_foliage->dencity = density;
     // registering in internal renderer
-    render.registered_foliage.push_back(new_foliage);
+    opaque_members->render.registered_foliage.push_back(new_foliage);
     return new_foliage;
 }
 Lum::MeshVolumetric Lum::Renderer::loadVolumetric(float max_density, float density_deviation, const u8vec3& color) noexcept {
     LumInternal::InternalMeshVolumetric* 
-        new_volumetric = mesh_volumetric_storage.allocate();
+        new_volumetric = opaque_members->mesh_volumetric_storage.allocate();
         new_volumetric->max_dencity = max_density;
         new_volumetric->variation = density_deviation;
         new_volumetric->color = color;
@@ -126,7 +178,7 @@ Lum::MeshVolumetric Lum::Renderer::loadVolumetric(float max_density, float densi
 }
 Lum::MeshLiquid Lum::Renderer::loadLiquid(LumInternal::MatID_t main_mat, LumInternal::MatID_t foam_mat) noexcept {
     LumInternal::InternalMeshLiquid* 
-        new_liquid = mesh_liquid_storage.allocate();
+        new_liquid = opaque_members->mesh_liquid_storage.allocate();
         new_liquid->main = main_mat;
         new_liquid->foam = foam_mat;
     return new_liquid;
@@ -157,12 +209,16 @@ static bool is_block_visible(dmat4 trans, dvec3 pos){
 void Lum::Renderer::drawWorld() noexcept {
     // block_que.clear(); done in startFrame
     // cam_dist could be moved into update()
-    for(int xx=0; xx<settings.world_size.x; xx++){
-    for(int yy=0; yy<settings.world_size.y; yy++){
-    for(int zz=0; zz<settings.world_size.z; zz++){
+    // LOG(opaque_members->settings.world_size.x)
+    // LOG(opaque_members->settings.world_size.y)
+    // LOG(opaque_members->settings.world_size.z)
+    for(int xx=0; xx < opaque_members->settings.world_size.x; xx++){
+    for(int yy=0; yy < opaque_members->settings.world_size.y; yy++){
+    for(int zz=0; zz < opaque_members->settings.world_size.z; zz++){
         MeshModel* block_mesh = NULL;
-        
-        int block_id = render.origin_world(xx,yy,zz);
+        // ATRACE()
+        int block_id = opaque_members->render.origin_world(xx,yy,zz);
+        // ATRACE()
         if(block_id != 0){
             struct BlockRenderRequest /*goes*/ brr = {}; //
             brr.pos = ivec3(xx*16,yy*16, zz*16);
@@ -173,11 +229,24 @@ void Lum::Renderer::drawWorld() noexcept {
 
             // brr.cam_dist = clip_coords.z;
 
-            if(is_block_visible(render.camera.cameraTransform, dvec3(brr.pos))){
+        // ATRACE()
+            if(is_block_visible(opaque_members->render.camera.cameraTransform, dvec3(brr.pos))){
+        // ATRACE()
+        //     LOG(block_que.size())
+        //     LOG(&block_que)
+        //     LOG(block_que.data())
+        //     LOG(brr.pos.x)
+        //     LOG(brr.pos.y)
+        //     LOG(brr.pos.z)
+        //     LOG(brr.cam_dist)
+        //     LOG(brr.block)
                 block_que.push_back(brr);
+        // ATRACE()
             }
+        // ATRACE()
         }
-        assert(block_id <= render.static_block_palette_size && "there is block in the world that is outside of the palette");
+        // ATRACE()
+        assert(block_id <= opaque_members->render.static_block_palette_size && "there is block in the world that is outside of the palette");
     }}}
 }
 
@@ -186,7 +255,7 @@ void Lum::Renderer::drawParticles() noexcept {
 }
 
 void Lum::Renderer::drawModel(const MeshModel& mesh, const MeshTransform& trans) noexcept {
-    assert(mesh != nullptr);
+    assert(mesh.ptr != nullptr);
     ModelRenderRequest 
         mrr = {};
         mrr.mesh = mesh;
@@ -200,7 +269,13 @@ void Lum::Renderer::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& po
         frr = {};
         frr.foliage = foliage;
         frr.pos = pos;
-    foliage_que.push_back(frr);
+// ATRACE()
+    FoliageRenderRequest t = frr;
+// ATRACE()
+//     LOG(&foliage_que)
+//     LOG(foliage_que.data())
+    foliage_que.push_back(t);
+// ATRACE()
 }
 void Lum::Renderer::drawLiquidBlock(const MeshLiquid& liquid, const ivec3& pos) noexcept {
     assert(liquid != nullptr);
@@ -247,12 +322,12 @@ void calculateAndSortByCamDist(Container& render_queue, const glm::dmat4& camera
 
 void Lum::Renderer::prepareFrame() noexcept{
     glfwPollEvents();
-    should_close |= glfwWindowShouldClose(render.render.window.pointer);
+    should_close |= glfwWindowShouldClose(opaque_members->render.lumal.window.pointer);
     updateTime();
-    render.deltaTime = delta_time;
+    opaque_members->render.deltaTime = delta_time;
 
     // separate for models just cause not worth template
-    auto cam = render.camera.cameraTransform;
+    auto cam = opaque_members->render.camera.cameraTransform;
     auto sortMeshByCamDist = [](const struct ModelRenderRequest& lhs, const struct ModelRenderRequest& rhs) {
         return lhs.cam_dist > rhs.cam_dist;
     };
@@ -270,149 +345,176 @@ void Lum::Renderer::prepareFrame() noexcept{
 
 void Lum::Renderer::submitFrame() noexcept {
 // ATRACE()
-    render.start_frame();
+    opaque_members->render.start_frame();
 // ATRACE()
 
-        // render.start_compute();
-            render.start_blockify();    
+        // opaque_members->render.start_compute();
+            opaque_members->render.start_blockify();    
             for (let m : mesh_que){
-                render.blockify_mesh(m.mesh, &m.trans);
+                opaque_members->render.blockify_mesh((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
             }
 // ATRACE()
 
-            render.end_blockify();
-            render.update_radiance();
-            // render.recalculate_df(); // currently unused. per-voxel Distance Field 
-            // render.recalculate_bit(); // currently unused. Bitpacking, like (block==Air) ? 0 : 1 
-            render.updade_grass({});
-            render.updade_water();
-            render.exec_copies();
-                render.start_map();
+            opaque_members->render.end_blockify();
+            opaque_members->render.update_radiance();
+            // opaque_members->render.recalculate_df(); // currently unused. per-voxel Distance Field 
+            // opaque_members->render.recalculate_bit(); // currently unused. Bitpacking, like (block==Air) ? 0 : 1 
+            opaque_members->render.updade_grass({});
+            opaque_members->render.updade_water();
+            opaque_members->render.exec_copies();
+                opaque_members->render.start_map();
                 for (let m : mesh_que){
-                    render.map_mesh(m.mesh, &m.trans);
+                    opaque_members->render.map_mesh((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                 }
-                render.end_map();
+                opaque_members->render.end_map();
 // ATRACE()
-            render.end_compute();
+            opaque_members->render.end_compute();
 // ATRACE()
-                // render.raytrace();
-                render.start_lightmap();
+                // opaque_members->render.raytrace();
+                opaque_members->render.start_lightmap();
 // ATRACE()
                 //yeah its wrong
-                render.lightmap_start_blocks();
+                opaque_members->render.lightmap_start_blocks();
 // ATRACE()
                     for(let b : block_que){
-                        render.lightmap_block(&block_palette[b.block].mesh, b.block, b.pos);
+                        opaque_members->render.lightmap_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
                     }
 // ATRACE()
-                render.lightmap_start_models();
+                opaque_members->render.lightmap_start_models();
 // ATRACE()
                     for (let m : mesh_que){
-                        render.lightmap_model(m.mesh, &m.trans);
+                        opaque_members->render.lightmap_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
 // ATRACE()
-                render.end_lightmap();
+                opaque_members->render.end_lightmap();
 // ATRACE()
 
-                render.start_raygen();  
+                opaque_members->render.start_raygen();  
 // ATRACE()
                 // printl(block_que.size());
-                render.raygen_start_blocks();
+                opaque_members->render.raygen_start_blocks();
 // ATRACE()
                     for(let b : block_que){
                         // DEBUG_LOG(b.block)
                         // DEBUG_LOG(&block_palette[b.block].mesh)
-                        render.raygen_block(&block_palette[b.block].mesh, b.block, b.pos);
+                        opaque_members->render.raygen_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
                     }  
 // ATRACE()
                     
-                render.raygen_start_models();
+                opaque_members->render.raygen_start_models();
 // ATRACE()
                     for (let m : mesh_que){
-                        render.raygen_model(m.mesh, &m.trans);
+                        opaque_members->render.raygen_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
 // ATRACE()
-                render.update_particles();
+                opaque_members->render.update_particles();
 // ATRACE()
-                render.raygen_map_particles();      
+                opaque_members->render.raygen_map_particles();      
 // ATRACE()
-                render.raygen_start_grass();
+                opaque_members->render.raygen_start_grass();
 // ATRACE()
                     for(let f : foliage_que){
-                        render.raygen_map_grass(f.foliage, f.pos);
+                        opaque_members->render.raygen_map_grass((LumInternal::InternalMeshFoliage*)f.foliage, f.pos);
                     }
 // ATRACE()
 
-                render.raygen_start_water();
+                opaque_members->render.raygen_start_water();
 // ATRACE()
                     for(let l : liquid_que){
-                        render.raygen_map_water(*(l.liquid), l.pos);
+                        opaque_members->render.raygen_map_water(*((LumInternal::InternalMeshLiquid*)(l.liquid)), l.pos);
                     }
 // ATRACE()
-                render.end_raygen();
+                opaque_members->render.end_raygen();
 // ATRACE()
-                render.start_2nd_spass();
+                opaque_members->render.start_2nd_spass();
 // ATRACE()
-                render.diffuse();
+                opaque_members->render.diffuse();
 // ATRACE()
-                render.ambient_occlusion(); 
+                opaque_members->render.ambient_occlusion(); 
 // ATRACE()
-                render.glossy_raygen();
+                opaque_members->render.glossy_raygen();
 // ATRACE()
-                render.raygen_start_smoke();
+                opaque_members->render.raygen_start_smoke();
 // ATRACE()
                     for(let v : volumetric_que){
-                        render.raygen_map_smoke(*v.volumetric, v.pos);
+                        opaque_members->render.raygen_map_smoke(*((LumInternal::InternalMeshVolumetric*)(v.volumetric)), v.pos);
                     }
 // ATRACE()
-                render.glossy();
+                opaque_members->render.glossy();
 // ATRACE()
-                render.smoke();
+                opaque_members->render.smoke();
 // ATRACE()
-                render.tonemap();
+                opaque_members->render.tonemap();
 // ATRACE()
-            render.start_ui(); 
+            opaque_members->render.start_ui(); 
 //                 ui.update();
 // ATRACE()
 //                 ui.draw();
 // ATRACE()
-        render.end_ui(); 
-        render.end_2nd_spass();
+        opaque_members->render.end_ui(); 
+        opaque_members->render.end_2nd_spass();
 // ATRACE()
-    render.end_frame();
+    opaque_members->render.end_frame();
 // ATRACE()
 }
 
 void Lum::Renderer::cleanup() noexcept {
     waitIdle();
 // ATRACE();
-    for(int i=1; i<render.static_block_palette_size; i++){
+    for(int i=1; i < opaque_members->render.static_block_palette_size; i++){
         // frees the mesh buffers and voxel images
-        render.free_block(&block_palette[i]);
+        opaque_members->render.free_block(&opaque_members->block_palette[i]);
     }
     waitIdle();
 // ATRACE();
-    for(int i=0; i<mesh_models_storage.total_size(); i++){
-        bool idx_is_free = mesh_models_storage.free_indices.contains(i);
+    for(int i=0; i < opaque_members->mesh_models_storage.total_size(); i++){
+        bool idx_is_free = opaque_members->mesh_models_storage.free_indices.contains(i);
         bool is_allocated = (not idx_is_free);
         if(is_allocated) {
-            LumInternal::InternalMeshModel* imm_ptr = &mesh_models_storage.storage[i];
+            LumInternal::InternalMeshModel* imm_ptr = &opaque_members->mesh_models_storage.storage[i];
             // LOG(imm_ptr)
-            render.free_mesh(imm_ptr);
+            opaque_members->render.free_mesh(imm_ptr);
             // no free cause not needed and will actually make referenced memory illegal
             // mesh_models_storage.free(imm_ptr);
         }
     }
     waitIdle();
 // ATRACE();
-    render.cleanup();
+    opaque_members->render.cleanup();
 // ATRACE();
 }
 
 void Lum::Renderer::waitIdle() noexcept {
-    render.render.deviceWaitIdle();
+    opaque_members->render.lumal.deviceWaitIdle();
 }
 
-GLFWwindow* Lum::Renderer::getGLFWptr() const noexcept {
-    return render.render.window.pointer;
+void* Lum::Renderer::getGLFWptr() const noexcept {
+    return opaque_members->render.lumal.window.pointer;
+}
+
+void Lum::Renderer::updateTime() noexcept {
+    auto now = std::chrono::steady_clock::now();
+    delta_time = std::chrono::duration<double>(now - curr_time).count();
+    curr_time = now;
+}
+
+Lum::Camera& Lum::Renderer::getCamera(){
+    return opaque_members->render.camera;
+}
+
+glm::ivec3 Lum::Renderer::getWorldSize(){
+    return opaque_members->render.world_size;
+}
+
+void Lum::Renderer::addParticle(Particle particle){
+    opaque_members->render.particles.push_back(particle);
+}
+
+
+glm::ivec3 Lum::MeshModelWithGetters::getSize() {
+    LumInternal::InternalMeshModel* ptr = (LumInternal::InternalMeshModel*) this->ptr;
+    return ptr->size;
+}
+Lum::MeshModelWithGetters::operator void* () {
+    return ptr;
 }

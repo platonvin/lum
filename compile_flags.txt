@@ -1,4 +1,6 @@
 -isystem
+-IC:\msys64\mingw64\include
+--target=x86_64-w64-windows-gnu
 -I./src
 -I.\
 -I.\common
