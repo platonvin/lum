@@ -4,7 +4,7 @@
 INCLUDE_DIRS = -Isrc -Icommon -Ilum-al/src -Iinclude -I./
 LINK_DIRS = -Llum-al/lib
 
-CPP_COMPILER = clang++ -ftime-trace
+CPP_COMPILER = c++
 
 # Linux is so good that static doesn't work
 STATIC_OR_DYNAMIC = 

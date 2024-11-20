@@ -35,6 +35,9 @@
       ]
     },
     {
+      "name": "zlib"
+    },
+    {
       "name": "glslang",
       "default-features": false,
       "features": [

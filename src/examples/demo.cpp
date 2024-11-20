@@ -224,14 +224,14 @@ int main(){
     }
 
     // prints GPU profile data
-    // if (lum.lumal.render.settings.profile){
-    //     printf("%-22s: %7.3f: %7.3f\n", lum.lumal.render.timestampNames[0], 0.0, 0.0);    
-    //     for (int i=1; i<lum.lumal.render.currentTimestamp; i++){
-    //         double time_point = double(lum.lumal.render.average_ftimestamps[i] - lum.lumal.render.average_ftimestamps[0]);
-    //         double time_diff = double(lum.lumal.render.average_ftimestamps[i] - lum.lumal.render.average_ftimestamps[i-1]);
-    //         printf("%3d %-22s: %7.3f: %7.3f\n", i, lum.lumal.render.timestampNames[i], time_point, time_diff);
-    //     }
-    // }
+    if (lum.opaque_members->render.lumal.settings.profile){
+        printf("%-22s: %7.3f: %7.3f\n", lum.opaque_members->render.lumal.timestampNames[0], 0.0, 0.0);    
+        for (int i=1; i<lum.opaque_members->render.lumal.currentTimestamp; i++){
+            double time_point = double(lum.opaque_members->render.lumal.average_ftimestamps[i] - lum.opaque_members->render.lumal.average_ftimestamps[0]);
+            double time_diff = double(lum.opaque_members->render.lumal.average_ftimestamps[i] - lum.opaque_members->render.lumal.average_ftimestamps[i-1]);
+            printf("%3d %-22s: %7.3f: %7.3f\n", i, lum.opaque_members->render.lumal.timestampNames[i], time_point, time_diff);
+        }
+    }
     cleanup(lum);
 }
 

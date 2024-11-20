@@ -8,7 +8,7 @@
 #define let auto&
 
 // just a shortcut for later
-#define transparent (*((Lum::OpaqueRendererMembers*)(&this->promised_opaque_members)))
+// #define transparent (*((Lum::OpaqueRendererMembers*)(&this->promised_opaque_members)))
 
 Lum::Renderer::Renderer() noexcept : Renderer(1024, 1024, 64, 64, 64) {}
 Lum::Renderer::Renderer(
