@@ -5,7 +5,7 @@
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
 
-#include "../../../lum-al/src/al.hpp"
+#include <lum-al/src/al.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include "internal_types.hpp"
@@ -401,51 +401,52 @@ struct LumInternalRenderer {
 };
 
 
-class MyRenderInterface : public Rml::RenderInterface {
+// class MyRenderInterface : public Rml::RenderInterface {
+class MyRenderInterface {
   public:
     MyRenderInterface() {}
 
     ~MyRenderInterface() {}; //override 
     // Called by RmlUi when it wants to render geometry that the application does not wish to optimise
-    void RenderGeometry (Rml::Vertex* vertices,
-                         int num_vertices,
-                         int* indices,
-                         int num_indices,
-                         Rml::TextureHandle texture,
-                         const Rml::Vector2f& translation); //override;
+    // void RenderGeometry (Rml::Vertex* vertices,
+    //                      int num_vertices,
+    //                      int* indices,
+    //                      int num_indices,
+    //                      Rml::TextureHandle texture,
+    //                      const Rml::Vector2f& translation); //override;
 
-    // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
-    Rml::CompiledGeometryHandle CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture); //override;
+    // // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
+    // Rml::CompiledGeometryHandle CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture); //override;
 
-    // Called by RmlUi when it wants to render application-compiled geometry.
-    void RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation); //override;
+    // // Called by RmlUi when it wants to render application-compiled geometry.
+    // void RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation); //override;
 
-    // Called by RmlUi when it wants to release application-compiled geometry.
-    void ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry); //override;
+    // // Called by RmlUi when it wants to release application-compiled geometry.
+    // void ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry); //override;
 
-    // Called by RmlUi when it wants to enable or disable scissoring to clip content.
-    void EnableScissorRegion (bool enable); //override;
+    // // Called by RmlUi when it wants to enable or disable scissoring to clip content.
+    // void EnableScissorRegion (bool enable); //override;
 
-    // Called by RmlUi when it wants to change the scissor region.
-    void SetScissorRegion (int x, int y, int width, int height); //override;
+    // // Called by RmlUi when it wants to change the scissor region.
+    // void SetScissorRegion (int x, int y, int width, int height); //override;
 
-    // Called by RmlUi when a texture is required by the library.
-    bool LoadTexture (Rml::TextureHandle& texture_handle,
-                      Rml::Vector2i& texture_dimensions,
-                      const Rml::String& source); //override;
+    // // Called by RmlUi when a texture is required by the library.
+    // bool LoadTexture (Rml::TextureHandle& texture_handle,
+    //                   Rml::Vector2i& texture_dimensions,
+    //                   const Rml::String& source); //override;
 
-    // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
-    bool GenerateTexture (Rml::TextureHandle& texture_handle,
-                          const Rml::byte* source,
-                          const Rml::Vector2i& source_dimensions); //override;
+    // // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
+    // bool GenerateTexture (Rml::TextureHandle& texture_handle,
+    //                       const Rml::byte* source,
+    //                       const Rml::Vector2i& source_dimensions); //override;
 
-    // Called by RmlUi when a loaded texture is no longer required.
-    void ReleaseTexture (Rml::TextureHandle texture_handle); //override;
+    // // Called by RmlUi when a loaded texture is no longer required.
+    // void ReleaseTexture (Rml::TextureHandle texture_handle); //override;
 
-    // Called by RmlUi when it wants the renderer to use a new transform matrix.
-    // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
-    // an glm::identity matrix or otherwise omit the multiplication with the transform.
-    void SetTransform (const Rml::Matrix4f* transform); //override;
+    // // Called by RmlUi when it wants the renderer to use a new transform matrix.
+    // // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
+    // // an glm::identity matrix or otherwise omit the multiplication with the transform.
+    // void SetTransform (const Rml::Matrix4f* transform); //override;
 
     // Rml::Context* GetContext(); //override {};
     LumInternalRenderer* render;

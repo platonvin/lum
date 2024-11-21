@@ -40,3 +40,7 @@ vcpkg_installed
 *.md
 !README.md
 /lib
+/build
+/src/external/lum-al/build
+/src/external/lum-al/compile_commands.json
+!CMakeLists.txt

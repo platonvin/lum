@@ -1,0 +1,133 @@
+cmake_minimum_required(VERSION 3.21)
+project(lum LANGUAGES CXX C)
+
+# Some settings
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_COLOR_DIAGNOSTICS ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+# Export compile commands for IDEs or language servers (e.g. Clangd)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Download git submodules
+execute_process(
+    COMMAND git submodule update --init --recursive --depth 1
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE GIT_SUBMODULE_RESULT
+)
+if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to initialize or update git submodules")
+endif()
+
+# Set default build type if none is specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build: Debug or Release" FORCE)
+endif()
+
+# Compiler flags
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -Wl,--gc-sections -s")
+    # no -DNDEBUG because asserts are cheap and helpful
+endif()
+
+# Set output directories for binaries and libraries
+# So lum/bin | lum/lib
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
+
+# FreeType
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/freetype)
+    add_subdirectory(external/freetype)
+else()
+    message(WARNING "FreeType directory not found. Cannot proceed.")
+endif()
+
+# RmlUi
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/RmlUi)
+    set(RMLUI_FONT_ENGINE none)  # Specify the font engine
+    add_subdirectory(external/RmlUi)
+    add_dependencies(rmlui FreeType)  # Ensure FreeType is built first
+else()
+    message(WARNING "RmlUi directory not found. Cannot proceed.")
+endif()
+
+# Add lumal
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lum-al)
+    add_subdirectory(external/lum-al)
+    target_compile_definitions(lumal PUBLIC)
+else()
+    message(FATAL_ERROR "Lum-al directory not found. Cannot proceed.")
+endif()
+
+# main project files (implementations)
+file(GLOB_RECURSE PROJECT_SOURCES
+    src/renderer/*.cpp
+    common/*.cpp
+    common/*.c
+)
+
+# Temporary exclusion of certain files
+# rmlui changed api and this doesn't work atm
+list(REMOVE_ITEM PROJECT_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/src/ui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/src/render_ui_interface.cpp
+)
+
+# Create lum as a static library
+add_library(lum STATIC ${PROJECT_SOURCES})
+
+# Add include directories for lum
+target_include_directories(lum PUBLIC
+    src/
+    src/renderer/api
+    common
+    external/lum-al/external
+    external/RmlUi/Include
+    external
+)
+
+# Link external libraries statically
+target_link_libraries(lum 
+    lumal
+    glfw
+    freetype
+)
+
+# Examples to build
+set(EXAMPLES
+    src/engine/examples/ecs_example.cpp
+    src/examples/demo.cpp
+)
+
+# Loop through each example and create an executable for it
+foreach(EXAMPLE ${EXAMPLES})
+    # Get the filename without extension to name the executable
+    get_filename_component(EXAMPLE_NAME ${EXAMPLE} NAME_WE)
+
+    # Create an executable for this example
+    add_executable(${EXAMPLE_NAME} ${EXAMPLE})
+
+    # Include directories for the example
+    target_include_directories(${EXAMPLE_NAME} PRIVATE
+        src/
+        src/renderer/api
+        common
+        external/lum-al/external
+        external/RmlUi/Include
+        external
+    )
+
+    # Link the example to the static lum library
+    target_link_libraries(${EXAMPLE_NAME} PRIVATE lum)
+
+    # Set output directory for the example
+    set_target_properties(${EXAMPLE_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/examples
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/examples
+    )
+endforeach()

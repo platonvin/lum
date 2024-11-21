@@ -1,3 +1,9 @@
-[submodule "lum-al"]
-	path = lum-al
-	url = https://github.com/platonvin/lum-al.git
+[submodule "external/lum-al"]
+	path = external/lum-al
+	url = https://github.com/platonvin/lum-al
+[submodule "external/freetype"]
+	path = external/freetype
+	url = https://github.com/freetype/freetype
+[submodule "external/RmlUi"]
+	path = external/RmlUi
+	url = https://github.com/mikke89/RmlUi
