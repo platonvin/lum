@@ -7,10 +7,13 @@ client
 shaders/*.spv
 shaders/compiled/*.spv
 
-#generating compile commands without 10000 lines of cmake
 *.txt
+*.md
 # for clangd
 !compile_flags.txt
+!CMakeLists.txt
+!README.md
+!LICENSE.md
 # IDE things
 .vscode
 .idea
@@ -37,10 +40,12 @@ vcpkg_installed
 #pocket vcpkg installation
 /lum_vcpkg
 
-*.md
-!README.md
 /lib
 /build
 /src/external/lum-al/build
 /src/external/lum-al/compile_commands.json
-!CMakeLists.txt
+/.cache/
+/tests/build
+/tests/lib
+/tests/bin
+/tests/CMakeFiles

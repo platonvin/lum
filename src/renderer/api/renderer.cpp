@@ -216,9 +216,9 @@ void Lum::Renderer::drawWorld() noexcept {
     for(int yy=0; yy < opaque_members->settings.world_size.y; yy++){
     for(int zz=0; zz < opaque_members->settings.world_size.z; zz++){
         MeshModel* block_mesh = NULL;
-        // ATRACE()
+        // TRACE()
         int block_id = opaque_members->render.origin_world(xx,yy,zz);
-        // ATRACE()
+        // TRACE()
         if(block_id != 0){
             struct BlockRenderRequest /*goes*/ brr = {}; //
             brr.pos = ivec3(xx*16,yy*16, zz*16);
@@ -229,9 +229,9 @@ void Lum::Renderer::drawWorld() noexcept {
 
             // brr.cam_dist = clip_coords.z;
 
-        // ATRACE()
+        // TRACE()
             if(is_block_visible(opaque_members->render.camera.cameraTransform, dvec3(brr.pos))){
-        // ATRACE()
+        // TRACE()
         //     LOG(block_que.size())
         //     LOG(&block_que)
         //     LOG(block_que.data())
@@ -241,11 +241,11 @@ void Lum::Renderer::drawWorld() noexcept {
         //     LOG(brr.cam_dist)
         //     LOG(brr.block)
                 block_que.push_back(brr);
-        // ATRACE()
+        // TRACE()
             }
-        // ATRACE()
+        // TRACE()
         }
-        // ATRACE()
+        // TRACE()
         assert(block_id <= opaque_members->render.static_block_palette_size && "there is block in the world that is outside of the palette");
     }}}
 }
@@ -269,13 +269,13 @@ void Lum::Renderer::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& po
         frr = {};
         frr.foliage = foliage;
         frr.pos = pos;
-// ATRACE()
+TRACE()
     FoliageRenderRequest t = frr;
-// ATRACE()
+TRACE()
 //     LOG(&foliage_que)
 //     LOG(foliage_que.data())
     foliage_que.push_back(t);
-// ATRACE()
+TRACE()
 }
 void Lum::Renderer::drawLiquidBlock(const MeshLiquid& liquid, const ivec3& pos) noexcept {
     assert(liquid != nullptr);
@@ -344,129 +344,137 @@ void Lum::Renderer::prepareFrame() noexcept{
 }
 
 void Lum::Renderer::submitFrame() noexcept {
-// ATRACE()
+TRACE()
     opaque_members->render.start_frame();
-// ATRACE()
+TRACE()
 
         // opaque_members->render.start_compute();
             opaque_members->render.start_blockify();    
             for (let m : mesh_que){
                 opaque_members->render.blockify_mesh((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
             }
-// ATRACE()
+TRACE()
 
             opaque_members->render.end_blockify();
+TRACE()
             opaque_members->render.update_radiance();
+TRACE()
             // opaque_members->render.recalculate_df(); // currently unused. per-voxel Distance Field 
             // opaque_members->render.recalculate_bit(); // currently unused. Bitpacking, like (block==Air) ? 0 : 1 
+TRACE()
             opaque_members->render.updade_grass({});
+TRACE()
             opaque_members->render.updade_water();
+TRACE()
             opaque_members->render.exec_copies();
+TRACE()
                 opaque_members->render.start_map();
+TRACE()
                 for (let m : mesh_que){
                     opaque_members->render.map_mesh((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                 }
+TRACE()
                 opaque_members->render.end_map();
-// ATRACE()
+TRACE()
             opaque_members->render.end_compute();
-// ATRACE()
+TRACE()
                 // opaque_members->render.raytrace();
                 opaque_members->render.start_lightmap();
-// ATRACE()
+TRACE()
                 //yeah its wrong
                 opaque_members->render.lightmap_start_blocks();
-// ATRACE()
+TRACE()
                     for(let b : block_que){
                         opaque_members->render.lightmap_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
                     }
-// ATRACE()
+TRACE()
                 opaque_members->render.lightmap_start_models();
-// ATRACE()
+TRACE()
                     for (let m : mesh_que){
                         opaque_members->render.lightmap_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
-// ATRACE()
+TRACE()
                 opaque_members->render.end_lightmap();
-// ATRACE()
+TRACE()
 
                 opaque_members->render.start_raygen();  
-// ATRACE()
+TRACE()
                 // printl(block_que.size());
                 opaque_members->render.raygen_start_blocks();
-// ATRACE()
+TRACE()
                     for(let b : block_que){
                         // DEBUG_LOG(b.block)
                         // DEBUG_LOG(&block_palette[b.block].mesh)
                         opaque_members->render.raygen_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
                     }  
-// ATRACE()
+TRACE()
                     
                 opaque_members->render.raygen_start_models();
-// ATRACE()
+TRACE()
                     for (let m : mesh_que){
                         opaque_members->render.raygen_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
-// ATRACE()
+TRACE()
                 opaque_members->render.update_particles();
-// ATRACE()
+TRACE()
                 opaque_members->render.raygen_map_particles();      
-// ATRACE()
+TRACE()
                 opaque_members->render.raygen_start_grass();
-// ATRACE()
+TRACE()
                     for(let f : foliage_que){
                         opaque_members->render.raygen_map_grass((LumInternal::InternalMeshFoliage*)f.foliage, f.pos);
                     }
-// ATRACE()
+TRACE()
 
                 opaque_members->render.raygen_start_water();
-// ATRACE()
+TRACE()
                     for(let l : liquid_que){
                         opaque_members->render.raygen_map_water(*((LumInternal::InternalMeshLiquid*)(l.liquid)), l.pos);
                     }
-// ATRACE()
+TRACE()
                 opaque_members->render.end_raygen();
-// ATRACE()
+TRACE()
                 opaque_members->render.start_2nd_spass();
-// ATRACE()
+TRACE()
                 opaque_members->render.diffuse();
-// ATRACE()
+TRACE()
                 opaque_members->render.ambient_occlusion(); 
-// ATRACE()
+TRACE()
                 opaque_members->render.glossy_raygen();
-// ATRACE()
+TRACE()
                 opaque_members->render.raygen_start_smoke();
-// ATRACE()
+TRACE()
                     for(let v : volumetric_que){
                         opaque_members->render.raygen_map_smoke(*((LumInternal::InternalMeshVolumetric*)(v.volumetric)), v.pos);
                     }
-// ATRACE()
+TRACE()
                 opaque_members->render.glossy();
-// ATRACE()
+TRACE()
                 opaque_members->render.smoke();
-// ATRACE()
+TRACE()
                 opaque_members->render.tonemap();
-// ATRACE()
+TRACE()
             opaque_members->render.start_ui(); 
 //                 ui.update();
-// ATRACE()
+TRACE()
 //                 ui.draw();
-// ATRACE()
+TRACE()
         opaque_members->render.end_ui(); 
         opaque_members->render.end_2nd_spass();
-// ATRACE()
+TRACE()
     opaque_members->render.end_frame();
-// ATRACE()
+TRACE()
 }
 
 void Lum::Renderer::cleanup() noexcept {
     waitIdle();
-// ATRACE();
+TRACE();
     for(int i=1; i < opaque_members->render.static_block_palette_size; i++){
         // frees the mesh buffers and voxel images
         opaque_members->render.free_block(&opaque_members->block_palette[i]);
     }
     waitIdle();
-// ATRACE();
+TRACE();
     for(int i=0; i < opaque_members->mesh_models_storage.total_size(); i++){
         bool idx_is_free = opaque_members->mesh_models_storage.free_indices.contains(i);
         bool is_allocated = (not idx_is_free);
@@ -479,9 +487,9 @@ void Lum::Renderer::cleanup() noexcept {
         }
     }
     waitIdle();
-// ATRACE();
+TRACE();
     opaque_members->render.cleanup();
-// ATRACE();
+TRACE();
 }
 
 void Lum::Renderer::waitIdle() noexcept {

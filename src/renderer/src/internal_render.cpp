@@ -918,10 +918,14 @@ void LumInternal::LumInternalRenderer::start_frame() {
 
 void LumInternal::LumInternalRenderer::start_blockify() {
     VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
+    TRACE();
     blockCopyQueue.clear();
+    TRACE();
     paletteCounter = static_block_palette_size;
     size_t size_to_copy = world_size.x * world_size.y * world_size.z * sizeof (BlockID_t);
+    TRACE();
     memcpy (current_world.data(), origin_world.data(), size_to_copy);
+    TRACE();
 }
 
 struct AABB {
@@ -1040,52 +1044,39 @@ void push_radiance_updates(const ivec3& size, LumInternal::table3d<bool>& set, s
 // TODO: finish dynamic update system, integrate with RaVE
 void LumInternal::LumInternalRenderer::update_radiance() {
     VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    table3d<bool> set = {};
-    set.allocate(world_size);
-    set.set(false);
+    TRACE()
+    table3d<bool> 
+        set = {};
+        set.allocate(world_size);
+        set.set(false);
+    TRACE()
     radianceUpdates.clear();
     
-    ComputeDispatcher dispatcher;
-
-    // multithreaded
-    dispatcher.dispatch(world_size, [&](const ivec3& coord) {
-        set_blocks(coord, set, current_world);
-    });
-
-    // Now handle the second part in the main thread
-    push_radiance_updates(world_size, set, radianceUpdates);
-
-    // dispatcher.pool->enqueue(Function f, Args args...)
-    // update light near blocks
-
-    // for (int xx = 0; xx < world_size.x; xx++) {
-    //     for (int yy = 0; yy < world_size.y; yy++) {
-    //         for (int zz = 0; zz < world_size.z; zz++) {
-    //             // int block_id = currentcares on less then a million blocks?
-    //             // UPD: actually, smarter algorithms resulted in less perfomance
-    //             int sum_of_neighbours = 0;
-    //             for (int dx = -1; (dx <= +1); dx++) {
-    //             for (int dy = -1; (dy <= +1); dy++) {
-    //             for (int dz = -1; (dz <= +1); dz++) {
-    //                 ivec3 test_block = ivec3 (xx + dx, yy + dy, zz + dz);
-    //                 // test_block = clam_world(xx,yy,zz);
-    //             // kinda slow... but who p(test_block, ivec3(0), world_size-1);
-    //                 sum_of_neighbours += current_world (test_block);
-    //                 // if(sum_of_neighbours > 0) goto found_neighbour;
-    //             }}}
-    //             // goto not_found_neighbour;
-    //                 // found_neighbour:
-    //             if(sum_of_neighbours > 0){
-    //                 radianceUpdates.push_back (i8vec4 (xx, yy, zz, 0));
-    //                 // set.insert (i8vec3 (xx, yy, zz));
-    //                 set(ivec3(xx, yy, zz)) = true;
-    //             }
-    //             // not_found_neighbour:
-    //             ; // nothing
-    //         }
-    //     }
-    // }
+    TRACE()
+    for (int xx = 0; xx < world_size.x; xx++) {
+        for (int yy = 0; yy < world_size.y; yy++) {
+            for (int zz = 0; zz < world_size.z; zz++) {
+                // int block_id = currentcares on less then a million blocks?
+                // UPD: actually, smarter algorithms resulted in less perfomance
+                int sum_of_neighbours = 0;
+                for (int dx = -1; (dx <= +1); dx++) {
+                for (int dy = -1; (dy <= +1); dy++) {
+                for (int dz = -1; (dz <= +1); dz++) {
+                    ivec3 test_block = ivec3 (xx + dx, yy + dy, zz + dz);
+                    // kinda slow... but who cares on less then 1m blocks
+                    // safity
+                    test_block = glm::clamp(test_block, ivec3(0), ivec3(world_size));
+                    sum_of_neighbours += current_world (test_block);
+                }}}
+                if(sum_of_neighbours > 0){
+                    radianceUpdates.push_back (i8vec4 (xx, yy, zz, 0));
+                    set(ivec3(xx, yy, zz)) = true;
+                }
+            }
+        }
+    }
     // special updates are ones requested via API
+    TRACE()
     for (auto u : specialRadianceUpdates) {
         if (!set(ivec3(u.x, u.y, u.z))) {
             radianceUpdates.push_back (u);

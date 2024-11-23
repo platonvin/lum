@@ -1,4 +1,6 @@
 #include <cstring>
+#include <cstdint>
+
 #define _MY_VERTEX_STRUCT_
 /*
     opengametools voxel meshifier - v0.9 - MIT license - Justin Paver, April 2020

@@ -220,7 +220,9 @@
     #include <stdlib.h> // for size_t
 #else
     #error some fixup needed for this platform?
+    // #include <cstdint>
 #endif
+#include <stdint.h>
 
 #ifdef VOX_BIGENDIAN_SWAP32
     // host is big-endian, so we byte-swap

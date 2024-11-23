@@ -1,133 +1,225 @@
 cmake_minimum_required(VERSION 3.21)
-project(lum LANGUAGES CXX C)
+project(lum VERSION "0.1.4" LANGUAGES CXX C)
 
-# Some settings
-set(CMAKE_CXX_STANDARD 20)
+# ---- Notes for Users ----
+# - This CMake configuration applies SIMD optimizations in Release builds by default.
+# - `LUM_CUSTOM_FLAGS` is ON by default. If you include lum as a subproject in a larger project and want to control flags yourself, set `LUM_CUSTOM_FLAGS` to OFF.
+# - Interprocedural optimization (LTO) is enabled only in Release builds for performance reasons.
+# - Stripping symbols for smaller binaries is implemented for GNU, Clang (via `--gc-sections`), and MSVC (`/Qstrip_debug`).
+
+# ---- CMake Settings ----
+set(CMAKE_CXX_STANDARD 23) # Require C++23
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_COLOR_DIAGNOSTICS ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-# Export compile commands for IDEs or language servers (e.g. Clangd)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_COLOR_DIAGNOSTICS ON) # Enable colored diagnostics if supported
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Export compile_commands.json for tools
 
-# Download git submodules
-execute_process(
-    COMMAND git submodule update --init --recursive --depth 1
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    RESULT_VARIABLE GIT_SUBMODULE_RESULT
-)
-if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to initialize or update git submodules")
+set(BUILD_SHARED_LIBS OFF) # Build static libraries by default
+
+# ---- Options ----
+option(BUILD_EXAMPLES "Build example programs (also test validness of linking to libs)" ON)
+option(CREATE_DEMO_PACKAGE "Create an archive of binaries, libraries, and shaders" OFF)
+option(ENABLE_UNITY_BUILD "Enable Unity (Jumbo) Build" OFF) # Currently experimental
+option(ENABLE_EXTRA_WARNINGS "Enable extra compiler warnings (e.g., -Wall, -Wextra)" OFF)
+option(LUM_CUSTOM_FLAGS "Apply custom flags when building lum as standalone" OFF)
+if(PROJECT_IS_TOP_LEVEL)
+    set(LUM_CUSTOM_FLAGS ON)
 endif()
 
-# Set default build type if none is specified
+# ---- Default Build Type ----
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build: Debug or Release" FORCE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Develop, or Release" FORCE)
 endif()
 
-# Compiler flags
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -Wl,--gc-sections -s")
-    # no -DNDEBUG because asserts are cheap and helpful
+# ---- Default Build Type ----
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Develop, or Release" FORCE)
 endif()
 
-# Set output directories for binaries and libraries
-# So lum/bin | lum/lib
+# ---- Interprocedural Optimization (LTO) ----
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+else()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+endif()
+
+# ---- Compiler-Specific Flags ----
+if(LUM_CUSTOM_FLAGS AND PROJECT_IS_TOP_LEVEL)
+    # Common SIMD/Processor Optimization Flags
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(SIMD_FLAGS "-mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul")
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        # I do not understand how arch flags work in msvc
+        set(SIMD_FLAGS "/arch:AVX")
+    endif()
+    
+    # Extra warnings based on setting
+    if(ENABLE_EXTRA_WARNINGS)
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            set(COMMON_FLAGS "-Wall -Wextra -Wpedantic -Wno-unused-variable")
+        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+            set(COMMON_FLAGS "/W4 /permissive-")
+        endif()
+    else()
+        set(COMMON_FLAGS "")
+    endif()
+
+    # Compiler-specific build type flags
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math ${COMMON_FLAGS} ${SIMD_FLAGS} -static -Wl,--gc-sections -s") # Include stripping with `-s`
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math ${COMMON_FLAGS} ${SIMD_FLAGS} -static -Wl,--gc-sections") # Clang lacks `-s`; use `--gc-sections` for minimal binary size
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od ${COMMON_FLAGS}")
+        set(CMAKE_CXX_FLAGS_DEVELOP "/O2 ${COMMON_FLAGS} ${SIMD_FLAGS}")
+        set(CMAKE_CXX_FLAGS_RELEASE "/GL /O2 /Oi /Gy ${COMMON_FLAGS} ${SIMD_FLAGS} /Qstrip_debug") # `/Qstrip_debug` strips symbols
+    endif()
+endif()
+
+# ---- Apply the Flags ----
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}")
+
+# ---- Output directories ----
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 
-# FreeType
+# Submodules. Basically downloads subprojects from github
+# execute_process(
+#     COMMAND git submodule update --init --recursive --depth 1
+#     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+#     RESULT_VARIABLE GIT_SUBMODULE_RESULT
+# )
+# if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
+#     message(FATAL_ERROR "Failed to initialize or update git submodules")
+# endif()
+
+# freetype - font lib for rmlui
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/freetype)
+    set(FT_DISABLE_ZLIB TRUE)
+    set(FT_DISABLE_BZIP2 TRUE)
+    set(FT_DISABLE_PNG TRUE)
+    set(FT_DISABLE_HARFBUZZ TRUE)
     add_subdirectory(external/freetype)
 else()
-    message(WARNING "FreeType directory not found. Cannot proceed.")
+    message(FATAL_ERROR "FreeType directory not found.")
 endif()
 
-# RmlUi
+# rmlui - library for perfomant ui rendering
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/RmlUi)
-    set(RMLUI_FONT_ENGINE none)  # Specify the font engine
+    set(RMLUI_FONT_ENGINE none)
+    set(RMLUI_STATIC_LIBRARIES ON)
+    set(RMLUI_BUILD_SHARED_LIBRARIES OFF)
+    set(RMLUI_CUSTOM_RTTI ON)
     add_subdirectory(external/RmlUi)
-    add_dependencies(rmlui FreeType)  # Ensure FreeType is built first
 else()
-    message(WARNING "RmlUi directory not found. Cannot proceed.")
+    message(FATAL_ERROR "RmlUi directory not found.")
 endif()
 
-# Add lumal
+# lumal - lum's abstraction layer for vulkan
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/lum-al)
     add_subdirectory(external/lum-al)
-    target_compile_definitions(lumal PUBLIC)
 else()
-    message(FATAL_ERROR "Lum-al directory not found. Cannot proceed.")
+    message(FATAL_ERROR "lum-al directory not found.")
 endif()
 
-# main project files (implementations)
+# Project sources
 file(GLOB_RECURSE PROJECT_SOURCES
     src/renderer/*.cpp
     common/*.cpp
     common/*.c
 )
-
-# Temporary exclusion of certain files
-# rmlui changed api and this doesn't work atm
+# Exclude problematic files temporarily
 list(REMOVE_ITEM PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/src/ui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/src/render_ui_interface.cpp
 )
 
-# Create lum as a static library
-add_library(lum STATIC ${PROJECT_SOURCES})
+# unity build in unnecessary when lto is used. But might be useful
+if(ENABLE_UNITY_BUILD)
+    message(STATUS "Unity build enabled. Combining source files into a single translation unit.")
+        # Unity build source
+    set(UNITY_SOURCE ${CMAKE_BINARY_DIR}/unity_build.cpp)
+        # Generate the unity build file
+    file(WRITE ${UNITY_SOURCE} "// Unity Build Source File. Generated with CMake\n")
+        # Add lumal sources (defined in lumal's CMakeLists)
+    message(STATUS "Adding Lum-al sources to unity build: ${LUMAL_SOURCES}")
+    foreach(SRC ${LUMAL_SOURCES})
+        file(APPEND ${UNITY_SOURCE} "#include \"${SRC}\"\n")
+    endforeach()
+        # Add Lum sources
+    message(STATUS "Adding Lum sources to unity build: ${LUMAL_SOURCES}")
+    foreach(SRC ${PROJECT_SOURCES})
+        file(APPEND ${UNITY_SOURCE} "#include \"${SRC}\"\n")
+    endforeach()
+        # Override sources with unity build file. Otherwise there is duplication
+    set(PROJECT_SOURCES ${UNITY_SOURCE})
+endif()
 
-# Add include directories for lum
-target_include_directories(lum PUBLIC
+
+add_library(lum_shared SHARED ${PROJECT_SOURCES})
+add_library(lum_static STATIC ${PROJECT_SOURCES})
+
+set_target_properties(lum_static lum_shared PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+)
+
+target_include_directories(lum_static PUBLIC # public to propagate to downstream
+    src/
+    src/renderer/api
+    common
+    # external/lum-al/... not needed cause propagated
+    external/RmlUi/Include
+    external
+)
+target_include_directories(lum_shared PUBLIC
     src/
     src/renderer/api
     common
     external/lum-al/external
+    external/lum-al/src # i use some macros from dependencies, yeah
     external/RmlUi/Include
     external
 )
 
-# Link external libraries statically
-target_link_libraries(lum 
-    lumal
-    glfw
-    freetype
-)
-
-# Examples to build
-set(EXAMPLES
-    src/engine/examples/ecs_example.cpp
-    src/examples/demo.cpp
-)
-
-# Loop through each example and create an executable for it
-foreach(EXAMPLE ${EXAMPLES})
-    # Get the filename without extension to name the executable
-    get_filename_component(EXAMPLE_NAME ${EXAMPLE} NAME_WE)
-
-    # Create an executable for this example
-    add_executable(${EXAMPLE_NAME} ${EXAMPLE})
-
-    # Include directories for the example
-    target_include_directories(${EXAMPLE_NAME} PRIVATE
-        src/
-        src/renderer/api
-        common
-        external/lum-al/external
-        external/RmlUi/Include
-        external
+# Static linking for dependencies
+if(ENABLE_UNITY_BUILD)
+    # public to auto link with downstream
+    target_link_libraries(lum_shared PUBLIC glfw freetype)
+    target_link_libraries(lum_static PUBLIC glfw freetype)
+else()
+    # public to auto link with downstream
+    target_link_libraries(lum_static PUBLIC glfw freetype lumal_static)
+    target_link_libraries(lum_shared PUBLIC glfw freetype lumal_static)
+endif()
+# Examples
+if(BUILD_EXAMPLES)
+    set(EXAMPLES
+        src/engine/examples/ecs_example.cpp
+        src/examples/demo.cpp
     )
 
-    # Link the example to the static lum library
-    target_link_libraries(${EXAMPLE_NAME} PRIVATE lum)
+    foreach(EXAMPLE ${EXAMPLES})
+        get_filename_component(EXAMPLE_NAME ${EXAMPLE} NAME_WE)
+        add_executable(${EXAMPLE_NAME} ${EXAMPLE})
+        target_include_directories(${EXAMPLE_NAME} PUBLIC
+            src/
+            common
+            external/lum-al/external
+            external/RmlUi/Include
+            external
+        )
+        target_link_libraries(${EXAMPLE_NAME} PUBLIC lum_static)
+    endforeach()
+endif()
 
-    # Set output directory for the example
-    set_target_properties(${EXAMPLE_NAME} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples
-        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/examples
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/examples
+# Archive creation. Basically for github release
+if(CREATE_DEMO_PACKAGE)
+    add_custom_target(create_DEMO_PACKAGE ALL
+        COMMAND ${CMAKE_COMMAND} -E tar "cf" "lum_release.tar.gz"
+        --format=gnutar
+        -- ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} ${CMAKE_SOURCE_DIR}/shaders
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
-endforeach()
+endif()

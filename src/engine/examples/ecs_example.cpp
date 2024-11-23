@@ -1,4 +1,4 @@
-#define ENABLE_THROW
+// #define ENABLE_THROW
 #include "../ecs.hpp"
 #include <iostream>
 

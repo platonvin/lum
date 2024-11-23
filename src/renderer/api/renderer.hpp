@@ -10,13 +10,12 @@ C++ API for Lum
 #include "../src/internal_types.hpp"
 // #include <glm/ext/vector_int3.hpp>
 // #include <glm/ext/vector_float4.hpp>
-#include "../../containers/promised_storage.hpp"
-#include "../../containers/size_predictor.hpp"
+// #include "../../containers/promised_storage.hpp"
+// #include "../../containers/size_predictor.hpp"
 // #include "../../containers/arena.hpp"
 #include <chrono>
 #include <string>
-
-// #include "renderer/src/internal_render.hpp"
+#include <vector>
 
 namespace Lum {
 
