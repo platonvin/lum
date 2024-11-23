@@ -7,3 +7,6 @@
 [submodule "external/RmlUi"]
 	path = external/RmlUi
 	url = https://github.com/mikke89/RmlUi
+[submodule "external/glslang"]
+	path = external/lum-al/external/glslang
+	url = https://github.com/KhronosGroup/glslang.git
