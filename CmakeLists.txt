@@ -2,27 +2,29 @@ cmake_minimum_required(VERSION 3.21)
 project(lum VERSION "0.1.4" LANGUAGES CXX C)
 
 # ---- Notes for Users ----
-# - This CMake configuration applies SIMD optimizations in Release builds by default.
-# - `LUM_CUSTOM_FLAGS` is ON by default. If you include lum as a subproject in a larger project and want to control flags yourself, set `LUM_CUSTOM_FLAGS` to OFF.
-# - Interprocedural optimization (LTO) is enabled only in Release builds for performance reasons.
-# - Stripping symbols for smaller binaries is implemented for GNU, Clang (via `--gc-sections`), and MSVC (`/Qstrip_debug`).
+# - Custom flags for Release and Develop modes ensure optimal builds for Lum and its dependencies.
+# - Interprocedural optimization (LTO) is enabled in Release mode for performance.
+# - Develop mode uses lighter optimization for Lum itself while applying stronger optimization to dependencies.
+
+# ATTENTION:
+# I am bad in CMake. If you have better ideas on how to do all these - please help
 
 # ---- CMake Settings ----
-set(CMAKE_CXX_STANDARD 23) # Require C++23
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_COLOR_DIAGNOSTICS ON) # Enable colored diagnostics if supported
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Export compile_commands.json for tools
-
-set(BUILD_SHARED_LIBS OFF) # Build static libraries by default
+set(CMAKE_COLOR_DIAGNOSTICS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# set(BUILD_SHARED_LIBS OFF)
 
 # ---- Options ----
 option(BUILD_EXAMPLES "Build example programs (also test validness of linking to libs)" ON)
-option(CREATE_DEMO_PACKAGE "Create an archive of binaries, libraries, and shaders" OFF)
-option(ENABLE_UNITY_BUILD "Enable Unity (Jumbo) Build" OFF) # Currently experimental
+option(CREATE_DEMO_PACKAGE "Create an archive of binaries, libraries, and shaders" OFF) # not fully implemented
+option(ENABLE_UNITY_BUILD "Enable Unity (Jumbo) Build" OFF) # not fully implemented
 option(ENABLE_EXTRA_WARNINGS "Enable extra compiler warnings (e.g., -Wall, -Wextra)" OFF)
-option(LUM_CUSTOM_FLAGS "Apply custom flags when building lum as standalone" OFF)
-if(PROJECT_IS_TOP_LEVEL)
+option(LUM_CUSTOM_FLAGS "Apply custom flags when building Lum as standalone" OFF)
+# Set LUM_CUSTOM_FLAGS to ON only if the project is top-level and the user has not explicitly set it.
+if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED LUM_CUSTOM_FLAGS)
     set(LUM_CUSTOM_FLAGS ON)
 endif()
 
@@ -31,68 +33,61 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Develop, or Release" FORCE)
 endif()
 
-# ---- Default Build Type ----
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Develop, or Release" FORCE)
-endif()
-
 # ---- Interprocedural Optimization (LTO) ----
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-else()
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 endif()
 
 # ---- Compiler-Specific Flags ----
-if(LUM_CUSTOM_FLAGS AND PROJECT_IS_TOP_LEVEL)
-    # Common SIMD/Processor Optimization Flags
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(SIMD_FLAGS "-mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul")
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        # I do not understand how arch flags work in msvc
-        set(SIMD_FLAGS "/arch:AVX")
-    endif()
-    
-    # Extra warnings based on setting
-    if(ENABLE_EXTRA_WARNINGS)
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            set(COMMON_FLAGS "-Wall -Wextra -Wpedantic -Wno-unused-variable")
-        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-            set(COMMON_FLAGS "/W4 /permissive-")
-        endif()
+if(LUM_CUSTOM_FLAGS)
+    # Define SIMD and common flags
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        set(SIMD_FLAGS "/arch:AVX") # Adjust?
     else()
-        set(COMMON_FLAGS "")
+        set(SIMD_FLAGS "-mmmx -msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mcx16 -mavx -mpclmul")
     endif()
 
-    # Compiler-specific build type flags
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math ${COMMON_FLAGS} ${SIMD_FLAGS} -static -Wl,--gc-sections -s") # Include stripping with `-s`
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math ${COMMON_FLAGS} ${SIMD_FLAGS} -static -Wl,--gc-sections") # Clang lacks `-s`; use `--gc-sections` for minimal binary size
+    set(COMMON_FLAGS "")
+    if(ENABLE_EXTRA_WARNINGS)
+        set(COMMON_FLAGS "-Wall -Wextra -Wpedantic -Wno-unused-variable")
+    endif()
+
+    # Set build type specific flags
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(RELEASE_FLAGS "-O3 -ffast-math ${SIMD_FLAGS} ${COMMON_FLAGS} -Wl,--gc-sections -s")
+        # set(DEVELOP_FLAGS "-O2 ${SIMD_FLAGS} ${COMMON_FLAGS}")
+        set(LUM_DEVELOP_FLAGS "-O1 ${COMMON_FLAGS}") # Apply lighter optimization for Lum in Develop mode
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od ${COMMON_FLAGS}")
-        set(CMAKE_CXX_FLAGS_DEVELOP "/O2 ${COMMON_FLAGS} ${SIMD_FLAGS}")
-        set(CMAKE_CXX_FLAGS_RELEASE "/GL /O2 /Oi /Gy ${COMMON_FLAGS} ${SIMD_FLAGS} /Qstrip_debug") # `/Qstrip_debug` strips symbols
+        set(RELEASE_FLAGS "/X /FS /GL /O2 /Oi /Gy ${SIMD_FLAGS} ${COMMON_FLAGS} /Qstrip_debug")
+        # set(DEVELOP_FLAGS "/O2 ${SIMD_FLAGS} ${COMMON_FLAGS}")
+        set(LUM_DEVELOP_FLAGS "/X /FS /Od ${COMMON_FLAGS}") # Equivalent to -O1
+    endif()
+
+    # Apply flags globally
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RELEASE_FLAGS}")
+    if(CMAKE_BUILD_TYPE STREQUAL "Develop")
+        # For Lum, lighter optimization; dependencies use normal develop flags
+        set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_FLAGS "${LUM_DEVELOP_FLAGS}")
+        # set(CMAKE_CXX_FLAGS "${DEVELOP_FLAGS}")
     endif()
 endif()
 
-# ---- Apply the Flags ----
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}")
-
-# ---- Output directories ----
+# ---- Output Directories ----
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 
+# ---- Dependencies ----
 # Submodules. Basically downloads subprojects from github
-# execute_process(
-#     COMMAND git submodule update --init --recursive --depth 1
-#     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-#     RESULT_VARIABLE GIT_SUBMODULE_RESULT
-# )
-# if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
-#     message(FATAL_ERROR "Failed to initialize or update git submodules")
-# endif()
+execute_process(
+    COMMAND git submodule update --init --recursive --depth 1 --no-single-branch
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE GIT_SUBMODULE_RESULT
+)
+if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to initialize or update git submodules")
+endif()
 
 # freetype - font lib for rmlui
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/freetype)
@@ -156,44 +151,19 @@ if(ENABLE_UNITY_BUILD)
     set(PROJECT_SOURCES ${UNITY_SOURCE})
 endif()
 
-
-add_library(lum_shared SHARED ${PROJECT_SOURCES})
-add_library(lum_static STATIC ${PROJECT_SOURCES})
-
-set_target_properties(lum_static lum_shared PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+add_library(lum ${PROJECT_SOURCES})
+# Set include directories
+target_include_directories(lum PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/api
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/RmlUi/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external
 )
+# ---- Link lum with lumal ----
+target_link_libraries(lum PUBLIC lumal glfw freetype)
 
-target_include_directories(lum_static PUBLIC # public to propagate to downstream
-    src/
-    src/renderer/api
-    common
-    # external/lum-al/... not needed cause propagated
-    external/RmlUi/Include
-    external
-)
-target_include_directories(lum_shared PUBLIC
-    src/
-    src/renderer/api
-    common
-    external/lum-al/external
-    external/lum-al/src # i use some macros from dependencies, yeah
-    external/RmlUi/Include
-    external
-)
-
-# Static linking for dependencies
-if(ENABLE_UNITY_BUILD)
-    # public to auto link with downstream
-    target_link_libraries(lum_shared PUBLIC glfw freetype)
-    target_link_libraries(lum_static PUBLIC glfw freetype)
-else()
-    # public to auto link with downstream
-    target_link_libraries(lum_static PUBLIC glfw freetype lumal_static)
-    target_link_libraries(lum_shared PUBLIC glfw freetype lumal_static)
-endif()
-# Examples
+# ---- Compile examples ----
 if(BUILD_EXAMPLES)
     set(EXAMPLES
         src/engine/examples/ecs_example.cpp
@@ -203,18 +173,12 @@ if(BUILD_EXAMPLES)
     foreach(EXAMPLE ${EXAMPLES})
         get_filename_component(EXAMPLE_NAME ${EXAMPLE} NAME_WE)
         add_executable(${EXAMPLE_NAME} ${EXAMPLE})
-        target_include_directories(${EXAMPLE_NAME} PUBLIC
-            src/
-            common
-            external/lum-al/external
-            external/RmlUi/Include
-            external
-        )
-        target_link_libraries(${EXAMPLE_NAME} PUBLIC lum_static)
+        target_link_libraries(${EXAMPLE_NAME} PUBLIC lum)
     endforeach()
 endif()
-
-# Archive creation. Basically for github release
+    
+# ---- Archive creation ----
+# basically for github release
 if(CREATE_DEMO_PACKAGE)
     add_custom_target(create_DEMO_PACKAGE ALL
         COMMAND ${CMAKE_COMMAND} -E tar "cf" "lum_release.tar.gz"

@@ -23,11 +23,14 @@ r.cpp
 assets/*.zip
 #memory dump from VMA
 dump.json
+# nvidia nsight imgui file
 imgui.ini
+# directories with trace data
 nv_traces
 amd_traces
 intel_traces
 temp.*
+#github release thing
 package
 package.zip
 diag.mmd
@@ -36,12 +39,15 @@ diag.mmd
 build_wrapper_output_directory
 vcpkg_installed
 *.tar
-/bin
-#pocket vcpkg installation
+#pocket vcpkg installation. Not needed anymore, but still gitignored
 /lum_vcpkg
 
+/bin
 /lib
 /build
+/build_gcc
+/build_msvc
+/build_clang
 /src/external/lum-al/build
 /src/external/lum-al/compile_commands.json
 /.cache/
@@ -49,3 +55,5 @@ vcpkg_installed
 /tests/lib
 /tests/bin
 /tests/CMakeFiles
+/.vs
+/out/build/x64-Debug

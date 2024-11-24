@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(BUILD_SHARED_LIBS ON)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ")
 # Explicitly set the source and binary directories for lum
@@ -19,8 +20,7 @@ add_executable(test_main main.cpp)
 # Link the test executable with lum_static (or lum_shared)
 # target_link_libraries(test_main PUBLIC lum_static) # recommended
 
-# not recommended for mingw environment (Mingw-w64 runtime failure: 32 bit pseudo relocation. You can track issue on mingw github)
-# target_link_libraries(test_main PUBLIC lum_shared) 
+target_link_libraries(test_main PUBLIC lum) 
 
 # Tell cmake to but test_main.exe into test/bin 
 set_target_properties(test_main PROPERTIES

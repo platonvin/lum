@@ -1,7 +1,7 @@
-#include "renderer.hpp"
-#include "../input/input.hpp"
-#include "../engine/engine.hpp"
-#include "renderer/api/opaque_renderer_members.hpp"
+#include <renderer.hpp>
+#include <input/input.hpp>
+#include <engine/engine.hpp>
+#include <opaque_renderer_members.hpp>
 #include <random>
 // #include "defines/macros.hpp"
 
