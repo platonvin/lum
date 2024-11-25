@@ -48,12 +48,11 @@ vcpkg_installed
 /build_gcc
 /build_msvc
 /build_clang
-/src/external/lum-al/build
-/src/external/lum-al/compile_commands.json
+compile_commands.json
 /.cache/
-/tests/build
-/tests/lib
-/tests/bin
-/tests/CMakeFiles
+/examples/build
+/examples/lib
+/examples/bin
+/examples/CMakeFiles
 /.vs
 /out/build/x64-Debug

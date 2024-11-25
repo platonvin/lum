@@ -114,7 +114,7 @@ int main(){
         settings.world_size = ivec3(48, 48, 16);
         settings.static_block_palette_size = 15;
         settings.maxParticleCount = 8128;
-    Lum::Renderer lum(15, 4096, 64, 64, 64);
+    Lum::Renderer lum = Lum::Renderer(15, 4096, 64, 64, 64);
     lum_ptr = &lum;
 
     // ATTENTION: all foliage has to be declared BEFORE init()

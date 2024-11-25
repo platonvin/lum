@@ -18,11 +18,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # set(BUILD_SHARED_LIBS OFF)
 
 # ---- Options ----
-option(BUILD_EXAMPLES "Build example programs (also test validness of linking to libs)" ON)
-option(CREATE_DEMO_PACKAGE "Create an archive of binaries, libraries, and shaders" OFF) # not fully implemented
-option(ENABLE_UNITY_BUILD "Enable Unity (Jumbo) Build" OFF) # not fully implemented
-option(ENABLE_EXTRA_WARNINGS "Enable extra compiler warnings (e.g., -Wall, -Wextra)" OFF)
-option(LUM_CUSTOM_FLAGS "Apply custom flags when building Lum as standalone" OFF)
+# option(BUILD_EXAMPLES "Build example programs (also test validness of linking to libs)" ON)
+# option(LUM_CREATE_DEMO_PACKAGE "Create an archive of binaries, libraries, and shaders" OFF) # not fully implemented
+option(LUM_ENABLE_UNITY_BUILD "Enable Unity (Jumbo) Build" OFF) # not fully implemented
+option(LUM_ENABLE_EXTRA_WARNINGS "Enable extra compiler warnings (e.g., -Wall, -Wextra)" OFF)
+option(LUM_CUSTOM_FLAGS "Apply custom flags (non-default in Release) when building Lum" OFF)
 # Set LUM_CUSTOM_FLAGS to ON only if the project is top-level and the user has not explicitly set it.
 if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED LUM_CUSTOM_FLAGS)
     set(LUM_CUSTOM_FLAGS ON)
@@ -34,10 +34,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # ---- Interprocedural Optimization (LTO) ----
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-endif()
+# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
 # ---- Compiler-Specific Flags ----
 if(LUM_CUSTOM_FLAGS)
@@ -49,7 +46,7 @@ if(LUM_CUSTOM_FLAGS)
     endif()
 
     set(COMMON_FLAGS "")
-    if(ENABLE_EXTRA_WARNINGS)
+    if(LUM_ENABLE_EXTRA_WARNINGS)
         set(COMMON_FLAGS "-Wall -Wextra -Wpedantic -Wno-unused-variable")
     endif()
 
@@ -131,7 +128,7 @@ list(REMOVE_ITEM PROJECT_SOURCES
 )
 
 # unity build in unnecessary when lto is used. But might be useful
-if(ENABLE_UNITY_BUILD)
+if(LUM_ENABLE_UNITY_BUILD)
     message(STATUS "Unity build enabled. Combining source files into a single translation unit.")
         # Unity build source
     set(UNITY_SOURCE ${CMAKE_BINARY_DIR}/unity_build.cpp)
@@ -152,6 +149,12 @@ if(ENABLE_UNITY_BUILD)
 endif()
 
 add_library(lum ${PROJECT_SOURCES})
+
+# set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    # set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
+
 # Set include directories
 target_include_directories(lum PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -162,28 +165,3 @@ target_include_directories(lum PUBLIC
 )
 # ---- Link lum with lumal ----
 target_link_libraries(lum PUBLIC lumal glfw freetype)
-
-# ---- Compile examples ----
-if(BUILD_EXAMPLES)
-    set(EXAMPLES
-        src/engine/examples/ecs_example.cpp
-        src/examples/demo.cpp
-    )
-
-    foreach(EXAMPLE ${EXAMPLES})
-        get_filename_component(EXAMPLE_NAME ${EXAMPLE} NAME_WE)
-        add_executable(${EXAMPLE_NAME} ${EXAMPLE})
-        target_link_libraries(${EXAMPLE_NAME} PUBLIC lum)
-    endforeach()
-endif()
-    
-# ---- Archive creation ----
-# basically for github release
-if(CREATE_DEMO_PACKAGE)
-    add_custom_target(create_DEMO_PACKAGE ALL
-        COMMAND ${CMAKE_COMMAND} -E tar "cf" "lum_release.tar.gz"
-        --format=gnutar
-        -- ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} ${CMAKE_SOURCE_DIR}/shaders
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-endif()
