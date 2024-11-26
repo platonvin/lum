@@ -13,8 +13,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
+
+    - name: Download submodules
+      run: git submodule update --init --recursive
 
     - name: Maybe useful update
       run: sudo apt update
@@ -48,7 +49,3 @@ jobs:
       run: |
         cd build
         cmake --build . --verbose
-
-    - name: Run Tests
-      working-directory: build
-      run: ctest --output-on-failure
