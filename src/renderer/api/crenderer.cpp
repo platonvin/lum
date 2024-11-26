@@ -1,8 +1,8 @@
 #include "crenderer.h"
 #include "renderer.hpp"
-#include "defines/macros.hpp"
+#include "opaque_renderer_members.hpp"
+#include <defines/macros.hpp>
 #include <cstring>
-
 // this file has to be compiled by C++ compiler
 
 #ifdef __cplusplus
@@ -21,7 +21,7 @@ void lum_destroy_instance(LumRenderer instance) {
 }
 
 void lum_demo_load_scene(LumRenderer instance, const char* path){
-    ((Lum::Renderer*)instance)->render.load_scene(path);
+    ((Lum::Renderer*)instance)->opaque_members->render.load_scene(path);
 }
 
 // Initialization and world management
@@ -60,7 +60,7 @@ LumMeshBlock lum_get_world_block(const LumRenderer instance, int x, int y, int z
 
 // Block loading and palette management
 void lum_load_block(LumRenderer instance, LumMeshBlock block, void* block_data) {
-    ((Lum::Renderer*)instance)->loadBlock(block, reinterpret_cast<LumInternal::BlockWithMesh*>(block_data));
+    ((Lum::Renderer*)instance)->loadBlock(block, reinterpret_cast<LumInternal::BlockVoxels*>(block_data));
 }
 
 void lum_load_block_file(LumRenderer instance, LumMeshBlock block, const char* file) {
@@ -186,25 +186,25 @@ void lum_wait_idle(LumRenderer instance) {
 }
 
 bool lum_is_profiling_enabled(const LumRenderer instance) {
-    return ((Lum::Renderer*)instance)->render.render.settings.profile;
+    return ((Lum::Renderer*)instance)->opaque_members->render.lumal.settings.profile;
 }
 
 int lum_get_current_timestamp_count(const LumRenderer instance) {
-    return ((Lum::Renderer*)instance)->render.render.currentTimestamp;
+    return ((Lum::Renderer*)instance)->opaque_members->render.lumal.currentTimestamp;
 }
 
 void lum_get_timestamp_name(const LumRenderer instance, int index, char* out_name, size_t name_length) {
-    const char* name = ((Lum::Renderer*)instance)->render.render.timestampNames[index];
+    const char* name = ((Lum::Renderer*)instance)->opaque_members->render.lumal.timestampNames[index];
     strncpy(out_name, name, name_length - 1); // Ensure null termination
     out_name[name_length - 1] = '\0';         // Null-terminate in case of overflow
 }
 
 double lum_get_timestamp(const LumRenderer instance, int index) {
-    return static_cast<double>(((Lum::Renderer*)instance)->render.render.average_ftimestamps[index]);
+    return static_cast<double>(((Lum::Renderer*)instance)->opaque_members->render.lumal.average_ftimestamps[index]);
 }
 
 double lum_get_timestamp_difference(const LumRenderer instance, int index_start, int index_end) {
-    const auto& timestamps = ((Lum::Renderer*)instance)->render.render.average_ftimestamps;
+    const auto& timestamps = ((Lum::Renderer*)instance)->opaque_members->render.lumal.average_ftimestamps;
     return static_cast<double>(timestamps[index_end] - timestamps[index_start]);
 }
 

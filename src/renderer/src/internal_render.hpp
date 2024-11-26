@@ -5,8 +5,10 @@
 #define RMLUI_STATIC_LIB
 #include <RmlUi/Core.h>
 
-#include "../../../lum-al/src/al.hpp"
+#include <lum-al/src/al.hpp>
 #include <glm/gtx/quaternion.hpp>
+
+#include "internal_types.hpp"
 
 namespace LumInternal {
 // there are some conflicts in namespaces so have to do it like this
@@ -31,27 +33,6 @@ using glm::dvec2,glm::dvec3,glm::dvec4;
 using glm::mat, glm::mat2, glm::mat3, glm::mat4;
 using glm::dmat2, glm::dmat3, glm::dmat4;
 
-//Everything is X -> Y -> Z order in arrays (vectors)
-const int BLOCK_SIZE = 16; // each block in common world is BLOCK_SIZE x BLOCK_SIZE x BLOCK_SIZE
-const int MATERIAL_PALETTE_SIZE = 256; //0 always empty
-const int RCACHE_RAYS_PER_PROBE = 32;
-const int BLOCK_PALETTE_SIZE_X = 64;
-const int BLOCK_PALETTE_SIZE_Y = 64;
-const int BLOCK_PALETTE_SIZE = (BLOCK_PALETTE_SIZE_X* BLOCK_PALETTE_SIZE_Y);
-
-const int MAX_FRAMES_IN_FLIGHT = 2;
-
-typedef u8 MatID_t;
-typedef i16 BlockID_t;
-const BlockID_t SPECIAL_BLOCK = 32767;
-typedef struct Material {
-    vec4 color; //color AND transparancy
-    f32 emmit; //emmits same color as reflect
-    f32 rough;
-} Material;
-
-typedef u8 Voxel;
-
 #define POS_NORM_BIT_MASK 0b10000000
 typedef struct VoxelVertex {
     vec<3, unsigned char, defaultp> pos;
@@ -74,13 +55,6 @@ typedef struct PackedVoxelCircuit {
     vec<3, unsigned char, defaultp> pos;
 } PackedVoxelCircuit;
 
-typedef struct Particle {
-    vec3 pos;
-    vec3 vel;
-    float lifeTime;
-    MatID_t matID;
-} Particle;
-
 typedef struct IndexedVertices {
     u32 offset, icount;
 } IndexedVertices;
@@ -95,12 +69,6 @@ typedef struct FaceBuffers {
     Lumal::Buffer vertexes;
     Lumal::Buffer indices;
 } FaceBuffers;
-
-// separate from Mesh so you can "instance" mesh
-typedef struct MeshTransform {
-    quat rot = glm::quat_identity<float, defaultp>();   // rotation quaternion
-    vec3 shift = vec3(0); // float because not necessarily snapped to grid
-} MeshTransform;
 
 typedef struct InternalMeshModel {
     FaceBuffers triangles;
@@ -141,12 +109,8 @@ typedef struct InternalUiMesh {
     Lumal::Image* image;
 } InternalUiMesh;
 
-typedef struct BlockVoxels {
-    Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
-} BlockVoxels;
-
 typedef struct Block {
-    Voxel voxels[BLOCK_SIZE][BLOCK_SIZE][BLOCK_SIZE];
+    BlockVoxels voxels;
     InternalMeshModel mesh;
 } BlockWithMesh; //in palette
 
@@ -189,28 +153,10 @@ template <typename Type> class table3d {
 
 };
 
-typedef struct Camera {
-    dvec3 cameraPos = vec3(60, 0, 194);
-    dvec3 cameraDir = normalize(vec3(0.61, 1.0, -0.8));
-    dmat4 cameraTransform = glm::identity<dmat4>();
-    double pixelsInVoxel = 5.0;
-    dvec2 originViewSize = dvec2(1920, 1080);
-    dvec2 viewSize = originViewSize / pixelsInVoxel;
-    dvec3 cameraRayDirPlane = normalize (dvec3 (cameraDir.x, cameraDir.y, 0));
-    dvec3 horizline = normalize (cross (cameraRayDirPlane, dvec3 (0, 0, 1)));
-    dvec3 vertiline = normalize (cross (cameraDir, horizline));
-
-    void updateCamera();
-} Camera;
-
 //forward declaration for pointer
 class MyRenderInterface;
 
-typedef struct LumSpecificSettings {
-    ivec3 world_size = ivec3(48, 48, 16);
-    int static_block_palette_size = 15;
-    int maxParticleCount = 8128;
-} LumSpecificSettings;
+// typedef struct LumSpecificSettings
 typedef struct LumSettings : Lumal::Settings, LumSpecificSettings {
     // wait for it
     // LumSettings(LumSpecificSettings s) : LumSpecificSettings(s) {};
@@ -218,7 +164,7 @@ typedef struct LumSettings : Lumal::Settings, LumSpecificSettings {
 } LumSettings;
 
 struct LumInternalRenderer {
-    Lumal::Renderer render;
+    Lumal::Renderer lumal;
     
   public:
     void init (LumSettings settings);
@@ -455,51 +401,52 @@ struct LumInternalRenderer {
 };
 
 
-class MyRenderInterface : public Rml::RenderInterface {
+// class MyRenderInterface : public Rml::RenderInterface {
+class MyRenderInterface {
   public:
     MyRenderInterface() {}
 
     ~MyRenderInterface() {}; //override 
     // Called by RmlUi when it wants to render geometry that the application does not wish to optimise
-    void RenderGeometry (Rml::Vertex* vertices,
-                         int num_vertices,
-                         int* indices,
-                         int num_indices,
-                         Rml::TextureHandle texture,
-                         const Rml::Vector2f& translation); //override;
+    // void RenderGeometry (Rml::Vertex* vertices,
+    //                      int num_vertices,
+    //                      int* indices,
+    //                      int num_indices,
+    //                      Rml::TextureHandle texture,
+    //                      const Rml::Vector2f& translation); //override;
 
-    // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
-    Rml::CompiledGeometryHandle CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture); //override;
+    // // Called by RmlUi when it wants to compile geometry it believes will be static for the forseeable future.
+    // Rml::CompiledGeometryHandle CompileGeometry (Rml::Vertex* vertices, int num_vertices, int* indices, int num_indices, Rml::TextureHandle texture); //override;
 
-    // Called by RmlUi when it wants to render application-compiled geometry.
-    void RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation); //override;
+    // // Called by RmlUi when it wants to render application-compiled geometry.
+    // void RenderCompiledGeometry (Rml::CompiledGeometryHandle geometry, const Rml::Vector2f& translation); //override;
 
-    // Called by RmlUi when it wants to release application-compiled geometry.
-    void ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry); //override;
+    // // Called by RmlUi when it wants to release application-compiled geometry.
+    // void ReleaseCompiledGeometry (Rml::CompiledGeometryHandle geometry); //override;
 
-    // Called by RmlUi when it wants to enable or disable scissoring to clip content.
-    void EnableScissorRegion (bool enable); //override;
+    // // Called by RmlUi when it wants to enable or disable scissoring to clip content.
+    // void EnableScissorRegion (bool enable); //override;
 
-    // Called by RmlUi when it wants to change the scissor region.
-    void SetScissorRegion (int x, int y, int width, int height); //override;
+    // // Called by RmlUi when it wants to change the scissor region.
+    // void SetScissorRegion (int x, int y, int width, int height); //override;
 
-    // Called by RmlUi when a texture is required by the library.
-    bool LoadTexture (Rml::TextureHandle& texture_handle,
-                      Rml::Vector2i& texture_dimensions,
-                      const Rml::String& source); //override;
+    // // Called by RmlUi when a texture is required by the library.
+    // bool LoadTexture (Rml::TextureHandle& texture_handle,
+    //                   Rml::Vector2i& texture_dimensions,
+    //                   const Rml::String& source); //override;
 
-    // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
-    bool GenerateTexture (Rml::TextureHandle& texture_handle,
-                          const Rml::byte* source,
-                          const Rml::Vector2i& source_dimensions); //override;
+    // // Called by RmlUi when a texture is required to be built from an internally-generated sequence of pixels.
+    // bool GenerateTexture (Rml::TextureHandle& texture_handle,
+    //                       const Rml::byte* source,
+    //                       const Rml::Vector2i& source_dimensions); //override;
 
-    // Called by RmlUi when a loaded texture is no longer required.
-    void ReleaseTexture (Rml::TextureHandle texture_handle); //override;
+    // // Called by RmlUi when a loaded texture is no longer required.
+    // void ReleaseTexture (Rml::TextureHandle texture_handle); //override;
 
-    // Called by RmlUi when it wants the renderer to use a new transform matrix.
-    // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
-    // an glm::identity matrix or otherwise omit the multiplication with the transform.
-    void SetTransform (const Rml::Matrix4f* transform); //override;
+    // // Called by RmlUi when it wants the renderer to use a new transform matrix.
+    // // If no transform applies to the current element, nullptr is submitted. Then it expects the renderer to use
+    // // an glm::identity matrix or otherwise omit the multiplication with the transform.
+    // void SetTransform (const Rml::Matrix4f* transform); //override;
 
     // Rml::Context* GetContext(); //override {};
     LumInternalRenderer* render;

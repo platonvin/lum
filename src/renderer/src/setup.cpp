@@ -4,7 +4,7 @@
 ring<Lumal::Image> LumInternal::LumInternalRenderer::create_RayTrace_VoxelImages (Voxel* voxels, ivec3 size) {
     VkDeviceSize bufferSize = (sizeof (Voxel)) * size.x * size.y * size.z;
     ring<Lumal::Image> voxelImages = {};
-    render.createImageStorages (&voxelImages,
+    lumal.createImageStorages (&voxelImages,
                            VK_IMAGE_TYPE_3D,
                            VK_FORMAT_R8_UINT,
                            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -13,7 +13,7 @@ ring<Lumal::Image> LumInternal::LumInternalRenderer::create_RayTrace_VoxelImages
                            VK_IMAGE_ASPECT_COLOR_BIT,
                            Lumal::extent3d(size));
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        render.transitionImageLayoutSingletime (&voxelImages[i], VK_IMAGE_LAYOUT_GENERAL);
+        lumal.transitionImageLayoutSingletime (&voxelImages[i], VK_IMAGE_LAYOUT_GENERAL);
     }
     VkBufferCreateInfo 
         stagingBufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -26,15 +26,15 @@ ring<Lumal::Image> LumInternal::LumInternalRenderer::create_RayTrace_VoxelImages
         stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
-    vmaCreateBuffer (render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
+    vmaCreateBuffer (lumal.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
     void* data;
-    vmaMapMemory (render.VMAllocator, stagingAllocation, &data);
+    vmaMapMemory (lumal.VMAllocator, stagingAllocation, &data);
     memcpy (data, voxels, bufferSize);
-    vmaUnmapMemory (render.VMAllocator, stagingAllocation);
+    vmaUnmapMemory (lumal.VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        render.copyBufferSingleTime (stagingBuffer, &voxelImages[i], size);
+        lumal.copyBufferSingleTime (stagingBuffer, &voxelImages[i], size);
     }
-    vmaDestroyBuffer (render.VMAllocator, stagingBuffer, stagingAllocation);
+    vmaDestroyBuffer (lumal.VMAllocator, stagingBuffer, stagingAllocation);
     return voxelImages;
 }
 
@@ -56,36 +56,36 @@ void LumInternal::LumInternalRenderer::createSamplers() {
         samplerInfo.mipLodBias = 0.0f;
         samplerInfo.minLod = 0.0f;
         samplerInfo.maxLod = 0.0f;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &nearestSampler));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &nearestSampler));
         samplerInfo.magFilter = VK_FILTER_LINEAR;
         samplerInfo.minFilter = VK_FILTER_LINEAR;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &linearSampler));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &linearSampler));
         samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         samplerInfo.magFilter = VK_FILTER_LINEAR;
         samplerInfo.minFilter = VK_FILTER_LINEAR;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &linearSampler_tiled));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &linearSampler_tiled));
         samplerInfo.magFilter = VK_FILTER_NEAREST;
         samplerInfo.minFilter = VK_FILTER_NEAREST;
         samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &overlaySampler));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &overlaySampler));
         samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
         samplerInfo.magFilter = VK_FILTER_LINEAR;
         samplerInfo.minFilter = VK_FILTER_LINEAR;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &unnormLinear));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &unnormLinear));
         samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
         samplerInfo.magFilter = VK_FILTER_NEAREST;
         samplerInfo.minFilter = VK_FILTER_NEAREST;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &unnormNearest));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &unnormNearest));
         samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
@@ -95,5 +95,5 @@ void LumInternal::LumInternalRenderer::createSamplers() {
         samplerInfo.compareEnable = VK_TRUE;
         samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
         samplerInfo.compareOp = VK_COMPARE_OP_LESS;
-    VK_CHECK (vkCreateSampler (render.device, &samplerInfo, NULL, &shadowSampler));
+    VK_CHECK (vkCreateSampler (lumal.device, &samplerInfo, NULL, &shadowSampler));
 }

@@ -72,17 +72,17 @@ void LumInternal::LumInternalRenderer::updateBlockPalette (BlockWithMesh* blockP
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
     void* data = NULL;
-    VK_CHECK (vmaCreateBuffer (render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
-    VK_CHECK (vmaMapMemory (render.VMAllocator, stagingAllocation, &data));
+    VK_CHECK (vmaCreateBuffer (lumal.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL));
+    VK_CHECK (vmaMapMemory (lumal.VMAllocator, stagingAllocation, &data));
     assert (data != NULL);
     assert (bufferSize != 0);
     assert (blockPaletteLinear.data() != NULL);
     memcpy (data, blockPaletteLinear.data(), bufferSize);
-    vmaUnmapMemory (render.VMAllocator, stagingAllocation);
+    vmaUnmapMemory (lumal.VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        render.copyBufferSingleTime (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
+        lumal.copyBufferSingleTime (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
     }
-    vmaDestroyBuffer (render.VMAllocator, stagingBuffer, stagingAllocation);
+    vmaDestroyBuffer (lumal.VMAllocator, stagingBuffer, stagingAllocation);
 }
 
 //TODO: do smth with frames in flight
@@ -99,15 +99,15 @@ void LumInternal::LumInternalRenderer::updateMaterialPalette (Material* material
         stagingAllocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer stagingBuffer = {};
     VmaAllocation stagingAllocation = {};
-    vmaCreateBuffer (render.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
+    vmaCreateBuffer (lumal.VMAllocator, &stagingBufferInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, NULL);
     void* data;
-    vmaMapMemory (render.VMAllocator, stagingAllocation, &data);
+    vmaMapMemory (lumal.VMAllocator, stagingAllocation, &data);
     memcpy (data, materialPalette, bufferSize);
-    vmaUnmapMemory (render.VMAllocator, stagingAllocation);
+    vmaUnmapMemory (lumal.VMAllocator, stagingAllocation);
     for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        render.copyBufferSingleTime (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
+        lumal.copyBufferSingleTime (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
     }
-    vmaDestroyBuffer (render.VMAllocator, stagingBuffer, stagingAllocation);
+    vmaDestroyBuffer (lumal.VMAllocator, stagingBuffer, stagingAllocation);
 }
 // std::string find_shader(const std::string& shader_name) {
 //     std::string paths[] = {
@@ -145,7 +145,7 @@ std::string find_asset(const std::string& asset_name) {
 
     std::cout << "Asset file not found: " << asset_name;
     assert(false && "Asset file not found");
-    // std::unreachable();
+    // std::unreachable(); WHY LATEST UBUNTU BUILD ESSENTIALS DO NOT SUPPORT THIS?
 }
 
 std::vector<char> readFileBuffer(const std::string& asset_name) {
@@ -359,12 +359,12 @@ void LumInternal::LumInternalRenderer::free_block(BlockWithMesh* block) {
     if(block->mesh.triangles.indices.buffer) {\
         Lumal::BufferDeletion bd = {};\
             bd.buffer = block->mesh.triangles.indices;\
-            bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
-        render.bufferDeletionQueue.push_back(bd);\
+            bd.life_counter = lumal.settings.fif; /* delete after fif+1 frames*/\
+        lumal.bufferDeletionQueue.push_back(bd);\
         block->mesh.triangles.indices.buffer = VK_NULL_HANDLE;\
     }
     if((block)->mesh.triangles.vertexes.buffer){
-        vmaDestroyBuffer(render.VMAllocator, (block)->mesh.triangles.vertexes.buffer, (block)->mesh.triangles.vertexes.alloc);
+        vmaDestroyBuffer(lumal.VMAllocator, (block)->mesh.triangles.vertexes.buffer, (block)->mesh.triangles.vertexes.alloc);
         (block)->mesh.triangles.vertexes.buffer = VK_NULL_HANDLE;
     }
     // for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -407,14 +407,14 @@ void LumInternal::LumInternalRenderer::free_mesh(InternalMeshModel* mesh) {
     if(mesh->triangles.indices.buffer) {\
         Lumal::BufferDeletion bd = {};\
             bd.buffer = mesh->triangles.indices;\
-            bd.life_counter = render.settings.fif; /* delete after fif+1 frames*/\
-        render.bufferDeletionQueue.push_back(bd);\
+            bd.life_counter = lumal.settings.fif; /* delete after fif+1 frames*/\
+        lumal.bufferDeletionQueue.push_back(bd);\
     }
     Lumal::BufferDeletion
         bd = {};
         bd.buffer = mesh->triangles.vertexes;
-        bd.life_counter = render.settings.fif; // delete after fif+1 frames
-    render.bufferDeletionQueue.push_back(bd);
+        bd.life_counter = lumal.settings.fif; // delete after fif+1 frames
+    lumal.bufferDeletionQueue.push_back(bd);
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         // if (!mesh->triangles.vertexes.empty()) {
             // vmaDestroyBuffer(render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
@@ -425,8 +425,8 @@ void LumInternal::LumInternalRenderer::free_mesh(InternalMeshModel* mesh) {
             Lumal::ImageDeletion
                 id = {};
                 id.image = mesh->voxels[i];
-                id.life_counter = render.settings.fif; // delete after fif+1 frames
-            render.imageDeletionQueue.push_back(id);
+                id.life_counter = lumal.settings.fif; // delete after fif+1 frames
+            lumal.imageDeletionQueue.push_back(id);
         }
     }
 }
@@ -592,12 +592,12 @@ void LumInternal::LumInternalRenderer::make_vertices (InternalMeshModel* mesh, V
     offset_and_insert(verts_zzP, mesh->triangles.zzP);
     offset_and_insert(verts_zzN, mesh->triangles.zzN);
 
-    mesh->triangles.vertexes = render.createElemBuffer<PackedVoxelCircuit>(
+    mesh->triangles.vertexes = lumal.createElemBuffer<PackedVoxelCircuit>(
         circ_verts.data(), 
         circ_verts.size(),
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-    mesh->triangles.indices = render.createElemBuffer<u16>(
+    mesh->triangles.indices = lumal.createElemBuffer<u16>(
         all_indices.data(), 
         all_indices.size(),
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);

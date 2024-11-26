@@ -422,3 +422,4 @@ ogt_int_mesh* my_int_mesh_from_paletted_voxels(const ogt_voxel_meshify_context* 
     return mesh;
 }
 }
+#undef OGT_VOXEL_MESHIFY_IMPLEMENTATION // for unity build

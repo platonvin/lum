@@ -7,10 +7,13 @@ client
 shaders/*.spv
 shaders/compiled/*.spv
 
-#generating compile commands without 10000 lines of cmake
 *.txt
+*.md
 # for clangd
 !compile_flags.txt
+!CMakeLists.txt
+!README.md
+!LICENSE.md
 # IDE things
 .vscode
 .idea
@@ -20,11 +23,14 @@ r.cpp
 assets/*.zip
 #memory dump from VMA
 dump.json
+# nvidia nsight imgui file
 imgui.ini
+# directories with trace data
 nv_traces
 amd_traces
 intel_traces
 temp.*
+#github release thing
 package
 package.zip
 diag.mmd
@@ -33,10 +39,20 @@ diag.mmd
 build_wrapper_output_directory
 vcpkg_installed
 *.tar
-/bin
-#pocket vcpkg installation
+#pocket vcpkg installation. Not needed anymore, but still gitignored
 /lum_vcpkg
 
-*.md
-!README.md
+/bin
 /lib
+/build
+/build_gcc
+/build_msvc
+/build_clang
+compile_commands.json
+/.cache/
+/examples/build
+/examples/lib
+/examples/bin
+/examples/CMakeFiles
+/.vs
+/out/build/x64-Debug

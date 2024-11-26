@@ -1,7 +1,7 @@
 #pragma once
 #include <cassert>
-#ifndef __ARENA_HPP__
-#define __ARENA_HPP__
+#ifndef __LUM_ARENA_HPP__
+#define __LUM_ARENA_HPP__
 
 // extracted from [Circulli Bellum](https://github.com/platonvin/circuli-Bellum)
 // simple arena allocator with faster allocation time
@@ -81,4 +81,4 @@ public:
 private:
     int _size;
 };
-#endif // __ARENA_HPP__
+#endif // __LUM_ARENA_HPP__

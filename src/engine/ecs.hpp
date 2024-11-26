@@ -9,6 +9,7 @@
 #include <vector>
 #include <tuple>
 #include <stdexcept>
+#include <iostream>
 // #include <chrono>
 #include <type_traits>
 
@@ -100,9 +101,9 @@ public:
     /** 
      * @brief Nice defualt constructor 
      */
-    ECManager() : nextEntityID(69), cachedResize(0) {}
+    constexpr ECManager() : nextEntityID(69), cachedResize(0) {}
 
-    InternalIndex createEntityInternal(){
+    constexpr inline InternalIndex createEntityInternal(){
         InternalIndex newInternalIndex = aliveEntities.size();
         ASSERT(newInternalIndex == internalIndexToID.size());
 
@@ -117,7 +118,7 @@ public:
      * @details resizes component vectors immediately (turned out to be relatevly ok).
      * @return EntityID The ID of the newly created entity.
      */
-    EntityID createEntity() {
+    constexpr inline EntityID createEntity() {
         InternalIndex newInternalIndex = createEntityInternal();
         
         EntityID newID = nextEntityID++;
@@ -131,7 +132,7 @@ public:
      * @return EntityID The ID of the newly created entity.
      */
     template<typename Func>
-    EntityID createEntity(Func func) {
+    constexpr inline EntityID createEntity(Func func) {
         InternalIndex newInternalIndex = createEntityInternal();
         loadAndInvoke(func, newInternalIndex);
         
@@ -214,7 +215,7 @@ public:
     }
     // loads every component function needs and passes it to function
     template <typename Func>
-    void loadAndInvoke(Func fun, InternalIndex id) {
+    constexpr inline void loadAndInvoke(Func fun, InternalIndex id) {
         using ArgTuple = typename function_traits<Func>::args_type;
         using ArgNoRefTuple = tuple_with_removed_refs_t<ArgTuple>;
 
@@ -226,18 +227,18 @@ public:
 
     // Helper function to load components based on a tuple of component types
     template <typename Tuple, std::size_t... I>
-    auto loadComponentsFromTupleImplInternal(InternalIndex id, std::index_sequence<I...>) {
+    constexpr inline auto loadComponentsFromTupleImplInternal(InternalIndex id, std::index_sequence<I...>) {
         return std::forward_as_tuple(getEntityComponentInternal<std::tuple_element_t<I, Tuple>>(id)...);
     }
 
     template <typename Tuple>
-    constexpr auto loadComponentsFromTupleInternal(InternalIndex id) {
+    constexpr inline auto loadComponentsFromTupleInternal(InternalIndex id) {
         return loadComponentsFromTupleImplInternal<Tuple>(id, std::make_index_sequence<std::tuple_size_v<Tuple>>{});
     }
 
     // Variadic template to load multiple components
     template <typename... _Components>
-    std::tuple<_Components&...> loadComponents(EntityID id) {
+    constexpr inline std::tuple<_Components&...> loadComponents(EntityID id) {
         return std::forward_as_tuple(loadComponent<_Components>(id)...);
     }
 
@@ -333,7 +334,7 @@ struct ComponentFunctionHelper;
 template <typename Func, typename... Components>
 struct ComponentFunctionHelper<Func, std::tuple<Components...>> {
     // Check that Func is callable with references of Components and that Components are references
-    static constexpr bool value = requires(Func func, Components&... components) {
+    static constexpr inline bool value = requires(Func func, Components&... components) {
         { func(components...) } -> std::same_as<void>;
     } && (std::is_lvalue_reference_v<Components> && ...);  // Ensure all are lvalue references
 };
@@ -377,10 +378,10 @@ public:
      * @param cleanup Function called for each entity when destroyed.
      * @param funcs Variadic list of update functions to operate on entities.
      */
-    ECSystem(OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs)
+    constexpr inline ECSystem(OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs)
         : init(init), destroy(cleanup), functions(std::make_tuple(funcs...)) {}
 
-    ECSystem(ECManager_type& ecsInstance, OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs)
+    constexpr inline ECSystem(ECManager_type& ecsInstance, OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs)
         : ecm(ecsInstance), init(init), destroy(cleanup), functions(std::make_tuple(funcs...)) {}
 
     /**
@@ -415,7 +416,7 @@ public:
      * @return Component& reference to the requested component.
      */
     template<typename Component>
-    Component& getEntityComponent(EntityID id) {
+    constexpr inline Component& getEntityComponent(EntityID id) {
         return ecm.template getEntityComponent<Component>(id);
     }
     /**
@@ -426,7 +427,7 @@ public:
      * @return Component& reference to the requested component.
      */
     template<typename Component>
-    Component& getEntityComponent(EntityID id) requires std::is_reference<Component>::value {
+    constexpr inline Component& getEntityComponent(EntityID id) requires std::is_reference<Component>::value {
         using BaseComponent = std::remove_reference_t<Component>;
         return ecm.template getEntityComponent<BaseComponent>(id);
     }
@@ -437,7 +438,7 @@ public:
      * @param id The ID of the entity whose components are to be retrieved.
      * @return std::tuple<Components&...> references to all components associated for the specified entity.
      */
-    auto getEntityComponents(EntityID id) {
+    constexpr inline auto getEntityComponents(EntityID id) {
         return ecm.getEntityComponents(id);
     }
 
@@ -447,7 +448,7 @@ public:
      * 
      * Calls the update functions in the order defined in the constructor for all entities.
      */
-    void update() {
+    constexpr inline void update() {
         ecm.update();
         // For each function in the tuple, call ecm.forEachEntityWith
         std::apply([this](UpdateFuncs&... funcs) {
@@ -463,7 +464,7 @@ public:
      * @details just call ecs.updateSpecific(YourFunction);
      */
     template <typename Func>
-    void updateSpecific(Func fun) {
+    constexpr inline void updateSpecific(Func fun) {
         ecm.forEachEntityWith(fun);
     }
 };
@@ -486,7 +487,7 @@ public:
  * @return An instance of the ECSystem
  */
 template <typename... Components, typename OnInitFunc, typename OnDestroyFunc, typename... UpdateFuncs>
-auto makeECSystem(OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs) {
+constexpr inline auto makeECSystem(OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs) {
     using ECManager_t = ECManager<Components...>;
     return ECSystem<ECManager_t, OnInitFunc, OnDestroyFunc, UpdateFuncs...>(init, cleanup, funcs...);
 }

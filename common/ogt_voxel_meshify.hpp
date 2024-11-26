@@ -1,4 +1,6 @@
 #include <cstring>
+#include <cstdint>
+
 #define _MY_VERTEX_STRUCT_
 /*
     opengametools voxel meshifier - v0.9 - MIT license - Justin Paver, April 2020
@@ -893,7 +895,7 @@ void _greedy_meshify_voxels_in_face_direction(
 #ifndef _MY_VERTEX_STRUCT_
                 ogt_mesh_rgba color = palette[color_index];
 #else
-                ogt_mesh_rgba color = (ogt_mesh_rgba){};
+                ogt_mesh_rgba color = (ogt_mesh_rgba){0,0,0,0};
 #endif
                 // write the verts for this face
                 vertex_data[0] = _mesh_make_vertex(_transform_point(transform, _make_vec3(min_x, min_y, max_z)), normal, color, color_index);

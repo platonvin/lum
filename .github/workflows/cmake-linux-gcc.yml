@@ -1,0 +1,48 @@
+name: Build with Linux GCC
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux-gcc:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download submodules
+      run: git submodule update --init --recursive
+
+    - name: Maybe useful update
+      run: sudo apt update
+        
+    - name: Cache APT Packages - GCC, Ninja, GLFW-needed ones
+      uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+      with:
+        packages: wayland-protocols libwayland-dev libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential gcc g++ ninja-build libxkbcommon-dev libwayland-client0.1-0 libwayland-cursor0 libwayland-egl1.0-0
+        execute_install_scripts: true  # optional, set to true if you need to run install scripts
+
+    - name: Cache CMake and Build Files
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cmake/packages
+          build
+        key: gcc-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          gcc-${{ github.ref }}
+
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake -G "Ninja" .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --verbose

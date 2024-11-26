@@ -366,13 +366,13 @@ void mouse_button_callback (GLFWwindow* window, int button, int action, int mods
 
 void Ui::setup() {
     _renderer = renderer;
-    sysInterface.SetWindow (renderer->render.window.pointer);
+    sysInterface.SetWindow (renderer->lumal.window.pointer);
     Rml::SetRenderInterface (renderer->ui_render_interface);
     Rml::SetSystemInterface (&sysInterface);
-    sysInterface.SetWindow (renderer->render.window.pointer);
+    sysInterface.SetWindow (renderer->lumal.window.pointer);
     Rml::Initialise();
-    assert (renderer->render.swapChainExtent.width != 0 && renderer->render.swapChainExtent.height != 0);
-    context = Rml::CreateContext ("main", Rml::Vector2i (renderer->render.swapChainExtent.width, renderer->render.swapChainExtent.height));
+    assert (renderer->lumal.swapChainExtent.width != 0 && renderer->lumal.swapChainExtent.height != 0);
+    context = Rml::CreateContext ("main", Rml::Vector2i (renderer->lumal.swapChainExtent.width, renderer->lumal.swapChainExtent.height));
     Rml::Debugger::Initialise (context);
     Rml::LoadFontFace ("assets/LatoLatin-Regular.ttf");
     SetupDataBinding (context, my_model);
@@ -381,7 +381,7 @@ void Ui::setup() {
         Rml::Shutdown();
     }
     document->Show();
-    glfwSetMouseButtonCallback (renderer->render.window.pointer, mouse_button_callback);
+    glfwSetMouseButtonCallback (renderer->lumal.window.pointer, mouse_button_callback);
 }
 
 void Ui::update() {
@@ -391,7 +391,7 @@ void Ui::update() {
         assert (res);
     }
     double xpos, ypos;
-    glfwGetCursorPos (renderer->render.window.pointer, &xpos, &ypos);
+    glfwGetCursorPos (renderer->lumal.window.pointer, &xpos, &ypos);
     context->ProcessMouseMove (int (floor (xpos)), int (floor (ypos)), 0);
     if (mouse_down_state != -1) {
         // printl(mouse_down_state)
