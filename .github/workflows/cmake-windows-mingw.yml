@@ -1,4 +1,4 @@
-name: Build with Windows MinGW (MSYS2)
+name: Windows-MinGW Build
 
 on:
   workflow_dispatch:
@@ -30,9 +30,10 @@ jobs:
         restore-keys: |
           mingw-${{ github.ref }}
 
-    - name: Configure CMake
+    - name: Configure CMake to build examples
       shell: msys2 {0}
       run: |
+        cd examples
         cmake -B build \
           -G "MinGW Makefiles" \
           -DCMAKE_CXX_COMPILER=g++ \

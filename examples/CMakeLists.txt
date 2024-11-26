@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.21)
-project(LumTests LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.22)
+project(LumTests LANGUAGES C CXX)
 
 # CMake settings
 set(CMAKE_CXX_STANDARD 23)
@@ -7,38 +7,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(BUILD_SHARED_LIBS OFF)
+set(BUILD_SHARED_LIBS OFF) # disable shared (dynamic) libraries, so build static
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ")
 # Explicitly set the source and binary directories for lum
+# Note: it look weird because examples/ folder is inside lum/ folder
+# if Lum is your git submodule / just folder, that you can just do
+# add_subdirectory(path/to/lum), e.g. add_subdirectory(external/lum)
 add_subdirectory(${CMAKE_SOURCE_DIR}/.. ${CMAKE_BINARY_DIR}/lum)
 
 # Enable -flto for higher perfomance. Note that it increases compile times
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
-# Add the test executable
-add_executable(test_demo demo.cpp)
-
-# Link the test executable with lum_static (or lum_shared)
-# target_link_libraries(test_demo PUBLIC lum_static) # recommended
-
-target_link_libraries(test_demo PRIVATE lum) 
-
-# Tell cmake to but test_demo.exe into test/bin 
-set_target_properties(test_demo PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+# Add the test executable named test_demo_cpp
+add_executable(test_demo_cpp demo.cpp)
+add_executable(test_demo_c99 
+    cdemo.c
+    cdemo_api_impl.cpp # this has to be compiled with c++ compiler
 )
 
-# is not needed because PUBLIC in include directories upstream makes them visible for your project (and this test)
-# target_include_directories 
+# Link the test executable with lum (or lum)
+# This will automatically propagate include directiory with lum headers
+# so target_include_directories is not needed to add lum to include paths
+# Note: if you are not using CMake, you still need to add them manually
+target_link_libraries(test_demo_cpp PRIVATE lum)
+target_link_libraries(test_demo_c99 PRIVATE lum)
 
-# # ---- Archive creation ----
-# # basically for github release
-# if(CREATE_DEMO_PACKAGE)
-#     add_custom_target(create_DEMO_PACKAGE ALL
-#         COMMAND ${CMAKE_COMMAND} -E tar "cf" "lum_release.tar.gz"
-#         --format=gnutar
-#         -- ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} ${CMAKE_SOURCE_DIR}/shaders
-#         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-#     )
-# endif()
+# Tell cmake to but test_demo_cpp.exe into test/bin 
+set_target_properties(test_demo_cpp test_demo_c99 PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+)

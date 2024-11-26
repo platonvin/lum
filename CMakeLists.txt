@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.22)
 project(lum VERSION "0.1.4" LANGUAGES CXX C)
 
 # ---- Notes for Users ----
@@ -15,7 +15,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-# set(BUILD_SHARED_LIBS OFF)
 
 # ---- Options ----
 # option(BUILD_EXAMPLES "Build example programs (also test validness of linking to libs)" ON)
@@ -23,8 +22,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(LUM_ENABLE_UNITY_BUILD "Enable Unity (Jumbo) Build" OFF) # not fully implemented
 option(LUM_ENABLE_EXTRA_WARNINGS "Enable extra compiler warnings (e.g., -Wall, -Wextra)" OFF)
 option(LUM_CUSTOM_FLAGS "Apply custom flags (non-default in Release) when building Lum" OFF)
-# Set LUM_CUSTOM_FLAGS to ON only if the project is top-level and the user has not explicitly set it.
-if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED LUM_CUSTOM_FLAGS)
+# Set LUM_CUSTOM_FLAGS to ON if the project is top-level (standalone build)
+if(PROJECT_IS_TOP_LEVEL AND NOT LUM_CUSTOM_FLAGS)
     set(LUM_CUSTOM_FLAGS ON)
 endif()
 
@@ -77,13 +76,16 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 
 # ---- Dependencies ----
 # Submodules. Basically downloads subprojects from github
+find_package(Git)
+if(Git_FOUND)
+  message("Git found: ${GIT_EXECUTABLE}")
+endif()
 execute_process(
-    COMMAND git submodule update --init --recursive
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    RESULT_VARIABLE GIT_SUBMODULE_RESULT
-)
+    COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    RESULT_VARIABLE GIT_SUBMODULE_RESULT)
 if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to initialize or update git submodules")
+    message(WARNING "Failed to initialize or update git submodules. Update them manually with  $> git submodule update --init --recursive")
 endif()
 
 # freetype - font lib for rmlui
@@ -151,17 +153,23 @@ endif()
 add_library(lum ${PROJECT_SOURCES})
 
 # set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    # set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-endif()
+# if(CMAKE_BUILD_TYPE STREQUAL "Release")
+#     set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+# endif()
 
-# Set include directories
-target_include_directories(lum PUBLIC
+# Set (internal?) include directories
+target_include_directories(lum PUBLIC # TODO: private
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/api
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/external/RmlUi/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/external
 )
-# ---- Link lum with lumal ----
-target_link_libraries(lum PUBLIC lumal glfw freetype)
+
+# Set API headers directory, so #include <lum.hpp> or <clum.h> is possible
+target_include_directories(lum PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include # API headers directory
+)
+
+# ---- Link lum with lumal and freetype ----
+target_link_libraries(lum PUBLIC lumal freetype)

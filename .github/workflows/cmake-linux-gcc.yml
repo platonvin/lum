@@ -1,4 +1,4 @@
-name: Build with Linux GCC
+name: Linux-GCC Build
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
     - name: Cache APT Packages - GCC, Ninja, GLFW-needed ones
       uses: awalsh128/cache-apt-pkgs-action@v1.4.2
       with:
-        packages: wayland-protocols libwayland-dev libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential gcc g++ ninja-build libxkbcommon-dev libwayland-client0.1-0 libwayland-cursor0 libwayland-egl1.0-0
+        packages: gcc g++ libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential libxkbcommon-dev
         execute_install_scripts: true  # optional, set to true if you need to run install scripts
 
     - name: Cache CMake and Build Files
@@ -33,8 +33,9 @@ jobs:
         restore-keys: |
           gcc-${{ github.ref }}
 
-    - name: Configure CMake
+    - name: Configure CMake to build examples
       run: |
+        cd examples
         mkdir -p build
         cd build
         cmake -G "Ninja" .. \

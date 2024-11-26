@@ -1,4 +1,4 @@
-#include <renderer.hpp>
+#include <lum.hpp>
 #include <input/input.hpp>
 #include <engine/engine.hpp>
 #include <opaque_renderer_members.hpp>
@@ -18,7 +18,7 @@ void process_physics(Lum::Renderer& lum);
 void cleanup(Lum::Renderer& lum);
 quat find_quat(vec3 v1, vec3 v2);
 
-// but for simplicity lets stick to this
+// for simplicity lets stick to this
 Lum::MeshModel     tank_body = {};
 Lum::MeshTransform tank_body_trans = {};
 Lum::MeshModel     tank_head = {};
@@ -26,6 +26,8 @@ Lum::MeshTransform tank_head_trans = {};
 float physical_body_height;
 float interpolated_body_height;
 vec3 tank_direction_forward, tank_direction_right;
+
+// Legs are controlled with Lum::ECS. Each leg is an entity, they have components, and animation systems, defined below
 
 // defining ECS components
 typedef struct {vec2 pos;} physical_leg_point;
@@ -36,13 +38,15 @@ typedef struct {vec3 pos;} leg_joint_shift;
 typedef struct {vec3 pos;} leg_point;
 typedef struct {quat rot;} rotation_mul;
 
-//defining ECS functions
+// defining ECS functions
 
 // function called on entity when its created. Aka constructor
 void init (Lum::MeshModel&, Lum::MeshTransform&, leg_point&, leg_joint_shift&, target_leg_point&, physical_leg_point&, interpolated_leg_point&, leg_center&, rotation_mul&) {}
 // function called on entity when its destroyed. Aka destructor
 void destroy (Lum::MeshModel&, Lum::MeshTransform&, leg_point&, leg_joint_shift&, target_leg_point&, physical_leg_point&, interpolated_leg_point&, leg_center&, rotation_mul&) {}
 
+// just sequance of functions to actually animate.
+// in real world you would balance their cache usage (e.g. divide/group to load as many data/functions as possible while staying in L1 cache)
 void calculateLegJointsAndRotations(leg_point& leg, leg_center& center, Lum::MeshTransform& trans, rotation_mul& mul) {
     leg.pos = tank_body_trans.shift + tank_body_trans.rot * center.pos;
     trans.rot = mul.rot * tank_body_trans.rot;
@@ -69,6 +73,7 @@ Lum::Renderer* lum_ptr;
 void drawLeg(Lum::MeshTransform& leg_trans, Lum::MeshModel& leg_mesh) {
     lum_ptr->drawModel(leg_mesh, leg_trans);
 }
+
 int main(){
     // input system i designed. You can use, but it is not neccessary for Lum::Renderer
     Input input;
@@ -89,7 +94,7 @@ int main(){
        interpolateAndCalculateLegRotation,
        applyShiftAndDrawLeg);
 
-    // creating legs
+    // creating legs entities. Lum::EntityID is an opaque handle (index. Actually, indirect index)
     Lum::EntityID rf_leg = anim_system.createEntity();
     Lum::EntityID lf_leg = anim_system.createEntity();
     Lum::EntityID rb_leg = anim_system.createEntity();
@@ -120,7 +125,7 @@ int main(){
     // ATTENTION: all foliage has to be declared BEFORE init()
     // this restriction just makes everything 100x simpler
     // i might implement dynamic Vulkan resources in future, but it will only hurt perfomance until ~20k foliage meshes
-    // and you are supposed to compile shader to SPIRV yourself (for GLSL, use glslang / shaderc)
+    // and you are also supposed to compile shader to SPIRV yourself (for GLSL, use glslang / shaderc)
     Lum::MeshFoliage grass = lum.loadFoliage("shaders/compiled/grass.vert.spv", 6, 10);
 
     lum.init(settings);

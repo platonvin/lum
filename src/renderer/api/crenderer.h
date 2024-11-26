@@ -113,4 +113,10 @@ double lum_get_timestamp_difference(const LumRenderer instance, int index_start,
 }
 #endif
 
+    // define LUM_C_API_IMPLEMENTATION in one of your C++ files
+    #ifdef LUM_C_API_IMPLEMENTATION
+    #include "../src/renderer/api/crenderer.cpp"
+    #undef LUM_C_API_IMPLEMENTATION
+    #endif
+    
 #endif // LUM_C_BINDINGS_H
