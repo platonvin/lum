@@ -2,9 +2,6 @@ name: Build with Windows MinGW (MSYS2)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - modules
 
 jobs:
   build-windows-mingw:
@@ -13,8 +10,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
+
+    - name: Download submodules
+      run: git submodule update --init --recursive
 
     - name: Install MSYS2
       uses: msys2/setup-msys2@v2

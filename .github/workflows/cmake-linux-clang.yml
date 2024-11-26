@@ -2,9 +2,6 @@ name: Build with Linux Clang
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - modules
 
 jobs:
   build-linux-clang:

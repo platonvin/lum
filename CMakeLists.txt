@@ -78,7 +78,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib)
 # ---- Dependencies ----
 # Submodules. Basically downloads subprojects from github
 execute_process(
-    COMMAND git submodule update --init --recursive --depth 1 --no-single-branch
+    COMMAND git submodule update --init --recursive
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE GIT_SUBMODULE_RESULT
 )
