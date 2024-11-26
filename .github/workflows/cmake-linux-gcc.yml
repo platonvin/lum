@@ -1,0 +1,45 @@
+name: Build with Linux GCC
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - modules
+
+jobs:
+  build-linux-gcc:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install GCC
+      run: sudo apt-get update && sudo apt-get install -y build-essential gcc g++
+
+    - name: Cache CMake and Build Files
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cmake/packages
+          build
+        key: gcc-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          gcc-${{ github.ref }}
+
+    - name: Configure CMake
+      run: >
+        cmake -B build
+        -DCMAKE_CXX_COMPILER=g++
+        -DCMAKE_C_COMPILER=gcc
+        -DCMAKE_BUILD_TYPE=Release
+        -S .
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Run Tests
+      working-directory: build
+      run: ctest --output-on-failure
