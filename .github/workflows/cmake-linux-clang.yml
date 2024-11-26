@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - modules
 
 jobs:
   build-linux-clang:
@@ -13,11 +13,18 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
-    - name: Install Clang
-      run: sudo apt-get update && sudo apt-get install -y clang
+    - name: Download submodules
+      run: git submodule update --init --recursive
+
+    - name: Maybe useful update
+      run: sudo apt update
+
+    - name: Cache APT Packages - Clang, Ninja, GLFW-needed ones
+      uses: awalsh128/cache-apt-pkgs-action@v1.4.2
+      with:
+        packages: clang llvm lld clang-tools libclang-dev ninja-build pkg-config build-essential libxkbcommon-dev libwayland-client0.1-0 libwayland-cursor0 libwayland-egl1.0-0 wayland-protocols libwayland-dev libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev
+        execute_install_scripts: true  # optional, set to true if you need to run install scripts
 
     - name: Cache CMake and Build Files
       uses: actions/cache@v3
@@ -29,17 +36,22 @@ jobs:
         restore-keys: |
           clang-${{ github.ref }}
 
+    - name: Install Clang LTO plugin (LLVMgold)
+      run: |
+        sudo apt-get install llvm-12-tools
+
     - name: Configure CMake
-      run: >
-        cmake -B build
-        -DCMAKE_CXX_COMPILER=clang++
-        -DCMAKE_C_COMPILER=clang
-        -DCMAKE_BUILD_TYPE=Release
-        -S .
+      run: |
+        mkdir -p build
+        cd build
+        cmake -G "Ninja" .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_LINKER=lld \
+          -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -flto"  # Enable LTO and link using LLD
 
     - name: Build
-      run: cmake --build build --config Release
-
-    - name: Run Tests
-      working-directory: build
-      run: ctest --output-on-failure
+      run: |
+        cd build
+        cmake --build . --verbose

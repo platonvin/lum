@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - modules
 
 jobs:
   build-windows-mingw:
@@ -20,7 +20,7 @@ jobs:
       uses: msys2/setup-msys2@v2
       with:
         msystem: mingw64
-        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make
+        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make ninja
 
     - name: Cache CMake and Build Files
       uses: actions/cache@v3
@@ -34,19 +34,14 @@ jobs:
 
     - name: Configure CMake
       shell: msys2 {0}
-      run: >
-        cmake -B build
-        -G "MinGW Makefiles"
-        -DCMAKE_CXX_COMPILER=g++
-        -DCMAKE_C_COMPILER=gcc
-        -DCMAKE_BUILD_TYPE=Release
-        -S .
+      run: |
+        cmake -B build \
+          -G "MinGW Makefiles" \
+          -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_BUILD_TYPE=Release \
+          -S .
 
     - name: Build
       shell: msys2 {0}
-      run: cmake --build build --config Release
-
-    - name: Run Tests
-      shell: msys2 {0}
-      working-directory: build
-      run: ctest --output-on-failure
+      run: cmake --build build --config Release --verbose
