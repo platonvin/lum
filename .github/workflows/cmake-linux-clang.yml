@@ -20,8 +20,8 @@ jobs:
     - name: Cache APT Packages - Clang, Ninja, GLFW-needed ones
       uses: awalsh128/cache-apt-pkgs-action@v1.4.2
       with:
-        packages: clang llvm lld clang-tools libclang-dev ninja-build install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential libxkbcommon-dev
-        execute_install_scripts: true  # optional, set to true if you need to run install scripts
+        packages: clang llvm lld clang-tools libclang-dev build-essential ninja-build libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config libxkbcommon-dev libwayland-dev
+        execute_install_scripts: true  # run install scripts
 
     - name: Cache CMake and Build Files
       uses: actions/cache@v3
@@ -35,7 +35,7 @@ jobs:
 
     - name: Install Clang LTO plugin (LLVMgold)
       run: |
-        sudo apt-get install llvm-12-tools
+        sudo apt-get install llvm-18-tools
 
     - name: Configure CMake to build examples
       run: |
@@ -47,7 +47,7 @@ jobs:
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_LINKER=lld \
-          -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -flto"  # Enable LTO and link using LLD
+          -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" # just cause i want
 
     - name: Build
       run: |

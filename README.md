@@ -35,19 +35,25 @@ https://github.com/user-attachments/assets/ce7883c4-a706-406f-875c-fbf23d68020d
  
 - **Vulkan support**
 
-- on Linux, GLFW will ask you to install multiple different packages. You can do it in advance for Debian/Ubuntu/Mint:\
-  `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential libxkbcommon-dev`
+- on Linux, GLFW will ask you to install multiple different packages. You can do it in advance :
+  - for Debian / Ubuntu / Mint:\
+  `sudo apt install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential libxkbcommon-dev libwayland-dev`
+  - for Fedore / Red Hat:\
+  `sudo dnf install wayland-devel libxkbcommon-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel`
+  - for FreeBSD:\
+  `pkg install wayland libxkbcommon evdev-proto xorgproto`  
 
 <!--todo: why? libxkbcommon-dev libwayland-client0.1-0 libwayland-cursor0 libwayland-egl1.0-0 wayland-protocols libwayland-dev libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev -->
 
 ### Build Instructions 
  
-1. Clone the repository :
+1. Clone the repository with it's submodules:
 
 
 ```bash
 git clone https://github.com/platonvin/lum.git
 cd lum
+git submodule update --init --recursive
 ```
  
 2. Build using **CMake** :

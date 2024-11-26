@@ -20,8 +20,8 @@ jobs:
     - name: Cache APT Packages - GCC, Ninja, GLFW-needed ones
       uses: awalsh128/cache-apt-pkgs-action@v1.4.2
       with:
-        packages: gcc g++ libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config build-essential libxkbcommon-dev
-        execute_install_scripts: true  # optional, set to true if you need to run install scripts
+        packages: gcc g++ build-essential ninja-build libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config libxkbcommon-dev libwayland-dev
+        execute_install_scripts: true  # run install scripts
 
     - name: Cache CMake and Build Files
       uses: actions/cache@v3
