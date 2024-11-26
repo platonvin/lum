@@ -34,13 +34,16 @@ jobs:
       shell: msys2 {0}
       run: |
         cd examples
-        cmake -B build \
-          -G "MinGW Makefiles" \
+        mkdir -p build
+        cd build
+        cmake \
+          -G "MinGW Makefiles" .. \
           -DCMAKE_CXX_COMPILER=g++ \
           -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_BUILD_TYPE=Release \
-          -S .
+          -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       shell: msys2 {0}
-      run: cmake --build build --config Release --verbose
+      run: 
+        cd examples/build
+        cmake --build . --verbose
