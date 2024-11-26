@@ -35,7 +35,7 @@ jobs:
 
     - name: Install Clang LTO plugin (LLVMgold)
       run: |
-        sudo apt-get install llvm-18-tools
+        sudo apt-get install llvm-12-tools # lol 12 is largest supported by default?
 
     - name: Configure CMake to build examples
       run: |
