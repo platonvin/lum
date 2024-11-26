@@ -16,8 +16,8 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Install GCC
-      run: sudo apt-get update && sudo apt-get install -y build-essential gcc g++
+    - name: Install GCC and Ninja
+      run: sudo apt-get update && sudo apt-get install -y build-essential gcc g++ ninja-build
 
     - name: Cache CMake and Build Files
       uses: actions/cache@v3
@@ -30,15 +30,18 @@ jobs:
           gcc-${{ github.ref }}
 
     - name: Configure CMake
-      run: >
-        cmake -B build
-        -DCMAKE_CXX_COMPILER=g++
-        -DCMAKE_C_COMPILER=gcc
-        -DCMAKE_BUILD_TYPE=Release
-        -S .
+      run: |
+        mkdir -p build
+        cd build
+        cmake -G "Ninja" .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++
 
     - name: Build
-      run: cmake --build build --config Release
+      run: |
+        cd build
+        cmake --build . --verbose
 
     - name: Run Tests
       working-directory: build
