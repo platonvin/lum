@@ -35,11 +35,7 @@ jobs:
         cd examples
         mkdir -p build
         cd build
-        cmake \
-          -G "Ninja" .. \
-          -DCMAKE_CXX_COMPILER=g++ \
-          -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_BUILD_TYPE=Release
+        cmake -G "MinGW Makefiles" .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: |
