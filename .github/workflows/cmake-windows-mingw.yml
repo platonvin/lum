@@ -31,19 +31,17 @@ jobs:
           mingw-${{ github.ref }}
 
     - name: Configure CMake to build examples
-      shell: msys2 {0}
       run: |
         cd examples
         mkdir -p build
         cd build
         cmake \
-          -G "MinGW Makefiles" .. \
+          -G "Ninja" .. \
           -DCMAKE_CXX_COMPILER=g++ \
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
-      shell: msys2 {0}
-      run: 
+      run: |
         cd examples/build
         cmake --build . --verbose

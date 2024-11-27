@@ -37,27 +37,31 @@ typedef struct {
     char debug;
     char profile;
 } LumSettings;
-const LumSettings LUM_DEFAULT_SETTINGS = {
-    {48, 48, 16},
-    15,
-    8128,
-    1024,
-    2,
-    false,
-    false,
-    false,
-    false,
-};
+
+#define LUM_DEFAULT_SETTINGS ((LumSettings){{48, 48, 16}, 15, 8128, 1024, 2, false, false, false, false})
+// const LumSettings LUM_DEFAULT_SETTINGS = {
+//     {48, 48, 16},
+//     15,
+//     8128,
+//     1024,
+//     2,
+//     false,
+//     false,
+//     false,
+//     false,
+// };
 
 
 typedef struct LumMeshTransform {
     float rot[4];   // rotation quaternion
     float shift[3]; // float because not necessarily snapped to grid
 } LumMeshTransform;  // to avoid pointer
-const LumMeshTransform LUM_DEFAULT_MESH_TRANSFORM = {
-    {1,0,0,0},
-    {0,0,0},
-};
+#define LUM_DEFAULT_MESH_TRANSFORM ((LumMeshTransform){{1,0,0,0}, {0,0,0}})
+// not a comptime expression
+// const LumMeshTransform LUM_DEFAULT_MESH_TRANSFORM = {
+//     {1,0,0,0},
+//     {0,0,0},
+// };
 // Function prototypes
 LumRenderer lum_create_instance(const LumSettings* settings);
 void lum_destroy_instance(LumRenderer instance);
