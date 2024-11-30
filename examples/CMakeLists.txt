@@ -15,8 +15,17 @@ set(BUILD_SHARED_LIBS OFF) # disable shared (dynamic) libraries, so build static
 # add_subdirectory(path/to/lum), e.g. add_subdirectory(external/lum)
 add_subdirectory(${CMAKE_SOURCE_DIR}/.. ${CMAKE_BINARY_DIR}/lum)
 
-# Enable -flto for higher perfomance. Note that it increases compile times
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Develop")
+    # lto is too much for development
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+    # decreases compile speed, but this is absolutely neccessary for lum
+    set(CMAKE_CXX_FLAGS "-O1")
+    set(LUM_CUSTOM_FLAGS OFF) 
+else()
+    # Enable -flto for higher perfomance. Note that it increases compile times
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
 
 # Add the test executable named test_demo_cpp
 add_executable(test_demo_cpp demo.cpp)

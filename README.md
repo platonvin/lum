@@ -4,7 +4,7 @@
 # Lum
 **Lum** is a voxel\* renderer\*\* built with Vulkan. Currently, it's only available in a form of C99/C++ API, but might (on request) be ported (in form of bindings) into Unity / Unreal / languages that support C interop. Currently, it is also in process of porting to Rust (in pure Rust form).
 
-\* Note: In Lum, "voxel" refers to a small, grid-aligned cube with a single material. Lum expects you to group voxels into blocks and blocks into world, but also supports non-grid-aligned models at a minor performance cost.
+\* Note: In Lum, "voxel" refers to a small, grid-aligned cube with a single material. Lum expects you to group voxels into blocks and blocks into world, but also supports non-grid-aligned models at a minor performance cost.\
 \*\* Note: Lum also has ECS ([check it out!](src/engine/README.md)), input, ~~Ui,~~ meshloader (and will have voxel physics engine), but it's stil mostly GPU code - so it's called renderer
 
 If you have ideas or suggestions for the API, feel free to open an [issue](https://github.com/platonvin/lum/issues)
@@ -70,7 +70,11 @@ To improve performance for release builds, you can enable **LTO**  (Link Time Op
 cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
 cmake --build .
 ```
+For faster builds, you can install Ninja and add `-G "Ninja"` to your CMake command
 
+```bash
+cmake -G "Ninja" .. -DCMAKE_BUILD_TYPE=Release
+```
 Note: this will only build lum library, not demo. For demo, go to [examples](examples/README.md)
 
 ### Integration 

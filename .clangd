@@ -1,2 +1,45 @@
+If:
+  PathMatch: build/.*
+
 CompileFlags:
-  CompilationDatabase: build/
+  CompilationDatabase: /build
+
+---
+
+If:
+  PathMatch: examples/build/.*
+
+CompileFlags:
+  CompilationDatabase: examples/build/
+
+---
+
+If:
+  PathMatch: examples/build_deb/.*
+
+CompileFlags:
+  CompilationDatabase: examples/build_deb/
+
+---
+
+If:
+  PathMatch: build_default/.*
+
+CompileFlags:
+  CompilationDatabase: build_default/
+
+---
+
+If:
+  PathMatch: build_gcc/.*
+
+CompileFlags:
+  CompilationDatabase: build_gcc/
+
+---
+
+If:
+  PathMatch: build_clang/.*
+
+CompileFlags:
+  CompilationDatabase: build_clang/

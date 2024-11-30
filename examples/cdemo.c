@@ -1,5 +1,3 @@
-// #include "input/input.hpp"
-
 #include <clum.h>
 #include <assert.h>
 #include <stdio.h>

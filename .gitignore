@@ -44,16 +44,14 @@ vcpkg_installed
 
 /bin
 /lib
-/build
-/build_default
-/build_gcc
-/build_msvc
-/build_clang
+/build*
+/examples/build*
 compile_commands.json
-/.cache/
+/.cache
 /examples/build
 /examples/lib
 /examples/bin
 /examples/CMakeFiles
 /.vs
 /out/build/x64-Debug
+/examples/.cache
