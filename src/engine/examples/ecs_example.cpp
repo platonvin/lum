@@ -14,20 +14,6 @@ using ComponentC = float;
 using ComponentD = int;
 // typedef float ComponentD;
 
-// function called on entity when its created. Aka constructor
-void init (ComponentA& a, ComponentB& b, ComponentC& c, ComponentD& d) {
-    a = {0xA};
-    b = {0xB};
-    c = 0xC;
-    d = 0xD;
-    std::cout << "  init:" << ";\n";
-}
-// function called on entity when its destroyed. Aka destructor
-void cleanup (ComponentA& a, ComponentB& b, ComponentC& c, ComponentD& d) {
-    std::cout << "  cleanup: ComponentA value: " << a.valueA << ", ComponentB value: " << b.valueB << ", ComponentC value: " << c << ";\n";
-}
-
-
 void funA (ComponentB& b, ComponentA& a) {
     std::cout << "    funA: ComponentA value: " << a.valueA << ", ComponentB value: " << b.valueB << ";\n";
 }
@@ -51,7 +37,7 @@ int main() {
         ComponentB,
         ComponentC,
         ComponentD
-    >(init, cleanup, funA, funB, funC, funD);
+    >(funA, funB, funC, funD);
     // static_assert(sizeof(ecs)==280);
 
     std::cout << "updating empty ecs\n";

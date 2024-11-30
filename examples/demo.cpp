@@ -40,11 +40,6 @@ typedef struct {quat rot;} rotation_mul;
 
 // defining ECS functions
 
-// function called on entity when its created. Aka constructor
-void init (Lum::MeshModel&, Lum::MeshTransform&, leg_point&, leg_joint_shift&, target_leg_point&, physical_leg_point&, interpolated_leg_point&, leg_center&, rotation_mul&) {}
-// function called on entity when its destroyed. Aka destructor
-void destroy (Lum::MeshModel&, Lum::MeshTransform&, leg_point&, leg_joint_shift&, target_leg_point&, physical_leg_point&, interpolated_leg_point&, leg_center&, rotation_mul&) {}
-
 // just sequance of functions to actually animate.
 // in real world you would balance their cache usage (e.g. divide/group to load as many data/functions as possible while staying in L1 cache)
 void calculateLegJointsAndRotations(leg_point& leg, leg_center& center, Lum::MeshTransform& trans, rotation_mul& mul) {
@@ -88,7 +83,7 @@ int main(){
         interpolated_leg_point,
         leg_center,
         rotation_mul
-    > (init, destroy, 
+    > (
        calculateLegJointsAndRotations,
        calculateAndUpdateLegPoints,
        interpolateAndCalculateLegRotation,

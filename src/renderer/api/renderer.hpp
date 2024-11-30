@@ -60,8 +60,7 @@ typedef struct {
     even tho world is limited, it is not supposed to be the whole game world
     instead, treat it like "sliding window view" into your game world
 */
-class Renderer {
-public:
+struct Renderer {
     Renderer() noexcept;
     Renderer(
             size_t block_palette_size, 

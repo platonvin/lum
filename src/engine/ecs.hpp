@@ -361,14 +361,10 @@ concept FunctionSatisfiesArguments = ComponentFunctionHelper<Func, Tuple>::value
  * @todo Implement synchronization so systems can be reordered.
  * @todo Parallelize update calls for improved performance.
  */
-template <typename ECManager_type, typename OnInitFunc, typename OnDestroyFunc, typename... UpdateFuncs> 
-requires FunctionSatisfiesArguments<OnInitFunc, typename ECManager_type::AllComponents> &&
-         FunctionSatisfiesArguments<OnDestroyFunc, typename ECManager_type::AllComponents>
+template <typename ECManager_type, typename... UpdateFuncs> 
 class ECSystem {
 public:
     ECManager_type ecm;
-    OnInitFunc init;
-    OnDestroyFunc destroy;
     std::tuple<UpdateFuncs...> functions;
 
     /**
@@ -378,11 +374,11 @@ public:
      * @param cleanup Function called for each entity when destroyed.
      * @param funcs Variadic list of update functions to operate on entities.
      */
-    constexpr inline ECSystem(OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs)
-        : init(init), destroy(cleanup), functions(std::make_tuple(funcs...)) {}
+    constexpr inline ECSystem(UpdateFuncs... funcs)
+        : functions(std::make_tuple(funcs...)) {}
 
-    constexpr inline ECSystem(ECManager_type& ecsInstance, OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs)
-        : ecm(ecsInstance), init(init), destroy(cleanup), functions(std::make_tuple(funcs...)) {}
+    constexpr inline ECSystem(ECManager_type& ecsInstance, UpdateFuncs... funcs)
+        : ecm(ecsInstance), functions(std::make_tuple(funcs...)) {}
 
     /**
      * @brief Creates a new entity.
@@ -390,7 +386,7 @@ public:
      * @return EntityID The ID of the newly created entity.
      */
     EntityID createEntity(){
-        return ecm.createEntity(init);
+        return ecm.createEntity();
     }
     /**
      * @brief Destroys an entity.
@@ -398,7 +394,7 @@ public:
      * @param id The ID of the entity to destroy.
      */
     void destroyEntity(EntityID id){
-        ecm.destroyEntity(destroy, id);
+        ecm.destroyEntity(id);
     }
     /**
      * @brief Resizes the internal storage for entities.
@@ -486,10 +482,10 @@ public:
  * 
  * @return An instance of the ECSystem
  */
-template <typename... Components, typename OnInitFunc, typename OnDestroyFunc, typename... UpdateFuncs>
-constexpr inline auto makeECSystem(OnInitFunc init, OnDestroyFunc cleanup, UpdateFuncs... funcs) {
+template <typename... Components, typename... UpdateFuncs>
+constexpr inline auto makeECSystem(UpdateFuncs... funcs) {
     using ECManager_t = ECManager<Components...>;
-    return ECSystem<ECManager_t, OnInitFunc, OnDestroyFunc, UpdateFuncs...>(init, cleanup, funcs...);
+    return ECSystem<ECManager_t, UpdateFuncs...>(funcs...);
 }
 
 } //namespace Lum
