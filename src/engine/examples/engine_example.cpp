@@ -40,8 +40,8 @@ void funD () {
 int main() {
     Engine engine;
     
-    auto ecs = Lum::makeECSystem<ComponentA, ComponentB, ComponentC>(
-        init, cleanup, funA, funB, funC, funD);
+    // auto ecs = Lum::makeECSystem<ComponentA, ComponentB, ComponentC>(
+        // init, cleanup, funA, funB, funC, funD);
     auto secs = EntityCollection<Lum::ECManager<
             ComponentA,
             ComponentB,
@@ -51,8 +51,8 @@ int main() {
 
     auto secs_collection = std::make_shared<decltype(secs)>(secs);
 
-        secs_collection->createEntity();
-        secs_collection->createEntity();
+        // secs_collection->createEntity();
+        // secs_collection->createEntity();
 
     // Adding systems to the engine
     engine.addSystem(secs_collection);

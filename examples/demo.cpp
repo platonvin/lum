@@ -73,7 +73,7 @@ int main(){
     // input system i designed. You can use, but it is not neccessary for Lum::Renderer
     Input input;
     // ecs system i designed. You can use, but it is not neccessary for Lum::Renderer
-    auto anim_system = Lum::makeECSystem<
+    auto anim_manager = Lum::ECManager<
         Lum::MeshModel,
         Lum::MeshTransform,
         leg_point,
@@ -83,30 +83,33 @@ int main(){
         interpolated_leg_point,
         leg_center,
         rotation_mul
-    > (
-       calculateLegJointsAndRotations,
-       calculateAndUpdateLegPoints,
-       interpolateAndCalculateLegRotation,
-       applyShiftAndDrawLeg);
+    > ();
+    auto anim_system = Lum::ECSystem (
+        anim_manager,
+        calculateLegJointsAndRotations,
+        calculateAndUpdateLegPoints,
+        interpolateAndCalculateLegRotation,
+        applyShiftAndDrawLeg
+    );
 
     // creating legs entities. Lum::EntityID is an opaque handle (index. Actually, indirect index)
-    Lum::EntityID rf_leg = anim_system.createEntity();
-    Lum::EntityID lf_leg = anim_system.createEntity();
-    Lum::EntityID rb_leg = anim_system.createEntity();
-    Lum::EntityID lb_leg = anim_system.createEntity();
+    Lum::EntityID rf_leg = anim_system.createEntity(anim_manager);
+    Lum::EntityID lf_leg = anim_system.createEntity(anim_manager);
+    Lum::EntityID rb_leg = anim_system.createEntity(anim_manager);
+    Lum::EntityID lb_leg = anim_system.createEntity(anim_manager);
     // setting up constants
-    anim_system.getEntityComponent<leg_center&>(rf_leg) = {vec3(14.0, 19.5, 6.5)};
-    anim_system.getEntityComponent<leg_center&>(lb_leg) = {vec3( 3.0,  3.5, 6.5)};
-    anim_system.getEntityComponent<leg_center&>(lf_leg) = {vec3( 3.0, 19.5, 6.5)};
-    anim_system.getEntityComponent<leg_center&>(rb_leg) = {vec3(14.0,  3.5, 6.5)};
-    anim_system.getEntityComponent<leg_joint_shift&>(rf_leg) = {vec3(10.0, 6.5, 12.5)};
-    anim_system.getEntityComponent<leg_joint_shift&>(lb_leg) = {vec3(10.0, 6.5, 12.5)};
-    anim_system.getEntityComponent<leg_joint_shift&>(lf_leg) = {vec3( 0.0, 6.5, 12.5)};
-    anim_system.getEntityComponent<leg_joint_shift&>(rb_leg) = {vec3( 0.0, 6.5, 12.5)};
-    anim_system.getEntityComponent<rotation_mul&>(rf_leg) = {quat(-vec3(0,0,glm::pi<float>()))};
-    anim_system.getEntityComponent<rotation_mul&>(lb_leg) = {glm::quat_identity<float, defaultp>()};
-    anim_system.getEntityComponent<rotation_mul&>(lf_leg) = {quat(-vec3(0,0,glm::pi<float>()))};
-    anim_system.getEntityComponent<rotation_mul&>(rb_leg) = {glm::quat_identity<float, defaultp>()};
+    anim_system.getEntityComponent<leg_center&>(anim_manager, rf_leg) = {vec3(14.0, 19.5, 6.5)};
+    anim_system.getEntityComponent<leg_center&>(anim_manager, lb_leg) = {vec3( 3.0,  3.5, 6.5)};
+    anim_system.getEntityComponent<leg_center&>(anim_manager, lf_leg) = {vec3( 3.0, 19.5, 6.5)};
+    anim_system.getEntityComponent<leg_center&>(anim_manager, rb_leg) = {vec3(14.0,  3.5, 6.5)};
+    anim_system.getEntityComponent<leg_joint_shift&>(anim_manager, rf_leg) = {vec3(10.0, 6.5, 12.5)};
+    anim_system.getEntityComponent<leg_joint_shift&>(anim_manager, lb_leg) = {vec3(10.0, 6.5, 12.5)};
+    anim_system.getEntityComponent<leg_joint_shift&>(anim_manager, lf_leg) = {vec3( 0.0, 6.5, 12.5)};
+    anim_system.getEntityComponent<leg_joint_shift&>(anim_manager, rb_leg) = {vec3( 0.0, 6.5, 12.5)};
+    anim_system.getEntityComponent<rotation_mul&>(anim_manager, rf_leg) = {quat(-vec3(0,0,glm::pi<float>()))};
+    anim_system.getEntityComponent<rotation_mul&>(anim_manager, lb_leg) = {glm::quat_identity<float, defaultp>()};
+    anim_system.getEntityComponent<rotation_mul&>(anim_manager, lf_leg) = {quat(-vec3(0,0,glm::pi<float>()))};
+    anim_system.getEntityComponent<rotation_mul&>(anim_manager, rb_leg) = {glm::quat_identity<float, defaultp>()};
 
     Lum::Settings settings = {};
         settings.fullscreen = false;
@@ -136,10 +139,10 @@ int main(){
         // material palette can also be loaded from alone
         // lum.loadPalette("my_magicavox_filescene_with_palette_i_want_to_extract.vox")
         // good way to handle this would be to have voxel for each material placed in scene to view them
-    anim_system.getEntityComponent<Lum::MeshModel&>(rf_leg) = lum.loadModel("assets/tank_rf_lb_leg.vox");
-    anim_system.getEntityComponent<Lum::MeshModel&>(lf_leg) = lum.loadModel("assets/tank_lf_rb_leg.vox");
-    anim_system.getEntityComponent<Lum::MeshModel&>(rb_leg) = lum.loadModel("assets/tank_lf_rb_leg.vox");
-    anim_system.getEntityComponent<Lum::MeshModel&>(lb_leg) = lum.loadModel("assets/tank_rf_lb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(anim_manager, rf_leg) = lum.loadModel("assets/tank_rf_lb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(anim_manager, lf_leg) = lum.loadModel("assets/tank_lf_rb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(anim_manager, rb_leg) = lum.loadModel("assets/tank_lf_rb_leg.vox");
+    anim_system.getEntityComponent<Lum::MeshModel&>(anim_manager, lb_leg) = lum.loadModel("assets/tank_rf_lb_leg.vox");
     
     Lum::MeshLiquid  water = lum.loadLiquid(69, 42);
     Lum::MeshVolumetric smoke = lum.loadVolumetric(1, .5, {});
@@ -177,7 +180,7 @@ int main(){
 
         process_physics(lum);
         process_animations(lum);
-        anim_system.update(); // also animations
+        anim_system.update(anim_manager); // also animations
         
         lum.startFrame();
         // this *could* be implicit
@@ -190,7 +193,7 @@ int main(){
         // lum.drawModel(tank_lf_leg, tank_lf_leg_trans);
         // lum.drawModel(tank_rb_leg, tank_rb_leg_trans);
         // lum.drawModel(tank_lb_leg, tank_lb_leg_trans);
-        anim_system.updateSpecific(drawLeg);
+        anim_system.updateSpecific(anim_manager, drawLeg);
         
 
         // literally procedural grass placement every frame. You probably want to store it as entities in your own structures

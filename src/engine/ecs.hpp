@@ -1,17 +1,16 @@
 #pragma once
-#include <string>
 #ifndef __ECS_HPP__
 #define __ECS_HPP__
 
-#include <algorithm>
 #include <cassert>
 #include <unordered_map>
-#include <vector>
 #include <tuple>
-#include <stdexcept>
 #include <iostream>
-// #include <chrono>
+#include <functional>
 #include <type_traits>
+
+#include "../containers/shared_vector.hpp"
+// #include "../containers/ankerl_unordered_dense.hpp"
 
 template <typename T>
 struct debug_type; // make compiler print type
@@ -21,29 +20,35 @@ using _func_pointer_t = std::add_pointer_t<_Func>;
 // is it possible to do it without macro?
 #define func_pointer_t(_Func) _func_pointer_t<decltype(_Func)>
 
-template<typename F, typename = void>
+template <typename T>
 struct function_traits;
 
-// specialization for function types
-template<typename R, typename ... A>
-struct function_traits<R(A...)> {
-    using return_type = R;
-    using args_type = std::tuple<A...>;
+// Specialization for functions and function pointers
+template <typename Ret, typename... Args>
+struct function_traits<Ret(Args...)> {
+    using return_type = Ret;
+    using args_type = std::tuple<Args...>;
 };
 
-// specialization for function pointer types
-template<typename R, typename ... A>
-struct function_traits<R(*)(A...)> {
-    using return_type = R;
-    using args_type = std::tuple<A...>;
-};
+// Specialization for function pointers
+template <typename Ret, typename... Args>
+struct function_traits<Ret(*)(Args...)> : function_traits<Ret(Args...)> {};
 
-// specialization for pointers to member functions
-template<typename R, typename G, typename ... A>
-struct function_traits<R(G::*)(A...)> {
-    using return_type = R;
-    using args_type = std::tuple<A...>;
-};
+// Specialization for member function pointers
+template <typename Ret, typename Class, typename... Args>
+struct function_traits<Ret(Class::*)(Args...)> : function_traits<Ret(Args...)> {};
+
+template <typename Ret, typename Class, typename... Args>
+struct function_traits<Ret(Class::*)(Args...) const> : function_traits<Ret(Args...)> {};
+
+// Specialization for std::function
+template <typename Ret, typename... Args>
+struct function_traits<std::function<Ret(Args...)>> : function_traits<Ret(Args...)> {};
+
+// Specialization for lambda or callable objects
+template <typename Callable>
+struct function_traits : function_traits<decltype(&Callable::operator())> {};
+
 
 template <typename Tuple>
 struct tuple_with_removed_refs;
@@ -95,22 +100,27 @@ namespace Lum {
 using EntityID = long long;  ///< Type alias for entity identifiers.
 using InternalIndex = int;  ///< Type alias for entity identifiers.
 template<typename... Components>
-class ECManager {
-public:
+struct ECManager {
     using AllComponents = std::tuple<Components&...>;
     /** 
      * @brief Nice defualt constructor 
      */
-    constexpr ECManager() : nextEntityID(69), cachedResize(0) {}
+    constexpr ECManager() : nextEntityID(69) {}
 
     constexpr inline InternalIndex createEntityInternal(){
-        InternalIndex newInternalIndex = aliveEntities.size();
-        ASSERT(newInternalIndex == internalIndexToID.size());
+        // new index is always the last one, because no gaps presented and we want tight packing
+        InternalIndex newInternalIndex = componentArrays.size();
 
-        internalIndexToID.push_back(nextEntityID);
+        //increase size by one (this is cached. dont worry)
+        componentArrays.resize(newInternalIndex+1);
 
-        aliveEntities.resize(newInternalIndex + 1, true);
-        (std::get<std::vector<Components>>(componentVectors).resize(newInternalIndex + 1), ...);
+        // mapping from internal to Id
+        componentArrays.template get<EntityID>()[newInternalIndex] = nextEntityID;
+        componentArrays.template get<bool>()[newInternalIndex] = true;
+
+
+        // aliveEntities.resize(newInternalIndex + 1, true);
+        // (std::get<std::vector<Components>>(componentVectors).resize(newInternalIndex + 1), ...);
         return newInternalIndex;
     }
     /**
@@ -151,7 +161,7 @@ public:
         auto it = idToInternalIndex.find(id);
         ASSERT (it != idToInternalIndex.end());
         InternalIndex index = it->second;
-        aliveEntities[index] = false;  // Updated to "aliveEntities"
+        componentArrays.template get<bool>()[index] = false;  // Updated to "aliveEntities"
     }
     template<typename Func>
     void destroyEntity(Func func, EntityID id) {
@@ -159,12 +169,13 @@ public:
         ASSERT (it != idToInternalIndex.end());
         InternalIndex index = it->second;
         loadAndInvoke(func, index);
-        aliveEntities[index] = false;  // Updated to "aliveEntities"
+        componentArrays.template get<bool>()[index] = false;  // Updated to "aliveEntities"
     }
     // just reads component from corresponding vector
     template<typename Component>
-    Component& getEntityComponentInternal(int index) {
-        return std::get<std::vector<Component>>(componentVectors)[index];
+    Component& getEntityComponentInternal(int internal_index) {
+        // return std::get<std::vector<Component>>(componentArrays)[index];
+        return componentArrays.template get<Component>()[internal_index];
     }
 
     /**
@@ -182,7 +193,19 @@ public:
         auto it = idToInternalIndex.find(id);
         ASSERT(it != idToInternalIndex.end());
         InternalIndex index = it->second;
-        ASSERT(index < aliveEntities.size());
+        ASSERT(index < componentArrays.size());
+        return getEntityComponentInternal<Component>(index);
+    }
+    
+    template<typename ComponentRef>
+    requires std::is_reference<ComponentRef>::value
+    // ComponentRef is Component& 
+    ComponentRef getEntityComponent(EntityID id) {
+        auto it = idToInternalIndex.find(id);
+        ASSERT(it != idToInternalIndex.end());
+        InternalIndex index = it->second;
+        ASSERT(index < componentArrays.size());
+        using Component = std::remove_reference<ComponentRef>::type;
         return getEntityComponentInternal<Component>(index);
     }
 
@@ -201,7 +224,10 @@ public:
     }
 
     std::tuple<Components&...> getEntityComponentsInternal(InternalIndex internal_index) {
-        return std::tie(std::get<std::vector<Components>>(componentVectors)[internal_index]...);
+        return std::tie(
+            // std::get<std::vector<Components>>(componentVectors)[internal_index]...
+            componentArrays.template get<Components>()[internal_index]...
+            );
     }
 
     template<typename Func>
@@ -209,7 +235,7 @@ public:
     void forEachEntityWith(Func func) {
         // TODO: assume vectorizable?
         // #pragma GCC ivdep
-        for (size_t i = 0; i < aliveEntities.size(); ++i) {
+        for (size_t i = 0; i < componentArrays.size(); ++i) {
             loadAndInvoke<Func>(func, i);
         }
     }
@@ -246,45 +272,53 @@ public:
      * @brief Updates the ECS, removing dead entities and compacting component vectors
      */
     void update() {
-        // remove dead enteties components 
-        auto compactComponents = [&](auto& componentVec) {
+        size_t old_size = componentArrays.size();
+        size_t new_size = 0;
+        // fun to remove dead enteties components
+        // TODO: sort by frequancy? Cache entity which is first to be updated to save iterations?
+        auto compactComponents = [&](auto* componentVec) {
             InternalIndex writeIndex = 0;
-            for (InternalIndex readIndex = 0; readIndex < aliveEntities.size(); readIndex++) {
-                if (aliveEntities[readIndex]) {
+            for (InternalIndex readIndex = 0; readIndex < componentArrays.size(); readIndex++) {
+                if (componentArrays.template get<bool>()[readIndex]) {
                     componentVec[writeIndex] = componentVec[readIndex];
                     writeIndex++;
                 }
             }
         };
 
-        // for all components
-        (compactComponents(std::get<std::vector<Components>>(componentVectors)), ...);
+        // generates code to invoce compactComponents on each pointer in this shared_vector
+        // for all "custom" components
+        (compactComponents(componentArrays.template get<Components>()), ...);
 
-        // same buf for "if alive" component
+        // iterate over entities, and remove mappings for dead ones from hashtable
         InternalIndex writeIndex = 0;
-        for (InternalIndex readIndex = 0; readIndex < aliveEntities.size(); readIndex++) {
-            if (aliveEntities[readIndex]) {
-                aliveEntities[writeIndex] = aliveEntities[readIndex];
-                internalIndexToID[writeIndex] = internalIndexToID[readIndex];
+        for (InternalIndex readIndex = 0; readIndex < old_size; readIndex++) {
+            bool is_read_alive = componentArrays.template get<bool>()[readIndex];
+            if (is_read_alive) {
+                componentArrays.template get<bool>()[writeIndex] = componentArrays.template get<bool>()[readIndex];
+                componentArrays.template get<EntityID>()[writeIndex] = componentArrays.template get<EntityID>()[readIndex];
                 writeIndex++;
-            } else {
-                EntityID deadEntityID = internalIndexToID[readIndex];
-                idToInternalIndex.erase(deadEntityID);
+            } else { // read entity is dead. Remove it from mapping
+                // NOTE: currently, this is currently not used, 
+                // because mappings are recalculated every frame
+
+                // EntityID deadEntityID = componentArrays.template get<EntityID>()[readIndex];
+                // idToInternalIndex.erase(deadEntityID);
             }
         }
+        new_size = writeIndex;
+        // NOTE: "internal to Id" and "is alive" should not be compacted
+        // becuase they already are (above)
 
-        resize(writeIndex);  // Resize the internal structures
+        resize(writeIndex);  // Resize the internal structures (component arrays). This is cached
+
         idToInternalIndex.clear();
         for (InternalIndex i = 0; i < writeIndex; i++) {
-            idToInternalIndex[internalIndexToID[i]] = i;
+            EntityID corresponding_id = componentArrays.template get<EntityID>()[i];
+            idToInternalIndex[corresponding_id] = i;
         }
-
-        // for next cached usage
-        cachedResize = aliveEntities.size();
-        ASSERT(cachedResize == internalIndexToID.size());
     }
 
-private:
     /**
      * @brief Resizes the internal data structures to the specified size.
      *
@@ -292,9 +326,10 @@ private:
      * @param newSize The new size to resize to.
      */
     void resize(int newSize) {
-        (std::get<std::vector<Components>>(componentVectors).resize(newSize), ...);
-        aliveEntities.resize(newSize);
-        internalIndexToID.resize(newSize);
+        // (std::get<std::vector<Components>>(componentVectors).resize(newSize), ...);
+        // aliveEntities.resize(newSize);
+        // internalIndexToID.resize(newSize);
+        componentArrays.resize(newSize);
     }
 
     /**
@@ -304,27 +339,31 @@ private:
      * @param from The index to move the entity from.
      * @param to The index to move the entity to.
      */
-    void moveEntity(InternalIndex from, InternalIndex to) {
-        if (from != to) {
-            internalIndexToID[to] = internalIndexToID[from];
-            (std::swap(std::get<std::vector<Components>>(componentVectors)[from], 
-                       std::get<std::vector<Components>>(componentVectors)[to]), ...);
-            aliveEntities[to] = aliveEntities[from];
-        }
-    }
+    // void moveEntity(InternalIndex from, InternalIndex to) {
+    //     if (from != to) {
+    //         internalIndexToID[to] = internalIndexToID[from];
+    //         (std::swap(std::get<std::vector<Components>>(componentVectors)[from], 
+    //                    std::get<std::vector<Components>>(componentVectors)[to]), ...);
+    //         componentArrays.template get<bool>()[to] = componentArrays.template get<bool>()[from];
+    //     }
+    // }
 
-    std::tuple<std::vector<Components>...> componentVectors;  ///< Vectors of component data.
-    /* Components that are always presented */
-    std::vector<bool> aliveEntities;  ///< Aka cached delete. Flags indicating whether an entity is alive
-    std::vector<EntityID> internalIndexToID;  ///< Mapping of internal indices to entity IDs.
-    //TODO: find best umap. Ankerl?
+    // this is like vectors, one per component
+    shared_vector<
+        bool,         ///< Aka cached delete. Flags indicating whether an entity is alive
+        EntityID,     ///< Mapping of internal indices to entity IDs.
+        Components... ///< Vectors of component data.
+    > componentArrays;
+
+    // std::tuple<std::vector<Components>...> componentVectors;  
+    // std::vector<bool> aliveEntities; 
+    // std::vector<EntityID> internalIndexToID;  
     
     // ankerl::unordered_dense::segmented_map<EntityID, InternalIndex> idToInternalIndex;  ///< Mapping of entity IDs to internal indices.
     std::unordered_map<EntityID, InternalIndex> idToInternalIndex;  ///< Mapping of entity IDs to internal indices.
     // absl::flat_hash_map<EntityID, InternalIndex> idToInternalIndex;  ///< Mapping of entity IDs to internal indices.
     // gtl::btree_map<EntityID, InternalIndex> idToInternalIndex;  ///< Mapping of entity IDs to internal indices.
     EntityID nextEntityID;  ///< ID to be assigned to the next created entity.
-    InternalIndex cachedResize; ///< Size component vectors will be qual to. Cached prevent resizing on every createEntity()
 };
 
 // Utility to expand the tuple into individual types
@@ -362,9 +401,8 @@ concept FunctionSatisfiesArguments = ComponentFunctionHelper<Func, Tuple>::value
  * @todo Parallelize update calls for improved performance.
  */
 template <typename ECManager_type, typename... UpdateFuncs> 
-class ECSystem {
+struct ECSystem {
 public:
-    ECManager_type ecm;
     std::tuple<UpdateFuncs...> functions;
 
     /**
@@ -377,15 +415,14 @@ public:
     constexpr inline ECSystem(UpdateFuncs... funcs)
         : functions(std::make_tuple(funcs...)) {}
 
-    constexpr inline ECSystem(ECManager_type& ecsInstance, UpdateFuncs... funcs)
-        : ecm(ecsInstance), functions(std::make_tuple(funcs...)) {}
-
+    constexpr inline ECSystem(ECManager_type& ecm, UpdateFuncs... funcs)
+        : functions(std::make_tuple(funcs...)) {}
     /**
      * @brief Creates a new entity.
      * 
      * @return EntityID The ID of the newly created entity.
      */
-    EntityID createEntity(){
+    EntityID createEntity(ECManager_type& ecm){
         return ecm.createEntity();
     }
     /**
@@ -393,7 +430,7 @@ public:
      * 
      * @param id The ID of the entity to destroy.
      */
-    void destroyEntity(EntityID id){
+    void destroyEntity(ECManager_type& ecm, EntityID id){
         ecm.destroyEntity(id);
     }
     /**
@@ -401,7 +438,7 @@ public:
      * 
      * @param newSize The new size for the entity storage.
      */
-    void resize(int newSize){
+    void resize(ECManager_type& ecm, int newSize){
         ecm.resize(newSize);
     }
     /**
@@ -412,7 +449,7 @@ public:
      * @return Component& reference to the requested component.
      */
     template<typename Component>
-    constexpr inline Component& getEntityComponent(EntityID id) {
+    constexpr inline Component& getEntityComponent(ECManager_type& ecm, EntityID id) {
         return ecm.template getEntityComponent<Component>(id);
     }
     /**
@@ -423,7 +460,8 @@ public:
      * @return Component& reference to the requested component.
      */
     template<typename Component>
-    constexpr inline Component& getEntityComponent(EntityID id) requires std::is_reference<Component>::value {
+    constexpr inline Component& getEntityComponent(ECManager_type& ecm, EntityID id) 
+    requires std::is_reference<Component>::value {
         using BaseComponent = std::remove_reference_t<Component>;
         return ecm.template getEntityComponent<BaseComponent>(id);
     }
@@ -434,7 +472,7 @@ public:
      * @param id The ID of the entity whose components are to be retrieved.
      * @return std::tuple<Components&...> references to all components associated for the specified entity.
      */
-    constexpr inline auto getEntityComponents(EntityID id) {
+    constexpr inline auto getEntityComponents(ECManager_type& ecm, EntityID id) {
         return ecm.getEntityComponents(id);
     }
 
@@ -444,10 +482,10 @@ public:
      * 
      * Calls the update functions in the order defined in the constructor for all entities.
      */
-    constexpr inline void update() {
+    constexpr inline void update(ECManager_type& ecm) {
         ecm.update();
         // For each function in the tuple, call ecm.forEachEntityWith
-        std::apply([this](UpdateFuncs&... funcs) {
+        std::apply([&, this](UpdateFuncs&... funcs) {
             (ecm.forEachEntityWith(funcs), ...);
         }, functions);
     }
@@ -460,7 +498,7 @@ public:
      * @details just call ecs.updateSpecific(YourFunction);
      */
     template <typename Func>
-    constexpr inline void updateSpecific(Func fun) {
+    constexpr inline void updateSpecific(ECManager_type& ecm, Func fun) {
         ecm.forEachEntityWith(fun);
     }
 };
@@ -482,11 +520,11 @@ public:
  * 
  * @return An instance of the ECSystem
  */
-template <typename... Components, typename... UpdateFuncs>
-constexpr inline auto makeECSystem(UpdateFuncs... funcs) {
-    using ECManager_t = ECManager<Components...>;
-    return ECSystem<ECManager_t, UpdateFuncs...>(funcs...);
-}
+// template <typename... Components, typename... UpdateFuncs>
+// constexpr inline auto makeECSystem(UpdateFuncs... funcs) {
+//     using ECManager_t = ECManager<Components...>;
+//     return ECSystem<ECManager_t, UpdateFuncs...>(funcs...);
+// }
 
 } //namespace Lum
 
