@@ -56,8 +56,8 @@ void Lum::Renderer::init(Lum::Settings lum_settings) noexcept {
         internal_settings.profile                   = lum_settings.profile;
     
         //this has to be managed better but works for now
-        internal_settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
-        internal_settings.timestampCount = 48;
+        // internal_settings.debug = false; //Validation Layers. Use them while developing or be tricked into thinking that your code is correct
+        // internal_settings.timestampCount = 48;
         internal_settings.profile = true; //monitors perfomance via timestamps. You can place one with PLACE_TIMESTAMP() macro
         // currently fif has bug in it, do not change for now 
         internal_settings.fif = LumInternal::MAX_FRAMES_IN_FLIGHT; // Frames In Flight. If 1, then record cmdbuff and submit it. If multiple, cpu will (might) be ahead of gpu by FIF-1, which makes GPU wait less

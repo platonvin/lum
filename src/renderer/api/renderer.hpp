@@ -41,17 +41,17 @@ typedef void*                MeshUi; // RmlUi interface thing
 typedef LumInternal::MeshTransform MeshTransform; // namespace typedef 
 typedef LumInternal::Particle      Particle; // namespace typedef 
 typedef LumInternal::Camera        Camera; // namespace typedef 
-typedef struct {
+struct Settings {
     glm::vec3 world_size;
     int static_block_palette_size;
     int maxParticleCount;
-    int timestampCount;
-    int fif;
-    bool vsync;
-    bool fullscreen;
-    bool debug;
-    bool profile;
-} Settings; 
+    int timestampCount = 48;
+    int fif = 2;
+    bool vsync = false;
+    bool fullscreen = false;
+    bool debug = false;
+    bool profile = true;
+}; 
 
 /*
     Lum::Renderer is a lightweight wrapper around LumInternalRenderer, with more stable and nicer API

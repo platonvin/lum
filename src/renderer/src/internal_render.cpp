@@ -1047,7 +1047,9 @@ void LumInternal::LumInternalRenderer::update_radiance() {
     TRACE()
     table3d<bool> 
         set = {};
+    TRACE()
         set.allocate(world_size);
+    TRACE()
         set.set(false);
     TRACE()
     radianceUpdates.clear();
@@ -1065,7 +1067,7 @@ void LumInternal::LumInternalRenderer::update_radiance() {
                     ivec3 test_block = ivec3 (xx + dx, yy + dy, zz + dz);
                     // kinda slow... but who cares on less then 1m blocks
                     // safity
-                    test_block = glm::clamp(test_block, ivec3(0), ivec3(world_size));
+                    test_block = glm::clamp(test_block, ivec3(0), ivec3(world_size)-1);
                     sum_of_neighbours += current_world (test_block);
                 }}}
                 if(sum_of_neighbours > 0){
@@ -1082,6 +1084,7 @@ void LumInternal::LumInternalRenderer::update_radiance() {
             radianceUpdates.push_back (u);
         }
     } specialRadianceUpdates.clear();
+    set.deallocate();
     VkDeviceSize bufferSize = sizeof (radianceUpdates[0]) * radianceUpdates.size();
     memcpy (stagingRadianceUpdates.current().mapped, radianceUpdates.data(), bufferSize);
 
