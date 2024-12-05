@@ -75,7 +75,15 @@ public:
         glfwSetKeyCallback(window, glfwKeyCallback);
         glfwSetMouseButtonCallback(window, glfwMouseButtonCallback);
         glfwSetCursorPosCallback(window, glfwCursorPosCallback);
+        glfwSetWindowSizeCallback(window, glfwWindowSizeCallback);
         glfwSetJoystickCallback(glfwJoystickConnectCallback);
+
+            int w,h;
+        glfwGetWindowSize(window, &w, &h);
+            screenSizef = dvec2(w,h);
+            screenSizei = vec2(w,h);
+
+        
         //TODO?
         joystickId = glfwJoystickPresent(GLFW_JOYSTICK_1) ? -1 : GLFW_JOYSTICK_1;
     }
@@ -119,6 +127,13 @@ private:
         if (handler) {
             handler->updateMousePosition(xpos, ypos);
         }
+    }
+    static void glfwWindowSizeCallback(GLFWwindow* window, int width, int height){
+        auto* handler = (InputHandler*)(glfwGetWindowUserPointer(window));
+        if (handler) {
+            handler->screenSizef = dvec2((double)width, (double)height);
+            handler->screenSizei = ivec2(width, height);
+        }  
     }
 
     void attemptTriggerActionForKey(int key, bool isPressed){
@@ -175,8 +190,14 @@ private:
     //TODO?
     bool hasJoystick() {return joystickId != -1;}
 public:
+    // screen coords are from top-left to right-bottom
+    // so NOT IN [0~1], but in [0~YourScreenSize] for both
     dvec2 mousePosf;
     ivec2 mousePosi;
+
+    // screen coords are from top-left to right-bottom
+    dvec2 screenSizef;
+    ivec2 screenSizei;
 private:
     int joystickId = -1;
     GLFWgamepadstate gState;
