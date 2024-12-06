@@ -273,6 +273,17 @@ struct LumInternalRenderer {
         void present();
     void end_frame();
 
+    struct AABB {
+        vec3 min;
+        vec3 max;
+
+        bool contains(const vec3& point) const;
+        bool intersects(const AABB& other) const;
+    };
+    bool mesh_intersects_aabb (InternalMeshModel* mesh, const mat4& transform, const AABB& block_aabb);
+    AABB get_shift (dmat4 trans, ivec3 size);
+
+
     template<class Vertex_T> vector<Lumal::Buffer> createElemBuffers (Vertex_T* vertices, u32 count, u32 buffer_usage = 0);
     template<class Vertex_T> vector<Lumal::Buffer> createElemBuffers (vector<Vertex_T> vertices, u32 buffer_usage = 0);
 

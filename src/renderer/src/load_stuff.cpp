@@ -23,7 +23,7 @@ using glm::dvec2,glm::dvec3,glm::dvec4;
 using glm::mat, glm::mat2, glm::mat3, glm::mat4;
 using glm::dmat2, glm::dmat3, glm::dmat4;
 
-tuple<int, int> get_block_xy (int N);
+ivec2 get_block_xy (int N);
 
 #ifdef DISTANCE_FIELD
 struct bp_tex {u8 r; u8 g;};
@@ -44,15 +44,15 @@ void LumInternal::LumInternalRenderer::updateBlockPalette (BlockWithMesh* blockP
         for (i32 x = 0; x < BLOCK_SIZE; x++) {
             for (i32 y = 0; y < BLOCK_SIZE; y++) {
                 for (i32 z = 0; z < BLOCK_SIZE; z++) {
-                    auto [block_x, block_y] = get_block_xy (N);
+                    ivec2 block_xy = get_block_xy (N);
                     // if (blockPalette[N] == NULL) {
                     //     blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
                     // } else 
                     {
                         if (N < static_block_palette_size) {
-                            blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = (u16) blockPalette[N].voxels[x][y][z];
+                            blockPaletteLinear (x + 16 * block_xy.x, y + 16 * block_xy.y, z).r = (u16) blockPalette[N].voxels[x][y][z];
                         } else {
-                            blockPaletteLinear (x + 16 * block_x, y + 16 * block_y, z).r = 0;
+                            blockPaletteLinear (x + 16 * block_xy.y, y + 16 * block_xy.y, z).r = 0;
                         }
                     }
                 }

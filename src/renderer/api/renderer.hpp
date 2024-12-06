@@ -28,7 +28,7 @@ public:
     void* ptr = nullptr;
     MeshModelWithGetters(void* ptr) : ptr(ptr) {} 
     MeshModelWithGetters() : ptr(nullptr) {} 
-    glm::ivec3 getSize();
+    glm::ivec3 getSize() const;
     operator void* ();
 };
 

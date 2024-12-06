@@ -206,6 +206,46 @@ static bool is_block_visible(dmat4 trans, dvec3 pos){
     return false;
 }
 
+// version for screen-space visibility
+static bool is_model_visible(const Lum::MeshModel& model, const Lum::MeshTransform& trans, const glm::mat4& viewProjMatrix) {
+    // Calculate the model's bounding box after applying the transform
+    glm::ivec3 modelSize = model.getSize();
+    glm::vec3 minCorner = glm::vec3(0.0f); // Least corner before transform
+    glm::vec3 maxCorner = glm::vec3(modelSize); // Max corner before transform
+
+    // Transform the corners
+    std::array<glm::vec3,8> transformedCorners = {};
+    int index = 0;
+    for (int x = 0; x <= 1; ++x) {
+        for (int y = 0; y <= 1; ++y) {
+            for (int z = 0; z <= 1; ++z) {
+                glm::vec3 corner = glm::vec3(x, y, z) * maxCorner + minCorner;
+                transformedCorners[index++] = trans.rot * corner + trans.shift;
+            }
+        }
+    }
+
+    // Check if any corner is within the screen bounds
+    for (let corner : transformedCorners) {
+        glm::vec4 clip = viewProjMatrix * glm::vec4(corner, 1.0f);
+
+        // Perspective divide (to convert from clip space to NDC)
+        // NOTE: i have no idea if it actually helps. TODO:
+        if (clip.w != 0.0f) {
+            clip /= clip.w;
+        }
+
+        // Check if the point lies within the NDC range
+        // i guess i can use GLM for simd but its not bottleneck for now
+        // TODO: asm view to imrpove every fun
+        if ((clip.x >= -1.0f) && (clip.y >= -1.0f) && (clip.z >= -1.0f) &&
+            (clip.x <= +1.0f) && (clip.y <= +1.0f) && (clip.z <= +1.0f)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Lum::Renderer::drawWorld() noexcept {
     // block_que.clear(); done in startFrame
     // cam_dist could be moved into update()
@@ -216,36 +256,27 @@ void Lum::Renderer::drawWorld() noexcept {
     for(int yy=0; yy < opaque_members->settings.world_size.y; yy++){
     for(int zz=0; zz < opaque_members->settings.world_size.z; zz++){
         MeshModel* block_mesh = NULL;
-        // TRACE()
+TRACE()
         int block_id = opaque_members->render.origin_world(xx,yy,zz);
-        // TRACE()
+TRACE()
         if(block_id != 0){
             struct BlockRenderRequest /*goes*/ brr = {}; //
             brr.pos = ivec3(xx*16,yy*16, zz*16);
             brr.block = block_id;
 
             // vec3 clip_coords = (render.camera.cameraTransform * vec4(brr.pos,1));
-            //     clip_coords.z = -clip_coords.z;
+            //     clip_coords.z = -clip_coords.z   ;
 
             // brr.cam_dist = clip_coords.z;
 
-        // TRACE()
+TRACE()
             if(is_block_visible(opaque_members->render.camera.cameraTransform, dvec3(brr.pos))){
-        // TRACE()
-        //     LOG(block_que.size())
-        //     LOG(&block_que)
-        //     LOG(block_que.data())
-        //     LOG(brr.pos.x)
-        //     LOG(brr.pos.y)
-        //     LOG(brr.pos.z)
-        //     LOG(brr.cam_dist)
-        //     LOG(brr.block)
                 block_que.push_back(brr);
-        // TRACE()
+TRACE()
             }
-        // TRACE()
+TRACE()
         }
-        // TRACE()
+TRACE()
         assert(block_id <= opaque_members->render.static_block_palette_size && "there is block in the world that is outside of the palette");
     }}}
 }
@@ -254,13 +285,46 @@ void Lum::Renderer::drawParticles() noexcept {
     // nothing here. Particles are not worth sorting
 }
 
+// world visibility. Turns out, screen-space is better, but gotta keep this one
+static bool isModelVisible(const Lum::MeshModel& model, const Lum::MeshTransform& trans, const glm::dvec3& worldSize) {
+    // Calculate the model's bounding box after applying the transform
+    glm::ivec3 modelSize = model.getSize();
+    glm::vec3 minCorner = glm::vec3(0.0f); // Least corner before transform
+    glm::vec3 maxCorner = glm::vec3(modelSize); // Max corner before transform
+
+    // Transform the corners
+    glm::vec3 transformedCorners[8];
+    int index = 0;
+    for (int x = 0; x <= 1; ++x) {
+        for (int y = 0; y <= 1; ++y) {
+            for (int z = 0; z <= 1; ++z) {
+                glm::vec3 corner = glm::vec3(x, y, z) * maxCorner + minCorner;
+                transformedCorners[index++] = trans.rot * corner + trans.shift;
+            }
+        }
+    }
+
+    // Check if any corner is inside the world bounds
+    for (const auto& corner : transformedCorners) {
+        if (corner.x >= 0.0 && corner.y >= 0.0 && corner.z >= 0.0 &&
+            corner.x <= worldSize.x && corner.y <= worldSize.y && corner.z <= worldSize.z) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Lum::Renderer::drawModel(const MeshModel& mesh, const MeshTransform& trans) noexcept {
     assert(mesh.ptr != nullptr);
-    ModelRenderRequest 
-        mrr = {};
-        mrr.mesh = mesh;
-        mrr.trans = trans;
-    mesh_que.push_back(mrr);
+    
+    // if (isModelVisible(mesh, trans, dvec3(getWorldSize())*16.0)) {
+    if (is_model_visible(mesh, trans, opaque_members->render.camera.cameraTransform)) {
+        ModelRenderRequest 
+            mrr = {};
+            mrr.mesh = mesh;
+            mrr.trans = trans;
+        mesh_que.push_back(mrr);
+    }
 }
 
 void Lum::Renderer::drawFoliageBlock(const MeshFoliage& foliage, const ivec3& pos) noexcept {
@@ -518,8 +582,7 @@ void Lum::Renderer::addParticle(Particle particle){
     opaque_members->render.particles.push_back(particle);
 }
 
-
-glm::ivec3 Lum::MeshModelWithGetters::getSize() {
+glm::ivec3 Lum::MeshModelWithGetters::getSize() const {
     LumInternal::InternalMeshModel* ptr = (LumInternal::InternalMeshModel*) this->ptr;
     return ptr->size;
 }

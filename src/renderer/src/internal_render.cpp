@@ -41,7 +41,7 @@ using glm::intBitsToFloat;
     }\
 } while(0)
 
-tuple<int, int> get_block_xy (int N);
+ivec2 get_block_xy (int N);
 
 vector<char> readFile (const char* filename);
 
@@ -928,12 +928,7 @@ void LumInternal::LumInternalRenderer::start_blockify() {
     TRACE();
 }
 
-struct AABB {
-    vec3 min;
-    vec3 max;
-};
-
-static AABB get_shift (dmat4 trans, ivec3 size) {
+LumInternal::LumInternalRenderer::AABB LumInternal::LumInternalRenderer::get_shift (dmat4 trans, ivec3 size) {
     vec3 box = vec3 (size - 1);
     vec3 zero = vec3 (0);
     vec3 corners[8];
@@ -960,49 +955,93 @@ static AABB get_shift (dmat4 trans, ivec3 size) {
     return rbox;
 }
 
+// bool LumInternal::LumInternalRenderer::mesh_intersects_aabb(
+//     InternalMeshModel* mesh, const mat4& transform, const AABB& block_aabb
+// ) {
+//     // Transform mesh vertices and check against block AABB
+//     for (const vec3& vertex : mesh->vertices) {
+//         vec3 transformed_vertex = vec3(transform * vec4(vertex, 1.0f));
+//         if (block_aabb.contains(transformed_vertex)) {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+
 // allocates temp block in palette for every block that intersects with every mesh blockified
-void LumInternal::LumInternalRenderer::blockify_mesh (InternalMeshModel* mesh, MeshTransform* trans) {
-    mat4 rotate = toMat4 ((*trans).rot);
-    mat4 shift = translate (identity<mat4>(), (*trans).shift);
-    struct AABB border_in_voxel = get_shift (shift* rotate, (*mesh).size);
-    struct {ivec3 min; ivec3 max;} border;
-    border.min = (ivec3 (border_in_voxel.min) - ivec3 (1)) / ivec3 (16);
-    border.max = (ivec3 (border_in_voxel.max) + ivec3 (1)) / ivec3 (16);
-    border.min = glm::clamp (border.min, ivec3 (0), ivec3 (world_size - u32(1)));
-    border.max = glm::clamp (border.max, ivec3 (0), ivec3 (world_size - u32(1)));
-    for (int xx = border.min.x; xx <= border.max.x; xx++) {
-        for (int yy = border.min.y; yy <= border.max.y; yy++) {
-            for (int zz = border.min.z; zz <= border.max.z; zz++) {
-                //if inside model TODO
-                //zero Lumal::clear TODO
-                int current_block = current_world (xx, yy, zz);
-                if (current_block < static_block_palette_size) { // static
-                    //add to copy queue
-                    ivec2 src_block = {};
-                    tie (src_block.x, src_block.y) = get_block_xy (current_block);
-                    ivec2 dst_block = {};
-                    tie (dst_block.x, dst_block.y) = get_block_xy (paletteCounter);
-                    VkImageCopy static_block_copy = {};
-                        static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                        static_block_copy.srcSubresource.baseArrayLayer = 0;
-                        static_block_copy.srcSubresource.layerCount = 1;
-                        static_block_copy.srcSubresource.mipLevel = 0;
-                        static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                        static_block_copy.dstSubresource.baseArrayLayer = 0;
-                        static_block_copy.dstSubresource.layerCount = 1;
-                        static_block_copy.dstSubresource.mipLevel = 0;
-                        static_block_copy.extent = {16, 16, 16};
-                        static_block_copy.srcOffset = {src_block.x * 16, src_block.y * 16, 0};
-                        static_block_copy.dstOffset = {dst_block.x * 16, dst_block.y * 16, 0};
-                    blockCopyQueue.push_back (static_block_copy);
-                    current_world (xx, yy, zz) = paletteCounter;
-                    paletteCounter++; // yeah i dont trust myself in this
-                } else {
-                    //already new block, just leave it
+void LumInternal::LumInternalRenderer::blockify_mesh(InternalMeshModel* mesh, MeshTransform* trans) {
+    // Compute the transformed AABB for the mesh
+    // ATRACE()
+    mat4 transform = translate(identity<mat4>(), trans->shift) * toMat4(trans->rot);
+    AABB mesh_aabb = get_shift(transform, mesh->size);
+    // ATRACE()
+
+    // Calculate voxel grid bounds
+    ivec3 min_block = glm::clamp(
+        (ivec3(mesh_aabb.min) - 1) / 16,
+        ivec3(0),
+        ivec3(world_size) - 1
+    );
+    ivec3 max_block = glm::clamp(
+        (ivec3(mesh_aabb.max) + 1) / 16,
+        ivec3(0),
+        ivec3(world_size) - 1
+    );
+
+    // ATRACE()
+    // Iterate over potentially occupied blocks
+    for (int x = min_block.x; x <= max_block.x; ++x) {
+        for (int y = min_block.y; y <= max_block.y; ++y) {
+            for (int z = min_block.z; z <= max_block.z; ++z) {
+                // Calculate AABB of the block in world space
+                AABB block_aabb = {
+                    vec3(x, y, z) * 16.0f,
+                    vec3(x + 1, y + 1, z + 1) * 16.0f
+                };
+
+                // Check if the mesh AABB intersects with the block AABB
+                if (!mesh_aabb.intersects(block_aabb)) {
+                    continue; // Skip if no intersection
                 }
+
+                // Process the block
+                int current_block = current_world(x, y, z);
+                if (current_block < static_block_palette_size) {
+                    // Prepare copy operation for static blocks
+                    ivec2 src_block = get_block_xy(current_block);
+                    ivec2 dst_block = get_block_xy(paletteCounter);
+
+                    VkImageCopy block_copy = {};
+                    block_copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                    block_copy.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                    block_copy.extent = {16, 16, 16};
+                    block_copy.srcOffset = {src_block.x * 16, src_block.y * 16, 0};
+                    block_copy.dstOffset = {dst_block.x * 16, dst_block.y * 16, 0};
+
+                    blockCopyQueue.push_back(block_copy);
+                    current_world(x, y, z) = paletteCounter;
+                    ++paletteCounter;
+                }
+                // If block is already processed, do nothing
             }
         }
     }
+    // ATRACE()
+}
+
+bool LumInternal::LumInternalRenderer::AABB::contains(const vec3& point) const {
+    // ATRACE()
+    return (point.x >= min.x && point.x <= max.x) &&
+           (point.y >= min.y && point.y <= max.y) &&
+           (point.z >= min.z && point.z <= max.z);
+}
+
+bool LumInternal::LumInternalRenderer::AABB::intersects(const AABB& other) const {
+    // ATRACE()
+    return (min.x <= other.max.x && max.x >= other.min.x) &&
+           (min.y <= other.max.y && max.y >= other.min.y) &&
+           (min.z <= other.max.z && max.z >= other.min.z);
 }
 
 void LumInternal::LumInternalRenderer::end_blockify() {
@@ -1106,6 +1145,8 @@ void LumInternal::LumInternalRenderer::update_radiance() {
     } else if (timeTakenByRadiance > 2.2) {
         magicSize ++;
     }
+    // LOG(timeTakenByRadiance);
+    // LOG(magicSize);
     magicSize = glm::max (magicSize, 1); //never remove
     magicSize = glm::min (magicSize, 10);
     struct rtpc {int time, iters, size, shift;} pushconstant = {lumal.iFrame, 0, magicSize, lumal.iFrame % magicSize};
@@ -1229,7 +1270,7 @@ void LumInternal::LumInternalRenderer::map_mesh (InternalMeshModel* mesh, MeshTr
     dmat4 rotate = toMat4 ((*mesh_trans).rot);
     dmat4 shift = translate (identity<mat4>(), (*mesh_trans).shift);
     dmat4 transform = shift * rotate;
-    struct AABB border_in_voxel = get_shift (transform, (*mesh).size);
+    AABB border_in_voxel = get_shift (transform, (*mesh).size);
     struct {ivec3 min; ivec3 max;} border;
     border.min = ivec3 (floor (border_in_voxel.min)) - ivec3 (0); // no -ivec3(1) cause IT STRETCHES MODELS;
     border.max = ivec3 ( ceil (border_in_voxel.max)) + ivec3 (0); // no +ivec3(1) cause IT STRETCHES MODELS;
@@ -1785,6 +1826,7 @@ void LumInternal::LumInternalRenderer::end_ui() {
 }
 
 void LumInternal::LumInternalRenderer::end_frame() {
+TRACE();
     lumal.end_frame({
         // "Special" cmb used by UI copies & layout transitions HAS to be first
         // Otherwise image state is LAYOUT_UNDEFINED
@@ -1855,11 +1897,8 @@ TRACE();
     perlinNoise3d.move(); //4 channels of different tileable noise for volumetrics
 TRACE();
 
-    // stagingWorldMapped.move();
-    // stagingRadianceUpdatesMapped.move();
-    // gpuParticlesMapped.move(); //multiple because cpu-related work
-    // double timestampPeriod = physicalDeviceProperties.limits.timestampPeriod;
-    // timeTakenByRadiance = float (timestamps[1] - timestamps[0]) * timestampPeriod / 1000000.0f;
+    double timestampPeriod = lumal.physicalDeviceProperties.limits.timestampPeriod;
+    timeTakenByRadiance = float (lumal.timestamps[1] - lumal.timestamps[0]) * timestampPeriod / 1000000.0f;
 
     // #ifdef MEASURE_PERFOMANCE
     // #endif
@@ -1867,9 +1906,9 @@ TRACE();
 TRACE();
 }
 
-tuple<int, int> get_block_xy (int N) {
+ivec2 get_block_xy (int N) {
     int x = N % LumInternal::BLOCK_PALETTE_SIZE_X;
     int y = N / LumInternal::BLOCK_PALETTE_SIZE_X;
     assert (y <= LumInternal::BLOCK_PALETTE_SIZE_Y);
-    return tuple (x, y);
+    return ivec2 (x, y);
 }
