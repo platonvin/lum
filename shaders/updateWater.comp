@@ -6,6 +6,8 @@ this code basically generates several heightmaps used to later lift vertices
 multiple heightmaps is like inverse fourier but for different frequancy and amplitude tiles mixed together
 its dft cause gpus are fast.
 */
+#extension GL_GOOGLE_include_directive : require
+#include "common\consts.glsl"
 
 precision highp int;
 precision highp float;
@@ -18,7 +20,7 @@ layout(push_constant) uniform readonly restrict constants{
     float time;
 } pco;
 
-const ivec3 world_size = ivec3(48,48,16);
+// const ivec3 world_size = ivec3(48,48,16);
 const float PI = 3.1415926535;
 const int lods = 6;
 

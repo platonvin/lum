@@ -7,6 +7,7 @@ precision highp int;
 #extension GL_GOOGLE_include_directive : require
 #include "common\ext.glsl"
 #include "common\ubo.glsl"
+#include "common\consts.glsl"
 
 // layout(location = 0) in vec3 zero_origin;
 // layout(location = 0) in vec2 clip_pos;
@@ -16,7 +17,7 @@ layout(input_attachment_index = 0, set = 0, binding = 2) uniform subpassInput sm
 layout(set = 0, binding = 3, rgba16) uniform restrict readonly image3D radianceCache;
 layout(set = 0, binding = 4) uniform sampler3D noise;
 
-const ivec3 world_size = ivec3(48,48,16);
+// const ivec3 world_size = ivec3(48,48,16);
 
 
 // vec3 load_norm(){

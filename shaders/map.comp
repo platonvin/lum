@@ -55,7 +55,14 @@ void main(void){
 
     uvec4 voxel = imageLoad(modelVoxels, imodel_voxel);
 
-    if ((voxel.r != 0) && (target_block_in_palette>=STATIC_BLOCK_COUNT)){
-        imageStore(blockPalette, target_palette_voxel, voxel); // maybe atomic?.. Could use temporal shared block for this
+    // read only if fails, i hope.
+    if (target_block_in_palette >= STATIC_BLOCK_COUNT) {
+        uvec4 voxel = imageLoad(modelVoxels, imodel_voxel);
+        if (voxel.r != 0) {
+            imageStore(blockPalette, target_palette_voxel, voxel); // maybe atomic?.. Could use temporal shared block for this
+        }
     }
+    // if ((voxel.r != 0) && (target_block_in_palette>=STATIC_BLOCK_COUNT)){
+    //     imageStore(blockPalette, target_palette_voxel, voxel); // maybe atomic?.. Could use temporal shared block for this
+    // }
 }

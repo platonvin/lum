@@ -1,6 +1,8 @@
 #version 450 core
 
 //basically updates grass "marks" texture.. Simple, unefficient and looks cool  
+#extension GL_GOOGLE_include_directive : require
+#include "common\consts.glsl"
 
 precision highp int;
 precision highp float;
@@ -13,7 +15,7 @@ layout(push_constant) uniform restrict readonly constants{
     float time;
 } pco;
 
-const ivec3 world_size = ivec3(48,48,16);
+// const ivec3 world_size = ivec3(48,48,16);
 
 //honestly it will be like 4 wavegroups i dont think i need to balance it. 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;

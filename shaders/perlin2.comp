@@ -3,6 +3,9 @@
 precision highp int;
 precision highp float;
 
+#extension GL_GOOGLE_include_directive : require
+#include "common\consts.glsl"
+
 layout(set = 0, binding = 0, rg16_snorm) uniform image2D noise_image;
 
 uint ihash1D(uint q)
@@ -458,7 +461,7 @@ void main(){
 	 vec2 fpix = gl_GlobalInvocationID.xy + 0.5;
 	ivec2 ipix = ivec2(fpix);
 	// float noise_val = cnoise(fpix / 48.0); 
-	float noise_val = perlinNoise(fpix/(2*48.0), vec2(3), 0); 
+	float noise_val = perlinNoise(fpix/(2.0*vec2(world_size.xy)), vec2(3), 0); 
 // mult
 	
 	imageStore(noise_image, ipix, vec4(noise_val));

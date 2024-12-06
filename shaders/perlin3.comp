@@ -3,6 +3,9 @@
 precision highp int;
 precision highp float;
 
+#extension GL_GOOGLE_include_directive : require
+#include "common\consts.glsl"
+
 layout(set = 0, binding = 0, rgba16) uniform image3D noise_image;
 
 /**

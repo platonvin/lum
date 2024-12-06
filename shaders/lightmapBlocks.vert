@@ -8,6 +8,7 @@ precision highp float;
 #extension GL_GOOGLE_include_directive : require
 #include "common\ext.glsl"
 #include "common\ubo.glsl"
+#include "common\consts.glsl"
 
 layout(location = 0) in lowp uvec3 posIn;
 

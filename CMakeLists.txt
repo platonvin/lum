@@ -152,6 +152,57 @@ endif()
 
 add_library(lum ${PROJECT_SOURCES})
 
+# Shader Compilation Configuration
+set(GLSLANG_EXECUTABLE "${CMAKE_SOURCE_DIR}/bin/glslang.exe" CACHE FILEPATH "Path to glslang executable")
+
+# Shader source directory
+set(SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/shaders/compiled" CACHE PATH "Directory for compiled shaders")
+
+# Ensure the output directory exists
+file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
+
+# Gather all shader source files
+file(GLOB GLSL_SOURCE_FILES
+    "${SHADER_SOURCE_DIR}/*.vert"
+    "${SHADER_SOURCE_DIR}/*.frag"
+    "${SHADER_SOURCE_DIR}/*.comp"
+    "${SHADER_SOURCE_DIR}/*.geom"
+)
+
+# List of common shader dependencies
+set(COMMON_SHADER_FILES
+    "${SHADER_SOURCE_DIR}/common/ext.glsl"
+    "${SHADER_SOURCE_DIR}/common/ubo.glsl"
+    "${SHADER_SOURCE_DIR}/common/consts.glsl"
+)
+
+# Generate SPIR-V files for each shader source
+set(SPIRV_BINARY_FILES)
+foreach(GLSL_FILE ${GLSL_SOURCE_FILES})
+    get_filename_component(SHADER_NAME ${GLSL_FILE} NAME_WE) # Get the file name without extension
+    get_filename_component(SHADER_EXT ${GLSL_FILE} EXT)      # Get the file extension
+    set(SPIRV_FILE "${SHADER_OUTPUT_DIR}/${SHADER_NAME}${SHADER_EXT}.spv") # Output SPIR-V file path
+
+    add_custom_command(
+        OUTPUT ${SPIRV_FILE}
+        COMMAND ${GLSLANG_EXECUTABLE} -V ${GLSL_FILE} -o ${SPIRV_FILE} --target-env vulkan1.1 -g -Os
+        DEPENDS ${GLSL_FILE} ${COMMON_SHADER_FILES} # Add dependencies here
+        COMMENT "Compiling shader ${GLSL_FILE} to SPIR-V"
+    )
+
+    list(APPEND SPIRV_BINARY_FILES ${SPIRV_FILE})
+endforeach()
+
+# Add a custom target for shaders
+add_custom_target(
+    CompileShaders
+    DEPENDS ${SPIRV_BINARY_FILES}
+)
+
+# Make sure the main target depends on shaders
+add_dependencies(lum CompileShaders)
+
 # set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 # if(CMAKE_BUILD_TYPE STREQUAL "Release")
 #     set_target_properties(lum PROPERTIES CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)

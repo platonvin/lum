@@ -6,6 +6,7 @@ precision highp float;
 
 #extension GL_GOOGLE_include_directive : require
 #include "common\ext.glsl"
+#include "common\consts.glsl"
 
 //well, its not really radiance. Its more of a minecraft lighting but raytraced
 //its not that realistic but imho looks good
@@ -37,7 +38,7 @@ layout(push_constant) uniform restrict readonly constants{
 //funniest thing is that it should even work on amd, tho _light might take twice more
 
 const float PI = 3.1415926535897932384626433832795;
-const ivec3 world_size = ivec3(48,48,16);
+// const ivec3 world_size = ivec3(48,48,16);
 vec3 globalLightDir = normalize(vec3(0.5, 0.5, -0.9));
 
 struct Material{

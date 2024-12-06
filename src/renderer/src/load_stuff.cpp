@@ -79,7 +79,7 @@ void LumInternal::LumInternalRenderer::updateBlockPalette (BlockWithMesh* blockP
     assert (blockPaletteLinear.data() != NULL);
     memcpy (data, blockPaletteLinear.data(), bufferSize);
     vmaUnmapMemory (lumal.VMAllocator, stagingAllocation);
-    for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (i32 i = 0; i < lumal.settings.fif; i++) {
         lumal.copyBufferSingleTime (stagingBuffer, &originBlockPalette[i], uvec3 (16 * BLOCK_PALETTE_SIZE_X, 16 * BLOCK_PALETTE_SIZE_Y, 16));
     }
     vmaDestroyBuffer (lumal.VMAllocator, stagingBuffer, stagingAllocation);
@@ -104,7 +104,7 @@ void LumInternal::LumInternalRenderer::updateMaterialPalette (Material* material
     vmaMapMemory (lumal.VMAllocator, stagingAllocation, &data);
     memcpy (data, materialPalette, bufferSize);
     vmaUnmapMemory (lumal.VMAllocator, stagingAllocation);
-    for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (i32 i = 0; i < lumal.settings.fif; i++) {
         lumal.copyBufferSingleTime (stagingBuffer, &this->materialPalette[i], uvec3 (6, 256, 1));
     }
     vmaDestroyBuffer (lumal.VMAllocator, stagingBuffer, stagingAllocation);
@@ -367,7 +367,7 @@ void LumInternal::LumInternalRenderer::free_block(BlockWithMesh* block) {
         vmaDestroyBuffer(lumal.VMAllocator, (block)->mesh.triangles.vertexes.buffer, (block)->mesh.triangles.vertexes.alloc);
         (block)->mesh.triangles.vertexes.buffer = VK_NULL_HANDLE;
     }
-    // for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    // for (int i = 0; i < lumal.settings.fif; i++) {
         // if (!(block)->mesh.triangles.vertexes.empty()) {
         // }
     // }
@@ -415,7 +415,7 @@ void LumInternal::LumInternalRenderer::free_mesh(InternalMeshModel* mesh) {
         bd.buffer = mesh->triangles.vertexes;
         bd.life_counter = lumal.settings.fif; // delete after fif+1 frames
     lumal.bufferDeletionQueue.push_back(bd);
-    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < lumal.settings.fif; i++) {
         // if (!mesh->triangles.vertexes.empty()) {
             // vmaDestroyBuffer(render.VMAllocator, mesh->triangles.vertexes[i].buffer, mesh->triangles.vertexes[i].alloc);
         // }

@@ -9,6 +9,7 @@ precision highp int;
 #extension GL_GOOGLE_include_directive : require
 #include "common\ext.glsl"
 #include "common\ubo.glsl"
+#include "common\consts.glsl"
 
 layout(location = 0) out vec4 frame_color;
 
@@ -26,7 +27,7 @@ layout(input_attachment_index = 0, set = 0, binding = 2) uniform usubpassInput m
 layout(set = 0, binding = 3) uniform sampler2D depthBuffer;
 
 const float PI = 3.1415926535;
-const ivec3 world_size = ivec3(48,48,16);
+// const ivec3 world_size = ivec3(48,48,16);
 
 vec3 load_norm(){
     // i16vec3 nenc = i16vec3(subpassLoad(matNorm).gba);

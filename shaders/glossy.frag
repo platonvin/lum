@@ -10,6 +10,7 @@ precision highp float;
 #extension GL_GOOGLE_include_directive : require
 #include "common\ext.glsl"
 #include "common\ubo.glsl"
+#include "common\consts.glsl"
 
 layout(set = 0, binding = 1) uniform usampler2D matNorm;
 layout(set = 0, binding = 2) uniform sampler2D depthBuffer;
@@ -26,7 +27,7 @@ layout(location = 0) out vec4 frame_color;
 layout(constant_id = 0) const int BLOCK_PALETTE_SIZE_X = 64;
 
 const float PI = 3.1415926535;
-const ivec3 world_size = ivec3(48,48,16);
+// const ivec3 world_size = ivec3(48,48,16);
 
  ivec2 size;
 ivec2 pix;

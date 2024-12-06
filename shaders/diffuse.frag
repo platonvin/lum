@@ -10,6 +10,7 @@ precision highp float;
 #extension GL_GOOGLE_include_directive : require
 #include "common\ext.glsl"
 #include "common\ubo.glsl"
+#include "common\consts.glsl"
 
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform usubpassInput matNorm;
 layout(input_attachment_index = 1, set = 0, binding = 2) uniform  subpassInput depthBuffer;
@@ -20,7 +21,6 @@ layout(set = 0, binding = 5 ) uniform sampler2DShadow lightmap;
 layout(location = 0) out vec4 frame_color;
 
 #define RAYS_PER_PROBE (32)
-const ivec3 world_size = ivec3(48,48,16);
 
 vec3 sample_probe(ivec3 probe_ipos, vec3 direction){
     ivec3 probe_ipos_clamped = clamp(probe_ipos, ivec3(0), world_size);
