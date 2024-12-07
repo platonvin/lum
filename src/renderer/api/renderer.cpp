@@ -3,6 +3,7 @@
 #include "opaque_renderer_members.hpp"
 
 #include "defines/macros.hpp"
+#include <cassert>
 
 
 // am i getting canceled?
@@ -26,7 +27,7 @@ Lum::Renderer::Renderer(
         size_t foliage_storage_size, 
         size_t volumetric_storage_size, 
         size_t liquid_storage_size) noexcept 
-        : curr_time(std::chrono::steady_clock::now()), 
+        : curr_time(std::chrono::high_resolution_clock::now()), 
         block_que(),
         mesh_que(),
         foliage_que(),
@@ -467,7 +468,7 @@ TRACE()
                 opaque_members->render.lightmap_start_models();
 TRACE()
                     for (let m : mesh_que){
-                        opaque_members->render.lightmap_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
+                        // opaque_members->render.lightmap_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
 TRACE()
                 opaque_members->render.end_lightmap();
@@ -481,14 +482,14 @@ TRACE()
                     for(let b : block_que){
                         // DEBUG_LOG(b.block)
                         // DEBUG_LOG(&block_palette[b.block].mesh)
-                        opaque_members->render.raygen_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
+                        // opaque_members->render.raygen_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
                     }  
 TRACE()
                     
                 opaque_members->render.raygen_start_models();
 TRACE()
                     for (let m : mesh_que){
-                        opaque_members->render.raygen_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
+                        // opaque_members->render.raygen_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
 TRACE()
                 opaque_members->render.update_particles();
@@ -498,14 +499,14 @@ TRACE()
                 opaque_members->render.raygen_start_grass();
 TRACE()
                     for(let f : foliage_que){
-                        opaque_members->render.raygen_map_grass((LumInternal::InternalMeshFoliage*)f.foliage, f.pos);
+                        // opaque_members->render.raygen_map_grass((LumInternal::InternalMeshFoliage*)f.foliage, f.pos);
                     }
 TRACE()
 
                 opaque_members->render.raygen_start_water();
 TRACE()
                     for(let l : liquid_que){
-                        opaque_members->render.raygen_map_water(*((LumInternal::InternalMeshLiquid*)(l.liquid)), l.pos);
+                        // opaque_members->render.raygen_map_water(*((LumInternal::InternalMeshLiquid*)(l.liquid)), l.pos);
                     }
 TRACE()
                 opaque_members->render.end_raygen();
@@ -521,7 +522,7 @@ TRACE()
                 opaque_members->render.raygen_start_smoke();
 TRACE()
                     for(let v : volumetric_que){
-                        opaque_members->render.raygen_map_smoke(*((LumInternal::InternalMeshVolumetric*)(v.volumetric)), v.pos);
+                        // opaque_members->render.raygen_map_smoke(*((LumInternal::InternalMeshVolumetric*)(v.volumetric)), v.pos);
                     }
 TRACE()
                 opaque_members->render.glossy();
@@ -577,9 +578,10 @@ void* Lum::Renderer::getGLFWptr() const noexcept {
 }
 
 void Lum::Renderer::updateTime() noexcept {
-    auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::high_resolution_clock::now();
     delta_time = std::chrono::duration<double>(now - curr_time).count();
     curr_time = now;
+    assert(delta_time > 0);
 }
 
 Lum::Camera& Lum::Renderer::getCamera(){

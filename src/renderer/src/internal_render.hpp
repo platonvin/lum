@@ -324,7 +324,7 @@ struct LumInternalRenderer {
     ring<VkCommandBuffer> copyCommandBuffers; //runtime copies for ui. Also does first frame resources
 
     ring<Lumal::Image> lightmap;
-    ring<Lumal::Image> swapchainImages;
+    // ring<Lumal::Image> swapchainImages;
     ring<Lumal::Image> highresFrame;
     ring<Lumal::Image> highresDepthStencil;
     // Image highresStencils;

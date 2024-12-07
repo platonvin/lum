@@ -1,5 +1,6 @@
 [![Build Linux GCC](https://github.com/platonvin/lum/actions/workflows/cmake-linux-gcc.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/cmake-linux-gcc.yml)
-[![Build Linux Clang](https://github.com/platonvin/lum/actions/workflows/cmake-linux-clang.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/cmake-linux-clang.yml) [![Build with Windows MinGW (MSYS2)](https://github.com/platonvin/lum/actions/workflows/cmake-windows-mingw.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/cmake-windows-mingw.yml)
+[![Build Linux Clang](https://github.com/platonvin/lum/actions/workflows/cmake-linux-clang.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/cmake-linux-clang.yml) [![Build with Windows MinGW (MSYS2)](https://github.com/platonvin/lum/actions/workflows/cmake-windows-mingw.yml/badge.svg)](https://github.com/platonvin/lum/actions/workflows/cmake-windows-mingw.yml)\
+<small>Note: it takes 30 minutes to build all three, so not every commit is tested to save actions minutes</small>
 
 # Lum
 **Lum** is a voxel\* renderer\*\* built with Vulkan. Currently, it's only available in a form of C99/C++ API, but might (on request) be ported (in form of bindings) into Unity / Unreal / languages that support C interop. Currently, it is also in process of porting to Rust (in pure Rust form).
@@ -7,7 +8,8 @@
 \* Note: In Lum, "voxel" refers to a small, grid-aligned cube with a single material. Lum expects you to group voxels into blocks and blocks into world, but also supports non-grid-aligned models at a minor performance cost.\
 \*\* Note: Lum also has ECS ([check it out!](src/engine/README.md)), input, ~~Ui,~~ meshloader (and will have voxel physics engine), but it's stil mostly GPU code - so it's called renderer
 
-If you have ideas or suggestions for the API, feel free to open an [issue](https://github.com/platonvin/lum/issues)
+If you have ideas or suggestions for the API, feel free to open an [issue](https://github.com/platonvin/lum/issues)\
+Note: Lum is not production-ready. It is slowly getting polished (via making an actual game), but some core features are missing (e.g. world size control) / unclear (measurement units, blocks<=>voxels)
 
 ##### Some demo footage
 https://github.com/user-attachments/assets/ce7883c4-a706-406f-875c-fbf23d68020d

@@ -147,7 +147,7 @@ struct Renderer {
     std::vector<VolumetricRenderRequest> volumetric_que = {};
 
     // very simple CPU timer
-    std::chrono::steady_clock::time_point curr_time;
+    std::chrono::high_resolution_clock::time_point curr_time;
     double delta_time{0};
     void updateTime() noexcept;
 };

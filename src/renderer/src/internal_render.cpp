@@ -17,8 +17,8 @@
 
 // #include <engine/profiler.hpp>
 // Profiler profiler (10);
-int zero_blocks = 0;
-int just_blocks = 0;
+// int zero_blocks = 0;
+// int just_blocks = 0;
 
 using std::vector;
 
@@ -623,8 +623,8 @@ VkResult LumInternal::LumInternalRenderer::createSwapchainDependent() {
         }, &lightmapRpass);
 TRACE();
     lumal.createRenderPass({
-            {&highresMatNorm, Lumal::DontCare, Lumal::Store, Lumal::DontCare, Lumal::DontCare},
-            {&highresDepthStencil, Lumal::Clear, Lumal::Store, Lumal::Clear, Lumal::Store, {.depthStencil = {.depth = 1}}},
+            {&highresMatNorm,      Lumal::DontCare, Lumal::Store, Lumal::DontCare, Lumal::DontCare},
+            {&highresDepthStencil, Lumal::Clear,    Lumal::Store, Lumal::Clear,    Lumal::Store, {.depthStencil = {.depth = 1}}},
         }, {
             {{&raygenBlocksPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
             {{&raygenModelsPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
@@ -634,12 +634,12 @@ TRACE();
         }, &gbufferRpass);
 TRACE();
     lumal.createRenderPass({
-            {&highresMatNorm,      Lumal::Load    , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare},
-            {&highresFrame,        Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, Lumal::DontCare},
-            {&lumal.swapchainImages,  Lumal::DontCare, Lumal::Store   , Lumal::DontCare, Lumal::DontCare, {}, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
-            {&highresDepthStencil, Lumal::Load    , Lumal::DontCare, Lumal::Load    , Lumal::DontCare, {.depthStencil = {.depth = 1}}},
-            {&farDepth,           Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {-1000.0,-1000.0,-1000.0,-1000.0}}}},
-            {&nearDepth,            Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {+1000.0,+1000.0,+1000.0,+1000.0}}}},
+            {&highresMatNorm,        Lumal::Load    , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare},
+            {&highresFrame,          Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, Lumal::DontCare},
+            {&lumal.swapchainImages, Lumal::DontCare, Lumal::Store   , Lumal::DontCare, Lumal::DontCare, {}, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            {&highresDepthStencil,   Lumal::Load    , Lumal::DontCare, Lumal::Load    , Lumal::DontCare, {.depthStencil = {.depth = 1}}},
+            {&farDepth,              Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {-1000.0,-1000.0,-1000.0,-1000.0}}}},
+            {&nearDepth,             Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {+1000.0,+1000.0,+1000.0,+1000.0}}}},
         }, {
             {{&diffusePipe},           {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
             {{&aoPipe},                {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
@@ -899,7 +899,13 @@ void LumInternal::LumInternalRenderer::update_light_transform() {
     const double voxel_in_pixels = 5.0; //we want voxel to be around 10 pixels in width / height
     const double view_width_in_voxels = 3000.0 / voxel_in_pixels; //todo make dynamic and use spec constnats
     const double view_height_in_voxels = 3000.0 / voxel_in_pixels;
-    dmat4 projection = glm::ortho (-view_width_in_voxels / 2.0, view_width_in_voxels / 2.0, view_height_in_voxels / 2.0, -view_height_in_voxels / 2.0, -350.0, +350.0); // => *(2000.0/2) for decoding
+    dmat4 projection = glm::ortho (
+            -view_width_in_voxels  / 2.0, +view_width_in_voxels  / 2.0, 
+            +view_height_in_voxels / 2.0, -view_height_in_voxels / 2.0, 
+            // lets just hope for something good with these numbers
+            // also, they are hardcoded when there is no reason to. 
+            // TODO: compute from world size
+            -512.0, +1024.0); // => decoding automatic
     dmat4 worldToScreen = projection * view;
     lightTransform = worldToScreen;
 }
@@ -1018,8 +1024,8 @@ void LumInternal::LumInternalRenderer::blockify_mesh (InternalMeshModel* mesh, M
                     current_world (xx, yy, zz) = paletteCounter;
                     paletteCounter++; // yeah i dont trust myself in this
 
-                    if(current_block == 0) zero_blocks++;
-                    else just_blocks++;
+                    // if(current_block == 0) zero_blocks++;
+                    // else just_blocks++;
                 } else {
                     //already new block, just leave it
                 }
@@ -1228,11 +1234,15 @@ void LumInternal::LumInternalRenderer::exec_copies() {
         &originBlockPalette.current());
 
     // zero the entire block palette image
-    vkCmdClearColorImage (commandBuffer, originBlockPalette.current().image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
+    // vkCmdClearColorImage (commandBuffer, originBlockPalette.current().image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
 
     // sync
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.previous());
     lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.current());
     
@@ -1257,11 +1267,11 @@ void LumInternal::LumInternalRenderer::exec_copies() {
 
     // sync
     lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.previous());
     lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.current());
 
@@ -1887,10 +1897,44 @@ void LumInternal::LumInternalRenderer::end_ui() {
 
 void LumInternal::LumInternalRenderer::end_frame() {
 TRACE();
-// LOG(zero_blocks)
-// LOG(just_blocks)
-zero_blocks=0;
-just_blocks=0;
+    // lumal.cmdExplicitTransLayoutBarrier (graphicsCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.current());    
+    // lumal.cmdExplicitTransLayoutBarrier (copyCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.current());
+    // lumal.cmdExplicitTransLayoutBarrier (lightmapCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.current());
+
+    // lumal.cmdExplicitTransLayoutBarrier (graphicsCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.previous());    
+    // lumal.cmdExplicitTransLayoutBarrier (copyCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.previous());
+    // lumal.cmdExplicitTransLayoutBarrier (lightmapCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.previous());
+
+    // lumal.cmdExplicitTransLayoutBarrier (graphicsCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.next());    
+    // lumal.cmdExplicitTransLayoutBarrier (copyCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.next());
+    // lumal.cmdExplicitTransLayoutBarrier (lightmapCommandBuffers.current(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+    //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+    //     &lumal.swapchainImages.next());
 
     lumal.end_frame({
         // "Special" cmb used by UI copies & layout transitions HAS to be first
