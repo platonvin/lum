@@ -15,6 +15,11 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/hash.hpp>
 
+// #include <engine/profiler.hpp>
+// Profiler profiler (10);
+int zero_blocks = 0;
+int just_blocks = 0;
+
 using std::vector;
 
 using glm::u8, glm::u16, glm::u16, glm::u32;
@@ -720,6 +725,8 @@ TRACE();
 }
 
 void LumInternal::LumInternalRenderer::cleanup() {
+    // profiler.printResults();
+    
     delete ui_render_interface;
 TRACE();
     lumal.destroyImages (&radianceCache);
@@ -769,6 +776,8 @@ TRACE();
 
     lumal.cleanup();
 TRACE();
+
+    // ctrack::result_print();
 }
 
 VkResult LumInternal::LumInternalRenderer::cleanupSwapchainDependent() {
@@ -930,29 +939,28 @@ void LumInternal::LumInternalRenderer::start_blockify() {
 
 LumInternal::LumInternalRenderer::AABB LumInternal::LumInternalRenderer::get_shift (dmat4 trans, ivec3 size) {
     vec3 box = vec3 (size - 1);
-    vec3 zero = vec3 (0);
-    vec3 corners[8];
-    corners[0] = zero;
-    corners[1] = vec3 (zero.x, box.y, zero.z);
-    corners[2] = vec3 (zero.x, box.y, box.z);
-    corners[3] = vec3 (zero.x, zero.y, box.z);
-    corners[4] = vec3 (box.x, zero.y, zero.z);
-    corners[5] = vec3 (box.x, box.y, zero.z);
-    corners[6] = box;
-    corners[7] = vec3 (box.x, zero.y, box.z);
+    vec3 corners[8] = {
+        vec3(0),
+        vec3(0, box.y, 0),
+        vec3(0, box.y, box.z),
+        vec3(0, 0, box.z),
+        vec3(box.x, 0, 0),
+        vec3(box.x, box.y, 0),
+        box,
+        vec3(box.x, 0, box.z)
+    };
     // transform the first corner
-    vec3 tmin = vec3 (trans* vec4 (corners[0], 1.0));
-    vec3 tmax = tmin;
-    // transform the other 7 corners and compute the result AABB
-    for (int i = 1; i < 8; i++) {
-        vec3 point = vec3 (trans* vec4 (corners[i], 1.0));
-        tmin = min (tmin, point);
-        tmax = max (tmax, point);
+    vec3 tmin = vec3(std::numeric_limits<float>::max());
+    vec3 tmax = vec3(std::numeric_limits<float>::lowest());
+
+    // Transform all corners and calculate AABB bounds
+    for (const auto& corner : corners) {
+        vec3 point = vec3(trans * vec4(corner, 1.0));
+        tmin = glm::min(tmin, point);
+        tmax = glm::max(tmax, point);
     }
-    AABB rbox;
-    rbox.min = tmin;
-    rbox.max = tmax;
-    return rbox;
+
+    return AABB {tmin, tmax};
 }
 
 // bool LumInternal::LumInternalRenderer::mesh_intersects_aabb(
@@ -968,66 +976,56 @@ LumInternal::LumInternalRenderer::AABB LumInternal::LumInternalRenderer::get_shi
 //     return false;
 // }
 
-
 // allocates temp block in palette for every block that intersects with every mesh blockified
-void LumInternal::LumInternalRenderer::blockify_mesh(InternalMeshModel* mesh, MeshTransform* trans) {
-    // Compute the transformed AABB for the mesh
-    // ATRACE()
-    mat4 transform = translate(identity<mat4>(), trans->shift) * toMat4(trans->rot);
-    AABB mesh_aabb = get_shift(transform, mesh->size);
-    // ATRACE()
+void LumInternal::LumInternalRenderer::blockify_mesh (InternalMeshModel* mesh, MeshTransform* trans) {
+    mat4 rotate = toMat4 ((*trans).rot);
+    mat4 shift = translate (identity<mat4>(), (*trans).shift);
+    struct AABB border_in_voxel = get_shift (shift* rotate, (*mesh).size);
+    struct {ivec3 min; ivec3 max;} border;
+    border.min = (ivec3 (border_in_voxel.min) - ivec3 (1)) / ivec3 (16);
+    border.max = (ivec3 (border_in_voxel.max) + ivec3 (1)) / ivec3 (16);
+    border.min = glm::clamp (border.min, ivec3 (0), ivec3 (world_size - u32(1)));
+    border.max = glm::clamp (border.max, ivec3 (0), ivec3 (world_size - u32(1)));
+    for (int xx = border.min.x; xx <= border.max.x; xx++) {
+        for (int yy = border.min.y; yy <= border.max.y; yy++) {
+            for (int zz = border.min.z; zz <= border.max.z; zz++) {
+                int current_block = current_world (xx, yy, zz);
+                if (current_block < static_block_palette_size) { // static
+                    //add to copy queue
+                    ivec2 src_block = {};
+                    src_block = get_block_xy (current_block);
+                    ivec2 dst_block = {};
+                    dst_block = get_block_xy (paletteCounter);
 
-    // Calculate voxel grid bounds
-    ivec3 min_block = glm::clamp(
-        (ivec3(mesh_aabb.min) - 1) / 16,
-        ivec3(0),
-        ivec3(world_size) - 1
-    );
-    ivec3 max_block = glm::clamp(
-        (ivec3(mesh_aabb.max) + 1) / 16,
-        ivec3(0),
-        ivec3(world_size) - 1
-    );
+                    // do image copy on for non-zero-src blocks. Other things still done for every allocated block
+                    // because zeroing is fast
+                    if(current_block != 0){
+                        VkImageCopy static_block_copy = {};
+                            static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                            static_block_copy.srcSubresource.baseArrayLayer = 0;
+                            static_block_copy.srcSubresource.layerCount = 1;
+                            static_block_copy.srcSubresource.mipLevel = 0;
+                            static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                            static_block_copy.dstSubresource.baseArrayLayer = 0;
+                            static_block_copy.dstSubresource.layerCount = 1;
+                            static_block_copy.dstSubresource.mipLevel = 0;
+                            static_block_copy.extent = {16, 16, 16};
+                            static_block_copy.srcOffset = {src_block.x * 16, src_block.y * 16, 0};
+                            static_block_copy.dstOffset = {dst_block.x * 16, dst_block.y * 16, 0};
+                        blockCopyQueue.push_back (static_block_copy);
+                    }
 
-    // ATRACE()
-    // Iterate over potentially occupied blocks
-    for (int x = min_block.x; x <= max_block.x; ++x) {
-        for (int y = min_block.y; y <= max_block.y; ++y) {
-            for (int z = min_block.z; z <= max_block.z; ++z) {
-                // Calculate AABB of the block in world space
-                AABB block_aabb = {
-                    vec3(x, y, z) * 16.0f,
-                    vec3(x + 1, y + 1, z + 1) * 16.0f
-                };
+                    current_world (xx, yy, zz) = paletteCounter;
+                    paletteCounter++; // yeah i dont trust myself in this
 
-                // Check if the mesh AABB intersects with the block AABB
-                if (!mesh_aabb.intersects(block_aabb)) {
-                    continue; // Skip if no intersection
+                    if(current_block == 0) zero_blocks++;
+                    else just_blocks++;
+                } else {
+                    //already new block, just leave it
                 }
-
-                // Process the block
-                int current_block = current_world(x, y, z);
-                if (current_block < static_block_palette_size) {
-                    // Prepare copy operation for static blocks
-                    ivec2 src_block = get_block_xy(current_block);
-                    ivec2 dst_block = get_block_xy(paletteCounter);
-
-                    VkImageCopy block_copy = {};
-                    block_copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                    block_copy.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                    block_copy.extent = {16, 16, 16};
-                    block_copy.srcOffset = {src_block.x * 16, src_block.y * 16, 0};
-                    block_copy.dstOffset = {dst_block.x * 16, dst_block.y * 16, 0};
-
-                    blockCopyQueue.push_back(block_copy);
-                    current_world(x, y, z) = paletteCounter;
-                    ++paletteCounter;
-                }
-                // If block is already processed, do nothing
             }
         }
     }
-    // ATRACE()
 }
 
 bool LumInternal::LumInternalRenderer::AABB::contains(const vec3& point) const {
@@ -1205,28 +1203,86 @@ void LumInternal::LumInternalRenderer::recalculate_bit() {
 
 void LumInternal::LumInternalRenderer::exec_copies() {
     VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    if (blockCopyQueue.size() != 0) {
-        //we can copy from previous image, cause static blocks are same in both palettes. Additionaly, it gives src and dst optimal layouts
-        lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-            &originBlockPalette.previous());
-        lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-            &originBlockPalette.current());
+
+    VkClearColorValue clearColor = {};
+        clearColor.int32[0] = 0;
+        clearColor.int32[1] = 0;
+        clearColor.int32[2] = 0;
+        clearColor.int32[3] = 0;
+    
+    VkImageSubresourceRange clearRange = {};
+        clearRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        clearRange.baseMipLevel = 0;
+        clearRange.levelCount = 1;
+        clearRange.baseArrayLayer = 0;
+        clearRange.layerCount = 1;
+
+    // Transition images for copying
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.previous());
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.current());
+
+    // zero the entire block palette image
+    vkCmdClearColorImage (commandBuffer, originBlockPalette.current().image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &clearRange);
+
+    // sync
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.current());
+    
+    VkImageCopy static_palette_copy = {};
+        static_palette_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        static_palette_copy.srcSubresource.baseArrayLayer = 0;
+        static_palette_copy.srcSubresource.layerCount = 1;
+        static_palette_copy.srcSubresource.mipLevel = 0;
+        static_palette_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        static_palette_copy.dstSubresource.baseArrayLayer = 0;
+        static_palette_copy.dstSubresource.layerCount = 1;
+        static_palette_copy.dstSubresource.mipLevel = 0;
+        // TODO: multi-raw copy
+        assert(static_block_palette_size < BLOCK_PALETTE_SIZE_X);
+        static_palette_copy.extent = {16 *static_block_palette_size, 16, 16};
+        static_palette_copy.srcOffset = {0, 0, 0};
+        static_palette_copy.dstOffset = {0, 0, 0};
+
+    // copy static blocks back. So clean version of palette now
+    vkCmdCopyImage (commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+        1, &static_palette_copy);
+
+    // sync
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.previous());
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.current());
+
+    // Execute actual block copy for each allocated temporal block
+    if (!blockCopyQueue.empty()) {
         PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
         vkCmdCopyImage (commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blockCopyQueue.size(), blockCopyQueue.data());
         PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-        lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-            &originBlockPalette.previous());
-        lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-            &originBlockPalette.previous());
     }
+
+    // Transition back images
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.previous());
+    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        &originBlockPalette.current());
+
+    // Copy the entire world buffer to the world image
     VkBufferImageCopy copyRegion = {};
         copyRegion.imageExtent.width = world_size.x;
         copyRegion.imageExtent.height = world_size.y;
@@ -1831,6 +1887,11 @@ void LumInternal::LumInternalRenderer::end_ui() {
 
 void LumInternal::LumInternalRenderer::end_frame() {
 TRACE();
+// LOG(zero_blocks)
+// LOG(just_blocks)
+zero_blocks=0;
+just_blocks=0;
+
     lumal.end_frame({
         // "Special" cmb used by UI copies & layout transitions HAS to be first
         // Otherwise image state is LAYOUT_UNDEFINED

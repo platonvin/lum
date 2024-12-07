@@ -81,7 +81,7 @@ public:
             int w,h;
         glfwGetWindowSize(window, &w, &h);
             screenSizef = dvec2(w,h);
-            screenSizei = vec2(w,h);
+            screenSizei = ivec2(w,h);
 
         
         //TODO?

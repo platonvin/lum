@@ -10,12 +10,13 @@
 
 // just a shortcut for later
 // #define transparent (*((Lum::OpaqueRendererMembers*)(&this->promised_opaque_members)))
-#ifdef LUM_USE_CTRACK
-    #include <ctrack.hpp>
+
+// #ifdef LUM_USE_CTRACK
+//     #include <ctrack.hpp>
     #define PROFILE_TIMESTAMP CTRACK;
-#else
-    #define PROFILE_TIMESTAMP 
-#endif
+// #else
+//     #define PROFILE_TIMESTAMP 
+// #endif
 
 
 Lum::Renderer::Renderer() noexcept : Renderer(1024, 1024, 64, 64, 64) {}
@@ -255,7 +256,7 @@ static bool is_model_visible(const Lum::MeshModel& model, const Lum::MeshTransfo
 }
 
 void Lum::Renderer::drawWorld() noexcept {
-    PROFILE_TIMESTAMP;
+    // CTRACK;
     // block_que.clear(); done in startFrame
     // cam_dist could be moved into update()
     // LOG(opaque_members->settings.world_size.x)
@@ -296,7 +297,7 @@ void Lum::Renderer::drawParticles() noexcept {
 
 // world visibility. Turns out, screen-space is better, but gotta keep this one
 static bool isModelVisible(const Lum::MeshModel& model, const Lum::MeshTransform& trans, const glm::dvec3& worldSize) {
-    PROFILE_TIMESTAMP;
+    // CTRACK;
     // Calculate the model's bounding box after applying the transform
     glm::ivec3 modelSize = model.getSize();
     glm::vec3 minCorner = glm::vec3(0.0f); // Least corner before transform
@@ -325,7 +326,7 @@ static bool isModelVisible(const Lum::MeshModel& model, const Lum::MeshTransform
 }
 
 void Lum::Renderer::drawModel(const MeshModel& mesh, const MeshTransform& trans) noexcept {
-    PROFILE_TIMESTAMP;
+    // CTRACK;
     assert(mesh.ptr != nullptr);
     
     // if (isModelVisible(mesh, trans, dvec3(getWorldSize())*16.0)) {
