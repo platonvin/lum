@@ -186,7 +186,7 @@ foreach(GLSL_FILE ${GLSL_SOURCE_FILES})
 
     add_custom_command(
         OUTPUT ${SPIRV_FILE}
-        COMMAND ${GLSLANG_EXECUTABLE} -V ${GLSL_FILE} -o ${SPIRV_FILE} --target-env vulkan1.1 -g -Os
+        COMMAND ${GLSLANG_EXECUTABLE} -V ${GLSL_FILE} -o ${SPIRV_FILE} --target-env vulkan1.3 -g
         DEPENDS ${GLSL_FILE} ${COMMON_SHADER_FILES} # Add dependencies here
         COMMENT "Compiling shader ${GLSL_FILE} to SPIR-V"
     )

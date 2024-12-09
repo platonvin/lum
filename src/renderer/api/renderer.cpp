@@ -400,7 +400,6 @@ void calculateAndSortByCamDist(Container& render_queue, const glm::dmat4& camera
 void Lum::Renderer::prepareFrame() noexcept{
     glfwPollEvents();
     should_close |= glfwWindowShouldClose(opaque_members->render.lumal.window.pointer);
-    updateTime();
     opaque_members->render.deltaTime = delta_time;
 
     // separate for models just cause not worth template
@@ -468,7 +467,7 @@ TRACE()
                 opaque_members->render.lightmap_start_models();
 TRACE()
                     for (let m : mesh_que){
-                        // opaque_members->render.lightmap_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
+                        opaque_members->render.lightmap_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
 TRACE()
                 opaque_members->render.end_lightmap();
@@ -482,14 +481,14 @@ TRACE()
                     for(let b : block_que){
                         // DEBUG_LOG(b.block)
                         // DEBUG_LOG(&block_palette[b.block].mesh)
-                        // opaque_members->render.raygen_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
+                        opaque_members->render.raygen_block(&opaque_members->block_palette[b.block].mesh, b.block, b.pos);
                     }  
 TRACE()
                     
                 opaque_members->render.raygen_start_models();
 TRACE()
                     for (let m : mesh_que){
-                        // opaque_members->render.raygen_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
+                        opaque_members->render.raygen_model((LumInternal::InternalMeshModel*)m.mesh.ptr, &m.trans);
                     }
 TRACE()
                 opaque_members->render.update_particles();
@@ -499,14 +498,14 @@ TRACE()
                 opaque_members->render.raygen_start_grass();
 TRACE()
                     for(let f : foliage_que){
-                        // opaque_members->render.raygen_map_grass((LumInternal::InternalMeshFoliage*)f.foliage, f.pos);
+                        opaque_members->render.raygen_map_grass((LumInternal::InternalMeshFoliage*)f.foliage, f.pos);
                     }
 TRACE()
 
                 opaque_members->render.raygen_start_water();
 TRACE()
                     for(let l : liquid_que){
-                        // opaque_members->render.raygen_map_water(*((LumInternal::InternalMeshLiquid*)(l.liquid)), l.pos);
+                        opaque_members->render.raygen_map_water(*((LumInternal::InternalMeshLiquid*)(l.liquid)), l.pos);
                     }
 TRACE()
                 opaque_members->render.end_raygen();
@@ -522,7 +521,7 @@ TRACE()
                 opaque_members->render.raygen_start_smoke();
 TRACE()
                     for(let v : volumetric_que){
-                        // opaque_members->render.raygen_map_smoke(*((LumInternal::InternalMeshVolumetric*)(v.volumetric)), v.pos);
+                        opaque_members->render.raygen_map_smoke(*((LumInternal::InternalMeshVolumetric*)(v.volumetric)), v.pos);
                     }
 TRACE()
                 opaque_members->render.glossy();
@@ -539,6 +538,7 @@ TRACE()
         opaque_members->render.end_ui(); 
         opaque_members->render.end_2nd_spass();
 TRACE()
+    updateTime();
     opaque_members->render.end_frame();
 TRACE()
 }
