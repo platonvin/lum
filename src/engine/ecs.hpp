@@ -62,6 +62,17 @@ struct tuple_with_removed_refs<std::tuple<T...>> {
 template <typename Tuple>
 using tuple_with_removed_refs_t = typename tuple_with_removed_refs<Tuple>::type;
 
+template <typename Tuple>
+struct tuple_tail;
+
+template <typename Head, typename... Tail>
+struct tuple_tail<std::tuple<Head, Tail...>> {
+    using type = std::tuple<Tail...>;
+};
+
+template <typename Tuple>
+using tuple_tail_t = typename tuple_tail<Tuple>::type;
+
 namespace Lum {
 // #define ENABLE_THROW
 // #define DISABLE_CHECKS
@@ -118,6 +129,7 @@ struct ECManager {
         componentArrays.template get<EntityID>()[newInternalIndex] = nextEntityID;
         componentArrays.template get<bool>()[newInternalIndex] = true;
 
+        ((componentArrays.template get<Components>()[newInternalIndex] = {}), ...);
 
         // aliveEntities.resize(newInternalIndex + 1, true);
         // (std::get<std::vector<Components>>(componentVectors).resize(newInternalIndex + 1), ...);
@@ -171,10 +183,10 @@ struct ECManager {
         loadAndInvoke(func, index);
         componentArrays.template get<bool>()[index] = false;  // Updated to "aliveEntities"
     }
-    // just reads component from corresponding vector
+    
+    // Reads ONE component from the corresponding vector.
     template<typename Component>
     Component& getEntityComponentInternal(int internal_index) {
-        // return std::get<std::vector<Component>>(componentArrays)[index];
         return componentArrays.template get<Component>()[internal_index];
     }
 
@@ -239,19 +251,31 @@ struct ECManager {
             loadAndInvoke<Func>(func, i);
         }
     }
+
     // loads every component function needs and passes it to function
     template <typename Func>
     constexpr inline void loadAndInvoke(Func fun, InternalIndex id) {
         using ArgTuple = typename function_traits<Func>::args_type;
         using ArgNoRefTuple = tuple_with_removed_refs_t<ArgTuple>;
-
-        auto components = loadComponentsFromTupleInternal<ArgNoRefTuple>(id);
-
-        std::apply(fun, components);
+        
+        if constexpr (std::is_same_v<std::tuple_element_t<0, ArgNoRefTuple>, InternalIndex>){
+            // Load components using types provided in function args
+            auto components_without_ii = loadComponentsFromTupleInternal<tuple_tail_t<ArgNoRefTuple>>(id);
+            auto components = std::tuple_cat(std::make_tuple(id), components_without_ii);
+            // Invoke the function with the constructed arguments tuple
+            std::apply(fun, components);
+        } else {
+            // Load components using types provided in function args
+            auto components = loadComponentsFromTupleInternal<ArgNoRefTuple>(id);
+            // Invoke the function with the constructed arguments tuple
+            std::apply(fun, components);
+        }
     }
 
 
     // Helper function to load components based on a tuple of component types
+    // what happens is we iterate over all types-components, load each one of them
+    // and put them all (loaded) into a tuple
     template <typename Tuple, std::size_t... I>
     constexpr inline auto loadComponentsFromTupleImplInternal(InternalIndex id, std::index_sequence<I...>) {
         return std::forward_as_tuple(getEntityComponentInternal<std::tuple_element_t<I, Tuple>>(id)...);
@@ -267,7 +291,7 @@ struct ECManager {
     constexpr inline std::tuple<_Components&...> loadComponents(EntityID id) {
         return std::forward_as_tuple(loadComponent<_Components>(id)...);
     }
-
+    
     /**
      * @brief Updates the ECS, removing dead entities and compacting component vectors
      */
@@ -330,6 +354,9 @@ struct ECManager {
         // aliveEntities.resize(newSize);
         // internalIndexToID.resize(newSize);
         componentArrays.resize(newSize);
+    }
+    int size() {
+        return componentArrays.size();
     }
 
     /**
@@ -529,3 +556,16 @@ public:
 } //namespace Lum
 
 #endif // __ECS_HPP__
+
+
+// struct _ {
+//     _() {}
+//     _(_&__) {____ = __.____;}
+//     _(_&&__) {____ = __.____;}
+//     _* ____;
+
+//     _ __(_ ___) {
+//         _ _____(___);
+//         return _____;
+//     };
+// };
