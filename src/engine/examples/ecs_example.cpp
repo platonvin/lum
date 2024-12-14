@@ -27,6 +27,7 @@ void funC(ComponentC& c) {
     std::cout << "    funC: ComponentC value: " << c << ";\n";
 }
 
+// lambda
 auto funD = []() {
     std::cout << "    funD does nothing;\n";
 };

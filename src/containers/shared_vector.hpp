@@ -141,12 +141,12 @@ public:
     // }
 
     // Get the current size
-    constexpr size_t size() const {
+    constexpr inline size_t size() const {
         return size_;
     }
 
     // Get the current capacity
-    constexpr size_t capacity() const {
+    constexpr inline size_t capacity() const {
         return capacity_;
     }
 };

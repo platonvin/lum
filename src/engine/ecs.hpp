@@ -169,14 +169,14 @@ struct ECManager {
      * @param id The ID of the entity to be destroyed.
      * @throws std::runtime_error If the entity does not exist.
      */
-    void destroyEntity(EntityID id) {
+    constexpr inline void destroyEntity(EntityID id) {
         auto it = idToInternalIndex.find(id);
         ASSERT (it != idToInternalIndex.end());
         InternalIndex index = it->second;
         componentArrays.template get<bool>()[index] = false;  // Updated to "aliveEntities"
     }
     template<typename Func>
-    void destroyEntity(Func func, EntityID id) {
+    constexpr inline void destroyEntity(Func func, EntityID id) {
         auto it = idToInternalIndex.find(id);
         ASSERT (it != idToInternalIndex.end());
         InternalIndex index = it->second;
@@ -186,7 +186,7 @@ struct ECManager {
     
     // Reads ONE component from the corresponding vector.
     template<typename Component>
-    Component& getEntityComponentInternal(int internal_index) {
+    constexpr inline Component& getEntityComponentInternal(int internal_index) {
         return componentArrays.template get<Component>()[internal_index];
     }
 
@@ -201,7 +201,7 @@ struct ECManager {
      * @todo better syntax
      */
     template<typename Component>
-    Component& getEntityComponent(EntityID id) {
+    constexpr inline Component& getEntityComponent(EntityID id) {
         auto it = idToInternalIndex.find(id);
         ASSERT(it != idToInternalIndex.end());
         InternalIndex index = it->second;
@@ -212,7 +212,7 @@ struct ECManager {
     template<typename ComponentRef>
     requires std::is_reference<ComponentRef>::value
     // ComponentRef is Component& 
-    ComponentRef getEntityComponent(EntityID id) {
+    constexpr inline ComponentRef getEntityComponent(EntityID id) {
         auto it = idToInternalIndex.find(id);
         ASSERT(it != idToInternalIndex.end());
         InternalIndex index = it->second;
@@ -228,33 +228,57 @@ struct ECManager {
      * @return A tuple containing references to the entity's components.
      * @throws std::runtime_error If the entity does not exist.
      */
-    std::tuple<Components&...> getEntityComponents(EntityID id) {
+    constexpr inline std::tuple<Components&...> getEntityComponents(EntityID id) {
         auto it = idToInternalIndex.find(id);
         ASSERT (it != idToInternalIndex.end());
         InternalIndex index = it->second;
         return getEntityComponentsInternal(index);
     }
 
-    std::tuple<Components&...> getEntityComponentsInternal(InternalIndex internal_index) {
+    constexpr inline std::tuple<Components&...> getEntityComponentsInternal(InternalIndex internal_index) {
         return std::tie(
             // std::get<std::vector<Components>>(componentVectors)[internal_index]...
             componentArrays.template get<Components>()[internal_index]...
             );
     }
 
+    // // Executes Func on every entity, loading needed components and passing them to Func
     template<typename Func>
-    // Executes Func on every entity, loading needed components and passing them to Func
-    void forEachEntityWith(Func func) {
+    constexpr inline void forEachEntityWith(Func& func) {
         // TODO: assume vectorizable?
-        // #pragma GCC ivdep
+        #pragma simd
         for (size_t i = 0; i < componentArrays.size(); ++i) {
             loadAndInvoke<Func>(func, i);
         }
     }
 
+    template <typename Func>
+    constexpr inline void forEachEntityWith(Func&& func) {
+        #pragma simd
+        #pragma GCC ivdep
+        for (size_t i = 0; i < componentArrays.size(); ++i) {
+            loadAndInvoke(std::forward<Func>(func), i);
+        }
+    }
+
+    template <typename Func>
+    constexpr inline void loadAndInvoke(Func&& func, InternalIndex id) {
+        using ArgTuple = typename function_traits<std::decay_t<Func>>::args_type;
+        using ArgNoRefTuple = tuple_with_removed_refs_t<ArgTuple>;
+        
+        if constexpr (std::is_same_v<std::tuple_element_t<0, ArgNoRefTuple>, InternalIndex>) {
+            auto components_without_ii = loadComponentsFromTupleInternal<tuple_tail_t<ArgNoRefTuple>>(id);
+            auto components = std::tuple_cat(std::make_tuple(id), components_without_ii);
+            std::apply(std::forward<Func>(func), components);
+        } else {
+            auto components = loadComponentsFromTupleInternal<ArgNoRefTuple>(id);
+            std::apply(std::forward<Func>(func), components);
+        }
+    }
+
     // loads every component function needs and passes it to function
     template <typename Func>
-    constexpr inline void loadAndInvoke(Func fun, InternalIndex id) {
+    constexpr inline void loadAndInvoke(Func& fun, InternalIndex id) {
         using ArgTuple = typename function_traits<Func>::args_type;
         using ArgNoRefTuple = tuple_with_removed_refs_t<ArgTuple>;
         
@@ -349,13 +373,13 @@ struct ECManager {
      * @warning Should not be used more than once per update
      * @param newSize The new size to resize to.
      */
-    void resize(int newSize) {
+    constexpr inline void resize(int newSize) {
         // (std::get<std::vector<Components>>(componentVectors).resize(newSize), ...);
         // aliveEntities.resize(newSize);
         // internalIndexToID.resize(newSize);
         componentArrays.resize(newSize);
     }
-    int size() {
+    constexpr inline int size() const {
         return componentArrays.size();
     }
 
