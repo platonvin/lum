@@ -66,6 +66,7 @@ void LumInternal::MyRenderInterface::RenderGeometry (Rml::Vertex* vertices,
         textureWrite.pImageInfo = &textureInfo;
     vector<VkWriteDescriptorSet> descriptorWrites = {textureWrite};
     vkCmdPushDescriptorSetKHR (renderCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render->overlayPipe.lineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
+    // use lumal.cmdBindVertexBuffers
     vkCmdBindVertexBuffers (renderCommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer (renderCommandBuffer, ui_mesh.indexes.buffer, 0, VK_INDEX_TYPE_UINT32);
     // render->lumal.cmdPipelineBarrier(renderCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_SHADER_STAGE_ALL_GRAPHICS);

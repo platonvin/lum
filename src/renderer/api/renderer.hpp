@@ -122,6 +122,10 @@ struct Renderer {
     Camera& getCamera();
     glm::ivec3 getWorldSize();
 
+    glm::ivec3 stored_radiance_shift = {};
+    glm::ivec3 getStoredRadianceShift() const noexcept;
+    void setStoredRadianceShift(const glm::ivec3& shift) noexcept;
+    
     public:
         bool should_close{false};
         // This could be 80k lines of headers just to declare private members

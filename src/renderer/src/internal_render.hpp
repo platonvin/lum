@@ -9,6 +9,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include "internal_types.hpp"
+#include "macros/assert.hpp"
 
 namespace LumInternal {
 // there are some conflicts in namespaces so have to do it like this
@@ -114,43 +115,86 @@ typedef struct Block {
     InternalMeshModel mesh;
 } BlockWithMesh; //in palette
 
-//just 3d array. Content invalid after allocate()
-template <typename Type> class table3d {
-  private:
-    Type* memory = NULL;
-    ivec3 _size = {};
-  public:
-    //makes content invalid
-    void allocate (int x, int y, int z) {
-        _size = ivec3 (x, y, z);
-        this->memory = (Type*)calloc (x* y* z, sizeof (Type));
-    }
-    void allocate (ivec3 size) {
-        this->allocate (size.x, size.y, size.z);
-    }
-    void deallocate() {
-        free (memory);
+// just 3d array. Content invalid after allocate()
+// Note: reverse order to make for x {for y {for z}} order be the fastest
+// NOTE2: DO NOT USE REVERSE ORDER FOR ACCESSING VIA data() - its memory layout is different
+template <typename Type, bool row_major = true>
+class table3d {
+private:
+    Type* memory = nullptr;   // pointer to the 3D array in a linear layout
+    uvec3 _size = {0, 0, 0};  // size of the 3D array
+
+public:
+    // allocates memory for the 3D array. I like it being explicit
+    void allocate(int x, int y, int z SLOC_DECLARE_DEFARG) {
+        ASSERT(x > 0 && y > 0 && z > 0, "dimensions must be positive");
+        _size = {x, y, z};
+        // memory = new Type[x * y * z](); // allocate memory AND ZERO it
+        memory = (Type*)calloc(x * y * z, sizeof(Type)); // allocate memory AND ZERO it memory
     }
 
-    void set (Type val) {
-        for (int x = 0; x < _size.x; x++) {
-            for (int y = 0; y < _size.y; y++) {
-                for (int z = 0; z < _size.z; z++) {
-                    this->memory [x + _size.x * y + (_size.x* _size.y)*z] = val;
-                }
-            }
+    int linear_index(int x, int y, int z) const {
+        if constexpr (row_major) {
+            // Row-major layout (x, y, z access is fastest)
+            return x + _size.x * y + _size.x * _size.y * z;
+        } else {
+            // Note: such order to make for x {for y {for z}} order be the fastest
+            // Column-major layout (z, y, x access is fastest)
+            return z + _size.z * y + _size.z * _size.y * x;
         }
     }
 
-    //syntactic sugar
-    Type* data() {return this->memory;}
-    uvec3 size() {return _size;}
-
-    Type& operator() (int x, int y, int z) const {
-        return this->memory [x + _size.x * y + (_size.x* _size.y) * z];
+    void allocate(uvec3 size) {
+        allocate(size.x, size.y, size.z);
     }
-    Type& operator() (ivec3 v) const {return (*this) (v.x, v.y, v.z);}
 
+    // free allocated memory
+    void deallocate(SLOC_DECLARE_DEFARG_NOCOMMA) {
+        ASSERT(memory != nullptr, "memory is already deallocated");
+        // delete[] memory;
+        free(memory);
+        memory = nullptr;
+        _size = {0, 0, 0};
+    }
+
+    // set all elements to a specific value
+    void set(Type val) {
+        for (int x = 0; x < _size.x; x++) {
+        for (int y = 0; y < _size.y; y++) {
+        for (int z = 0; z < _size.z; z++) {
+            (*this)(x, y, z) = val;
+        }}}
+    }
+    
+    // access elements using (x, y, z) coordinates
+    Type& operator()(int x, int y, int z SLOC_DECLARE_DEFARG) {
+        ASSERT(x >= 0 && x < _size.x, "X coordinate out of bounds");
+        ASSERT(y >= 0 && y < _size.y, "Y coordinate out of bounds");
+        ASSERT(z >= 0 && z < _size.z, "Z coordinate out of bounds");
+        return memory[linear_index(x, y, z)];
+    }
+
+    const Type& operator()(int x, int y, int z SLOC_DECLARE_DEFARG) const {
+        ASSERT(x >= 0 && x < _size.x, "X coordinate out of bounds");
+        ASSERT(y >= 0 && y < _size.y, "Y coordinate out of bounds");
+        ASSERT(z >= 0 && z < _size.z, "Z coordinate out of bounds");
+        return memory[linear_index(x, y, z)];
+    }
+
+    Type& operator()(uvec3 v) { return (*this)(v.x, v.y, v.z); }
+    const Type& operator()(uvec3 v) const { return (*this)(v.x, v.y, v.z); }
+
+    // access raw data pointer
+    Type* data() { return memory; }
+    const Type* data() const { return memory; }
+
+    // get the size of the array
+    uvec3 size() const { return _size; }
+
+    // destructor to free memory
+    ~table3d() {
+        // deallocate();
+    }
 };
 
 //forward declaration for pointer
@@ -229,7 +273,8 @@ struct LumInternalRenderer {
             void start_map();
                 void map_mesh(InternalMeshModel* mesh, MeshTransform* model_trans);
             void end_map();
-            void update_radiance();
+            void update_radiance(); // submits compute dispatches to recalculate radiance field values
+            void shift_radiance(ivec3 radiance_shift); // shifts radiance field values to the specified direction
             void updade_grass(vec2 windDirection);
             void updade_water();
             void recalculate_df();
@@ -318,10 +363,10 @@ struct LumInternalRenderer {
     Lumal::RenderPass gbufferRpass;
     Lumal::RenderPass shadeRpass; //for no downscaling
 
-    ring<VkCommandBuffer> computeCommandBuffers;
-    ring<VkCommandBuffer> lightmapCommandBuffers;
-    ring<VkCommandBuffer> graphicsCommandBuffers;
-    ring<VkCommandBuffer> copyCommandBuffers; //runtime copies for ui. Also does first frame resources
+    ring<Lumal::CommandBuffer> computeCommandBuffers;
+    ring<Lumal::CommandBuffer> lightmapCommandBuffers;
+    ring<Lumal::CommandBuffer> graphicsCommandBuffers;
+    ring<Lumal::CommandBuffer> copyCommandBuffers; //runtime copies for ui. Also does first frame resources
 
     ring<Lumal::Image> lightmap;
     // ring<Lumal::Image> swapchainImages;

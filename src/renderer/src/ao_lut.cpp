@@ -1,7 +1,6 @@
 //compute lut for ambient occlusion shader
 #include "ao_lut.hpp"
-
-using std::vector;
+#include <array>
 
 vec3 get_world_shift_from_clip_shift (vec2 clip_shift, vec3 horizline_scaled, vec3 vertiline_scaled) {
     vec3 shift =
@@ -23,9 +22,10 @@ double calculate_total_weight (int sample_count, double max_radius,
     return total_weight;
 }
 
-vector<AoLut> generateLUT (int sample_count, double max_radius,
+template <size_t sample_count>
+std::array<AoLut, sample_count> generateLUT (double max_radius,
                            dvec2 frame_size, dvec3 horizline_scaled, dvec3 vertiline_scaled) {
-    vector<AoLut> lut (sample_count);
+    std::array<AoLut, sample_count> lut = {};
     double angle = 0.0;
     double normalized_radius = 0.0;
     double norm_radius_step = 1.0 / double (sample_count);
@@ -50,3 +50,6 @@ vector<AoLut> generateLUT (int sample_count, double max_radius,
     }
     return lut;
 }
+
+template class std::array<AoLut, 8>;
+template std::array<AoLut, 8> generateLUT<8>(double, dvec2, dvec3, dvec3);

@@ -205,17 +205,15 @@ void LumInternal::LumInternalRenderer::load_scene (const char* vox_file) {
 
     ivec3 size2read = glm::clamp(stored_world_size, ivec3(0), ivec3(world_size));
 
+    for (int zz = 0; zz < size2read.z; zz++) {
+    for (int yy = 0; yy < size2read.y; yy++) {
     for (int xx = 0; xx < size2read.x; xx++) {
-        for (int yy = 0; yy < size2read.y; yy++) {
-            for (int zz = 0; zz < size2read.z; zz++) {
-                size_t index = xx + stored_world_size.x * yy + (stored_world_size.x * stored_world_size.y) * zz;
-                assert(index < (buffer.size() - sizeof(ivec3)) / sizeof(BlockID_t));
-                
-                BlockID_t loaded_block = stored_world[index];
-                origin_world(xx, yy, zz) = glm::clamp(loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
-            }
-        }
-    }
+        size_t index = xx + stored_world_size.x * yy + (stored_world_size.x * stored_world_size.y) * zz;
+        assert(index < (buffer.size() - sizeof(ivec3)) / sizeof(BlockID_t));
+        
+        BlockID_t loaded_block = stored_world[index];
+        origin_world(xx, yy, zz) = glm::clamp(loaded_block, BlockID_t(0), BlockID_t(static_block_palette_size));
+    }}}
 
     return;
 }

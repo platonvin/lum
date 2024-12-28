@@ -263,9 +263,9 @@ void Lum::Renderer::drawWorld() noexcept {
     // LOG(opaque_members->settings.world_size.x)
     // LOG(opaque_members->settings.world_size.y)
     // LOG(opaque_members->settings.world_size.z)
-    for(int xx=0; xx < opaque_members->settings.world_size.x; xx++){
-    for(int yy=0; yy < opaque_members->settings.world_size.y; yy++){
     for(int zz=0; zz < opaque_members->settings.world_size.z; zz++){
+    for(int yy=0; yy < opaque_members->settings.world_size.y; yy++){
+    for(int xx=0; xx < opaque_members->settings.world_size.x; xx++){
         MeshModel* block_mesh = NULL;
 TRACE()
         int block_id = opaque_members->render.origin_world(xx,yy,zz);
@@ -433,6 +433,8 @@ TRACE()
 
             opaque_members->render.end_blockify();
 TRACE()
+            opaque_members->render.shift_radiance(stored_radiance_shift);
+TRACE()
             opaque_members->render.update_radiance();
 TRACE()
             // opaque_members->render.recalculate_df(); // currently unused. per-voxel Distance Field 
@@ -538,7 +540,10 @@ TRACE()
         opaque_members->render.end_ui(); 
         opaque_members->render.end_2nd_spass();
 TRACE()
-    updateTime();
+    // this should happen BEFORE end_frame
+    // otherwise (if after) there is more (visible!) inconsistency which might seem like its perfomance problems
+    updateTime(); 
+
     opaque_members->render.end_frame();
 TRACE()
 }
@@ -580,6 +585,7 @@ void* Lum::Renderer::getGLFWptr() const noexcept {
 void Lum::Renderer::updateTime() noexcept {
     auto now = std::chrono::high_resolution_clock::now();
     delta_time = std::chrono::duration<double>(now - curr_time).count();
+    // delta_time = 1/75.0; // used for testing when no-reason lag occures
     curr_time = now;
     assert(delta_time > 0);
 }
@@ -595,7 +601,12 @@ glm::ivec3 Lum::Renderer::getWorldSize(){
 void Lum::Renderer::addParticle(Particle particle){
     opaque_members->render.particles.push_back(particle);
 }
-
+glm::ivec3 Lum::Renderer::getStoredRadianceShift() const noexcept {
+    return stored_radiance_shift;
+}
+void Lum::Renderer::setStoredRadianceShift(const glm::ivec3& shift) noexcept {
+    stored_radiance_shift = shift;
+}
 glm::ivec3 Lum::MeshModelWithGetters::getSize() const {
     LumInternal::InternalMeshModel* ptr = (LumInternal::InternalMeshModel*) this->ptr;
     return ptr->size;

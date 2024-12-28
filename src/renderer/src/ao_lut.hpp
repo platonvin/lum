@@ -31,5 +31,12 @@ struct AoLut {
     vec2 padding;
 };
 
-vector<AoLut> generateLUT (int sample_count, double max_radius,
+vec3 get_world_shift_from_clip_shift (vec2 clip_shift, vec3 horizline_scaled, vec3 vertiline_scaled);
+
+double calculate_total_weight (int sample_count, double max_radius,
+                               dvec2 frame_size, dvec3 horizline_scaled, dvec3 vertiline_scaled);
+
+// I still have no idea if this is valid C++23
+template <size_t sample_count>
+std::array<AoLut, sample_count> generateLUT (double max_radius,
                            dvec2 frame_size, dvec3 horizline_scaled, dvec3 vertiline_scaled);

@@ -1,3 +1,4 @@
+#include <cstdarg>
 #ifdef __EMSCRIPTEN__
 #error Lum does not compile for web
 #endif
@@ -38,6 +39,12 @@ using glm::mat, glm::mat2, glm::mat3, glm::mat4;
 using glm::dmat2, glm::dmat3, glm::dmat4;
 using glm::identity;
 using glm::intBitsToFloat;
+using Lumal::CommandBuffer;
+
+template<typename T, typename... N>
+auto _make_array(N&&... args) -> std::array<T,sizeof...(args)>{
+    return {std::forward<N>(args)...};
+}
 
 #define PLACE_TIMESTAMP_OUTSIDE(commandBuffer) do {\
     if(lumal.settings.profile){\
@@ -121,7 +128,7 @@ TRACE();
     lumal.createImageStorages (&radianceCache,
         VK_IMAGE_TYPE_3D,
         RADIANCE_FORMAT,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT,
@@ -204,8 +211,8 @@ TRACE();
 void LumInternal::LumInternalRenderer::setupFoliageDescriptors() {
     for (auto* fol : registered_foliage){
         lumal.deferDescriptorSetup (&fol->pipe.setLayout, &fol->pipe.sets, {
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {}, &grassState, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {}, &grassState, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
         }, VK_SHADER_STAGE_VERTEX_BIT);
 TRACE();
     }
@@ -220,67 +227,67 @@ void LumInternal::LumInternalRenderer::setupDescriptors() {
     }, &overlayPipe.setLayout,
     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     lumal.deferDescriptorSetup (&lightmapBlocksPipe.setLayout, &lightmapBlocksPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
     lumal.deferDescriptorSetup (&lightmapModelsPipe.setLayout, &lightmapModelsPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&lightUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&radiancePipe.setLayout, &radiancePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, Lumal::RD_FIRST, &gpuRadianceUpdates, {}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, RDP::FIRST, &gpuRadianceUpdates, {}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&diffusePipe.setLayout, &diffusePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &highresDepthStencil, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &materialPalette, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &lightmap, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
-        // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RD_FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &highresDepthStencil, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &materialPalette, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &lightmap, shadowSampler, VK_IMAGE_LAYOUT_GENERAL},
+        // {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, {lightmap}, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&aoPipe.setLayout, &aoPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&aoLutUniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&tonemapPipe.setLayout, &tonemapPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &highresFrame, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &highresFrame, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&fillStencilGlossyPipe.setLayout, &fillStencilGlossyPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &highresMatNorm, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&fillStencilSmokePipe.setLayout, &fillStencilSmokePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&glossyPipe.setLayout, &glossyPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &highresMatNorm, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &highresMatNorm, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &highresDepthStencil, nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &world, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::CURRENT, {/*empty*/}, (&originBlockPalette), unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::CURRENT, {/*empty*/}, (&materialPalette), nearestSampler, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &radianceCache, unnormLinear, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&smokePipe.setLayout, &smokePipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &farDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, Lumal::RD_FIRST, {/*empty*/}, &nearDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {/*empty*/}, &perlinNoise3d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &farDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, RDP::FIRST, {/*empty*/}, &nearDepth, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {/*empty*/}, &radianceCache, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {/*empty*/}, &perlinNoise3d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     // create_DescriptorSetLayout({
@@ -289,8 +296,8 @@ TRACE();
     // VK_SHADER_STAGE_VERTEX_BIT, &blocksPushLayout,
     // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     lumal.deferDescriptorSetup (&raygenBlocksPipe.setLayout, &raygenBlocksPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_CURRENT, {}, &originBlockPalette, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::CURRENT, {}, &originBlockPalette, unnormNearest, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // setup_RayGen_Particles_Descriptors();
     lumal.createDescriptorSetLayout ({
@@ -299,35 +306,35 @@ TRACE();
     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     // 0);
     lumal.deferDescriptorSetup (&raygenModelsPipe.setLayout, &raygenModelsPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 TRACE();
     lumal.deferDescriptorSetup (&raygenParticlesPipe.setLayout, &raygenParticlesPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {/*empty*/}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_CURRENT, {/*empty*/}, (&originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {/*empty*/}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::CURRENT, {/*empty*/}, (&originBlockPalette), NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
     lumal.deferDescriptorSetup (&updateGrassPipe.setLayout, &updateGrassPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {}, &grassState, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {}, &perlinNoise2d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, &grassState, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {}, &perlinNoise2d, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     lumal.deferDescriptorSetup (&updateWaterPipe.setLayout, &updateWaterPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {}, &waterState, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, &waterState, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     // dynamic now
     // render.deferDescriptorSetup (&raygenGrassPipe.setLayout, &raygenGrassPipe.sets, {
-    //     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-    //     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {}, &grassState, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
+    //     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+    //     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {}, &grassState, linearSampler, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_VERTEX_BIT);
     lumal.deferDescriptorSetup (&raygenWaterPipe.setLayout, &raygenWaterPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, Lumal::RD_CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, Lumal::RD_FIRST, {}, &waterState, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, RDP::CURRENT, (&uniform), {/*empty*/}, NO_SAMPLER, NO_LAYOUT},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, RDP::FIRST, {}, &waterState, linearSampler_tiled, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_VERTEX_BIT);
     lumal.deferDescriptorSetup (&genPerlin2dPipe.setLayout, &genPerlin2dPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {}, &perlinNoise2d, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, &perlinNoise2d, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     lumal.deferDescriptorSetup (&genPerlin3dPipe.setLayout, &genPerlin3dPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {}, &perlinNoise3d, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, &perlinNoise3d, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     lumal.createDescriptorSetLayout ({
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,VK_SHADER_STAGE_COMPUTE_BIT} // model voxels
@@ -335,24 +342,24 @@ TRACE();
     VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR);
     // 0);
     lumal.deferDescriptorSetup (&mapPipe.setLayout, &mapPipe.sets, {
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_FIRST, {}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, Lumal::RD_CURRENT, {}, &originBlockPalette, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, &world, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::CURRENT, {}, &originBlockPalette, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     }, VK_SHADER_STAGE_COMPUTE_BIT);
     // render.deferDescriptorsetup(&dfxPipe.setLayout, &dfxPipe.sets, {
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_COMPUTE_BIT);
     // render.deferDescriptorsetup(&dfyPipe.setLayout, &dfyPipe.sets, {
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_COMPUTE_BIT);
     // render.deferDescriptorsetup(&dfzPipe.setLayout, &dfzPipe.sets, {
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {distancePalette   }, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_COMPUTE_BIT);
     // render.deferDescriptorsetup(&bitmaskPipe.setLayout, &bitmaskPipe.sets, {
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
-    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RD_FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {originBlockPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
+    // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, RDP::FIRST, {}, {bitPalette}, NO_SAMPLER, VK_IMAGE_LAYOUT_GENERAL},
     // }, VK_SHADER_STAGE_COMPUTE_BIT);
 TRACE();
     lumal.flushDescriptorSetup();
@@ -844,16 +851,16 @@ TRACE();
 }
 
 void LumInternal::LumInternalRenderer::gen_perlin_2d() {
-    VkCommandBuffer commandBuffer = lumal.beginSingleTimeCommands();
+    CommandBuffer commandBuffer = lumal.beginSingleTimeCommands();
     // render.cmdBindPipe(commandBuffer, &genPerlin2dPipe);
-    vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin2dPipe.line);
+    commandBuffer.cmdBindPipeline (VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin2dPipe.line);
     for(int i=0; i<lumal.settings.fif; i++){
-        vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin2dPipe.lineLayout, 0, 1, &genPerlin2dPipe.sets[i], 0, 0);
-        lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin2dPipe.lineLayout, 0, 1, &genPerlin2dPipe.sets[i], 0, 0);
+        commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
             perlinNoise2d.current());
-        vkCmdDispatch (commandBuffer, world_size.x / 8, world_size.y / 8, 1);
-        lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        commandBuffer.cmdDispatch (world_size.x / 8, world_size.y / 8, 1);
+        commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
             perlinNoise2d.current());
     }
@@ -861,16 +868,16 @@ void LumInternal::LumInternalRenderer::gen_perlin_2d() {
 }
 
 void LumInternal::LumInternalRenderer::gen_perlin_3d() {
-    VkCommandBuffer commandBuffer = lumal.beginSingleTimeCommands();
+    CommandBuffer commandBuffer = lumal.beginSingleTimeCommands();
 
-    vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin3dPipe.line);
+    commandBuffer.cmdBindPipeline (VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin3dPipe.line);
     for(int i=0; i<lumal.settings.fif; i++){
-        vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin3dPipe.lineLayout, 0, 1, &genPerlin3dPipe.sets[i], 0, 0);
-        lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, genPerlin3dPipe.lineLayout, 0, 1, &genPerlin3dPipe.sets[i], 0, 0);
+        commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
             perlinNoise3d.current());
-        vkCmdDispatch (commandBuffer, 64 / 4, 64 / 4, 64 / 4);
-        lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        commandBuffer.cmdDispatch (64 / 4, 64 / 4, 64 / 4);
+        commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
             perlinNoise3d.current());
     }
@@ -917,10 +924,10 @@ void LumInternal::LumInternalRenderer::start_frame() {
     TRACE();
     update_light_transform();
     TRACE();
-    assert(computeCommandBuffers.current());
-    assert(graphicsCommandBuffers.current());
-    assert(copyCommandBuffers.current());
-    assert(lightmapCommandBuffers.current());
+    assert(computeCommandBuffers.current().commandBuffer);
+    assert(graphicsCommandBuffers.current().commandBuffer);
+    assert(copyCommandBuffers.current().commandBuffer);
+    assert(lightmapCommandBuffers.current().commandBuffer);
     TRACE();
     lumal.start_frame({
         computeCommandBuffers.current(),
@@ -932,7 +939,7 @@ void LumInternal::LumInternalRenderer::start_frame() {
 }
 
 void LumInternal::LumInternalRenderer::start_blockify() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
     TRACE();
     blockCopyQueue.clear();
     TRACE();
@@ -992,46 +999,44 @@ void LumInternal::LumInternalRenderer::blockify_mesh (InternalMeshModel* mesh, M
     border.max = (ivec3 (border_in_voxel.max) + ivec3 (1)) / ivec3 (16);
     border.min = glm::clamp (border.min, ivec3 (0), ivec3 (world_size - u32(1)));
     border.max = glm::clamp (border.max, ivec3 (0), ivec3 (world_size - u32(1)));
+    for (int zz = border.min.z; zz <= border.max.z; zz++) {
+    for (int yy = border.min.y; yy <= border.max.y; yy++) {
     for (int xx = border.min.x; xx <= border.max.x; xx++) {
-        for (int yy = border.min.y; yy <= border.max.y; yy++) {
-            for (int zz = border.min.z; zz <= border.max.z; zz++) {
-                int current_block = current_world (xx, yy, zz);
-                if (current_block < static_block_palette_size) { // static
-                    //add to copy queue
-                    ivec2 src_block = {};
-                    src_block = get_block_xy (current_block);
-                    ivec2 dst_block = {};
-                    dst_block = get_block_xy (paletteCounter);
+        int current_block = current_world (xx, yy, zz);
+        if (current_block < static_block_palette_size) { // static
+            //add to copy queue
+            ivec2 src_block = {};
+            src_block = get_block_xy (current_block);
+            ivec2 dst_block = {};
+            dst_block = get_block_xy (paletteCounter);
 
-                    // do image copy on for non-zero-src blocks. Other things still done for every allocated block
-                    // because zeroing is fast
-                    if(current_block != 0){
-                        VkImageCopy static_block_copy = {};
-                            static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                            static_block_copy.srcSubresource.baseArrayLayer = 0;
-                            static_block_copy.srcSubresource.layerCount = 1;
-                            static_block_copy.srcSubresource.mipLevel = 0;
-                            static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                            static_block_copy.dstSubresource.baseArrayLayer = 0;
-                            static_block_copy.dstSubresource.layerCount = 1;
-                            static_block_copy.dstSubresource.mipLevel = 0;
-                            static_block_copy.extent = {16, 16, 16};
-                            static_block_copy.srcOffset = {src_block.x * 16, src_block.y * 16, 0};
-                            static_block_copy.dstOffset = {dst_block.x * 16, dst_block.y * 16, 0};
-                        blockCopyQueue.push_back (static_block_copy);
-                    }
-
-                    current_world (xx, yy, zz) = paletteCounter;
-                    paletteCounter++; // yeah i dont trust myself in this
-
-                    // if(current_block == 0) zero_blocks++;
-                    // else just_blocks++;
-                } else {
-                    //already new block, just leave it
-                }
+            // do image copy on for non-zero-src blocks. Other things still done for every allocated block
+            // because zeroing is fast
+            if(current_block != 0){
+                VkImageCopy static_block_copy = {};
+                    static_block_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    static_block_copy.srcSubresource.baseArrayLayer = 0;
+                    static_block_copy.srcSubresource.layerCount = 1;
+                    static_block_copy.srcSubresource.mipLevel = 0;
+                    static_block_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    static_block_copy.dstSubresource.baseArrayLayer = 0;
+                    static_block_copy.dstSubresource.layerCount = 1;
+                    static_block_copy.dstSubresource.mipLevel = 0;
+                    static_block_copy.extent = {16, 16, 16};
+                    static_block_copy.srcOffset = {src_block.x * 16, src_block.y * 16, 0};
+                    static_block_copy.dstOffset = {dst_block.x * 16, dst_block.y * 16, 0};
+                blockCopyQueue.push_back (static_block_copy);
             }
+
+            current_world (xx, yy, zz) = paletteCounter;
+            paletteCounter++; // yeah i dont trust myself in this
+
+            // if(current_block == 0) zero_blocks++;
+            // else just_blocks++;
+        } else {
+            //already new block, just leave it
         }
-    }
+    }}}
 }
 
 bool LumInternal::LumInternalRenderer::AABB::contains(const vec3& point) const {
@@ -1075,9 +1080,9 @@ void set_blocks(const ivec3& coord, LumInternal::table3d<bool>& set, const LumIn
 }
 
 void push_radiance_updates(const ivec3& size, LumInternal::table3d<bool>& set, std::vector<i8vec4>& radianceUpdates) {
-    for (int xx = 0; xx < size.x; ++xx) {
-    for (int yy = 0; yy < size.y; ++yy) {
     for (int zz = 0; zz < size.z; ++zz) {
+    for (int yy = 0; yy < size.y; ++yy) {
+    for (int xx = 0; xx < size.x; ++xx) {
         if (set(xx, yy, zz)) {
             radianceUpdates.push_back(i8vec4(xx, yy, zz, 0));
         }
@@ -1086,7 +1091,7 @@ void push_radiance_updates(const ivec3& size, LumInternal::table3d<bool>& set, s
 
 // TODO: finish dynamic update system, integrate with RaVE
 void LumInternal::LumInternalRenderer::update_radiance() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
     TRACE()
     table3d<bool> 
         set = {};
@@ -1098,28 +1103,26 @@ void LumInternal::LumInternalRenderer::update_radiance() {
     radianceUpdates.clear();
     
     TRACE()
+    for (int zz = 0; zz < world_size.z; zz++) {
+    for (int yy = 0; yy < world_size.y; yy++) {
     for (int xx = 0; xx < world_size.x; xx++) {
-        for (int yy = 0; yy < world_size.y; yy++) {
-            for (int zz = 0; zz < world_size.z; zz++) {
-                // int block_id = currentcares on less then a million blocks?
-                // UPD: actually, smarter algorithms resulted in less perfomance
-                int sum_of_neighbours = 0;
-                for (int dx = -1; (dx <= +1); dx++) {
-                for (int dy = -1; (dy <= +1); dy++) {
-                for (int dz = -1; (dz <= +1); dz++) {
-                    ivec3 test_block = ivec3 (xx + dx, yy + dy, zz + dz);
-                    // kinda slow... but who cares on less then 1m blocks
-                    // safity
-                    test_block = glm::clamp(test_block, ivec3(0), ivec3(world_size)-1);
-                    sum_of_neighbours += current_world (test_block);
-                }}}
-                if(sum_of_neighbours > 0){
-                    radianceUpdates.push_back (i8vec4 (xx, yy, zz, 0));
-                    set(ivec3(xx, yy, zz)) = true;
-                }
-            }
+        // int block_id = currentcares on less then a million blocks?
+        // UPD: actually, smarter algorithms resulted in less perfomance
+        int sum_of_neighbours = 0;
+        for (int dz = -1; (dz <= +1); dz++) {
+        for (int dy = -1; (dy <= +1); dy++) {
+        for (int dx = -1; (dx <= +1); dx++) {
+            ivec3 test_block = ivec3 (xx + dx, yy + dy, zz + dz);
+            // kinda slow... but who cares on less then 1m blocks
+            // safity
+            test_block = glm::clamp(test_block, ivec3(0), ivec3(world_size)-1);
+            sum_of_neighbours += current_world (test_block);
+        }}}
+        if(sum_of_neighbours > 0){
+            radianceUpdates.push_back (i8vec4 (xx, yy, zz, 0));
+            set(ivec3(xx, yy, zz)) = true;
         }
-    }
+    }}}
     // special updates are ones requested via API
     TRACE()
     for (auto u : specialRadianceUpdates) {
@@ -1131,25 +1134,23 @@ void LumInternal::LumInternalRenderer::update_radiance() {
     VkDeviceSize bufferSize = sizeof (radianceUpdates[0]) * radianceUpdates.size();
     memcpy (stagingRadianceUpdates.current().mapped, radianceUpdates.data(), bufferSize);
 
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         gpuRadianceUpdates.current());
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         stagingRadianceUpdates.current());
 
     VkBufferCopy
         copyRegion = {};
         copyRegion.size = bufferSize;
-    vkCmdCopyBuffer (commandBuffer, stagingRadianceUpdates.current().buffer, gpuRadianceUpdates.current().buffer, 1, &copyRegion);
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    
+    vkCmdCopyBuffer (commandBuffer.commandBuffer, stagingRadianceUpdates.current().buffer, gpuRadianceUpdates.current().buffer, 1, &copyRegion);
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         gpuRadianceUpdates.current());
-    lumal.cmdBindPipe(commandBuffer, &radiancePipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.lineLayout, 0, 1, &radiancePipe.sets.current(), 0, 0);
+    commandBuffer.cmdBindPipe(&radiancePipe);
+    /**/ vkCmdBindDescriptorSets (commandBuffer.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, radiancePipe.lineLayout, 0, 1, &radiancePipe.sets.current(), 0, 0);
     int magic_number = lumal.iFrame % 2;
     //if fast than increase work
     if (timeTakenByRadiance < 1.8) {
@@ -1163,61 +1164,180 @@ void LumInternal::LumInternalRenderer::update_radiance() {
     magicSize = glm::max (magicSize, 1); //never remove
     magicSize = glm::min (magicSize, 10);
     struct rtpc {int time, iters, size, shift;} pushconstant = {lumal.iFrame, 0, magicSize, lumal.iFrame % magicSize};
-    vkCmdPushConstants (commandBuffer, radiancePipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
+    vkCmdPushConstants (commandBuffer.commandBuffer, radiancePipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
     int wg_count = radianceUpdates.size() / magicSize;
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDispatch (commandBuffer, wg_count, 1, 1);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    vkCmdDispatch (commandBuffer.commandBuffer, wg_count, 1, 1);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
         radianceCache.current());
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         radianceCache.current());
 }
 
+// copies radiance field image to itself with some 3d shift
+// Note: shift happens before anything else in the frame
+void LumInternal::LumInternalRenderer::shift_radiance(ivec3 radiance_shift) {
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    // we cannot "just" copy image to itself, because how would it even work?
+    // instead, we have to copy it to a temporary image, then copy it back
+    
+    // also, we work with "intersection" - between world and new_world (after shift)
+    // so if direction is 1,1,1 - then isection is one less than world_size
+    ivec3 cam_shift = 0 + radiance_shift;
+    
+    if (
+        false 
+        || abs(cam_shift.x) >= world_size.x
+        || abs(cam_shift.x) >= world_size.x
+        || abs(cam_shift.x) >= world_size.x
+    ) return; // then its pointless (zero-volume intersection). We can set it to zero os some pre-computed value in future, tho
+
+    auto process_axis = [](int shift, int world_size) -> ivec2 {  
+        int self_src_offset;
+        int self_dst_offset;
+        int extent = abs(shift);
+        if(shift >= 0){
+            self_src_offset = shift;
+        } else {
+            self_src_offset = 0;
+        }
+
+        if(shift >= 0){
+            self_dst_offset = 0;
+        } else {
+            self_dst_offset = abs(shift);
+        }
+
+        return ivec2(self_src_offset, self_dst_offset);
+    };
+
+    // where to copy from
+    ivec3 self_src_offset = ivec3(
+        process_axis(cam_shift.x, world_size.x).x, 
+        process_axis(cam_shift.y, world_size.y).x, 
+        process_axis(cam_shift.z, world_size.z).x
+    );
+    // where the intersection should end up (in the same image)
+    ivec3 self_dst_offset = ivec3(
+        process_axis(cam_shift.x, world_size.x).y, 
+        process_axis(cam_shift.y, world_size.y).y, 
+        process_axis(cam_shift.z, world_size.z).y
+    );
+    
+    uvec3 intersection_size = world_size - uvec3(abs(cam_shift));
+
+    // Those who complain about too much commented code:
+    // fuck off
+
+    // if i gave myself 1$ every time i log something, i would be rich
+
+    // LOG(cam_shift.x)
+    // LOG(cam_shift.y)
+    // LOG(cam_shift.z)
+    // LOG(self_dst_offset.x)
+    // LOG(self_dst_offset.y)
+    // LOG(self_dst_offset.z)
+    // LOG(self_src_offset.x)
+    // LOG(self_src_offset.y)
+    // LOG(self_src_offset.z)
+    // LOG(intersection_size.x)
+    // LOG(intersection_size.y)
+    // LOG(intersection_size.z)
+    // LOG("\n")
+
+
+    VkImageCopy 
+    copyRegion = {};
+        copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.srcSubresource.baseArrayLayer = 0;
+        copyRegion.srcSubresource.layerCount = 1;
+        copyRegion.srcSubresource.mipLevel = 0;
+        copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.dstSubresource.baseArrayLayer = 0;
+        copyRegion.dstSubresource.layerCount = 1;
+        copyRegion.dstSubresource.mipLevel = 0;
+        copyRegion.extent = {intersection_size.x, intersection_size.y, intersection_size.z};
+        copyRegion.srcOffset = {self_src_offset.x, self_src_offset.y, self_src_offset.z}; // we want 0,0,0 to end up in shift
+        copyRegion.dstOffset = {0, 0, 0}; // no reason to copy anywhere else - DST IS TEMP STORAGE
+
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        radianceCache.previous());
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        radianceCache.current());
+
+    // copy to temp
+    vkCmdCopyImage (commandBuffer.commandBuffer, radianceCache.current().image, VK_IMAGE_LAYOUT_GENERAL, radianceCache.previous().image, VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion);
+
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        radianceCache.previous());
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        radianceCache.current());
+
+    // copy back
+        copyRegion.extent = {intersection_size.x, intersection_size.y, intersection_size.z};
+        copyRegion.srcOffset = {0, 0, 0}; // we want 0,0,0 to end up in shift
+        copyRegion.dstOffset = {self_dst_offset.x, self_dst_offset.y, self_dst_offset.z}; // well, this is how to tell it to end up in (shift)
+    vkCmdCopyImage (commandBuffer.commandBuffer, radianceCache.previous().image, VK_IMAGE_LAYOUT_GENERAL, radianceCache.current().image, VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion);
+
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        radianceCache.previous());
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
+        radianceCache.current());
+
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+}
+
 void LumInternal::LumInternalRenderer::recalculate_df() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         distancePalette.current());
-    lumal.cmdBindPipe(commandBuffer, &dfxPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfxPipe.lineLayout, 0, 1, &dfxPipe.sets.current(), 0, 0);
-    vkCmdDispatch (commandBuffer, 1, 1, 16 * paletteCounter);
-    lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdBindPipe(&dfxPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, dfxPipe.lineLayout, 0, 1, &dfxPipe.sets.current(), 0, 0);
+    commandBuffer.cmdDispatch (1, 1, 16 * paletteCounter);
+    commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         distancePalette.current());
-    lumal.cmdBindPipe(commandBuffer, &dfyPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfyPipe.lineLayout, 0, 1, &dfyPipe.sets.current(), 0, 0);
-    vkCmdDispatch (commandBuffer, 1, 1, 16 * paletteCounter);
-    lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdBindPipe(&dfyPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, dfyPipe.lineLayout, 0, 1, &dfyPipe.sets.current(), 0, 0);
+    commandBuffer.cmdDispatch (1, 1, 16 * paletteCounter);
+    commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         distancePalette.current());
-    lumal.cmdBindPipe(commandBuffer, &dfzPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, dfzPipe.lineLayout, 0, 1, &dfzPipe.sets.current(), 0, 0);
-    vkCmdDispatch (commandBuffer, 1, 1, 16 * paletteCounter);
-    lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdBindPipe(&dfzPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, dfzPipe.lineLayout, 0, 1, &dfzPipe.sets.current(), 0, 0);
+    commandBuffer.cmdDispatch (1, 1, 16 * paletteCounter);
+    commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         distancePalette.current());
 }
 
 void LumInternal::LumInternalRenderer::recalculate_bit() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         bitPalette.current());
-    lumal.cmdBindPipe(commandBuffer, &bitmaskPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, bitmaskPipe.lineLayout, 0, 1, &bitmaskPipe.sets.current(), 0, 0);
-    vkCmdDispatch (commandBuffer, 1, 1, 8 * paletteCounter);
-    lumal.cmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdBindPipe(&bitmaskPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, bitmaskPipe.lineLayout, 0, 1, &bitmaskPipe.sets.current(), 0, 0);
+    commandBuffer.cmdDispatch (1, 1, 8 * paletteCounter);
+    commandBuffer.cmdPipelineBarrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         bitPalette.current());
 }
 
 void LumInternal::LumInternalRenderer::exec_copies() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
 
     VkClearColorValue clearColor = {};
         clearColor.int32[0] = 0;
@@ -1233,24 +1353,24 @@ void LumInternal::LumInternalRenderer::exec_copies() {
         clearRange.layerCount = 1;
 
     // Transition images for copying
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.previous());
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.current());
 
     // zero the entire block palette image
-    vkCmdClearColorImage (commandBuffer, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &clearRange);
+    vkCmdClearColorImage (commandBuffer.commandBuffer, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &clearRange);
 
     // sync
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.previous());
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.current());
@@ -1271,32 +1391,32 @@ void LumInternal::LumInternalRenderer::exec_copies() {
         static_palette_copy.dstOffset = {0, 0, 0};
 
     // copy static blocks back. So clean version of palette now
-    vkCmdCopyImage (commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, 
+    vkCmdCopyImage (commandBuffer.commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, 
         1, &static_palette_copy);
 
     // sync
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.previous());
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.current());
 
     // Execute actual block copy for each allocated temporal block
     if (!blockCopyQueue.empty()) {
-        PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-        vkCmdCopyImage (commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, blockCopyQueue.size(), blockCopyQueue.data());
-        PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+        PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+        vkCmdCopyImage (commandBuffer.commandBuffer, originBlockPalette.previous().image, VK_IMAGE_LAYOUT_GENERAL, originBlockPalette.current().image, VK_IMAGE_LAYOUT_GENERAL, blockCopyQueue.size(), blockCopyQueue.data());
+        PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
     }
 
     // Transition back images
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.previous());
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
         &originBlockPalette.current());
@@ -1308,26 +1428,26 @@ void LumInternal::LumInternalRenderer::exec_copies() {
         copyRegion.imageExtent.depth = world_size.z;
         copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         copyRegion.imageSubresource.layerCount = 1;
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
         &world.current());
-    vkCmdCopyBufferToImage (commandBuffer, stagingWorld.current().buffer, world.current().image, VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion);
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    vkCmdCopyBufferToImage (commandBuffer.commandBuffer, stagingWorld.current().buffer, world.current().image, VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion);
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         &world.current());
 }
 
 void LumInternal::LumInternalRenderer::start_map() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    lumal.cmdBindPipe(commandBuffer, &mapPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 0, 1, &mapPipe.sets.current(), 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    commandBuffer.cmdBindPipe(&mapPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 0, 1, &mapPipe.sets.current(), 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::map_mesh (InternalMeshModel* mesh, MeshTransform* mesh_trans) {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
     VkDescriptorImageInfo
         modelVoxelsInfo = {};
         modelVoxelsInfo.imageView = (*mesh).voxels.current().view; //CHANGE ME
@@ -1341,7 +1461,7 @@ void LumInternal::LumInternalRenderer::map_mesh (InternalMeshModel* mesh, MeshTr
         modelVoxelsWrite.descriptorCount = 1;
         modelVoxelsWrite.pImageInfo = &modelVoxelsInfo;
     vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite};
-    vkCmdPushDescriptorSetKHR (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
+    vkCmdPushDescriptorSetKHR (commandBuffer.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mapPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
     dmat4 rotate = toMat4 ((*mesh_trans).rot);
     dmat4 shift = translate (identity<mat4>(), (*mesh_trans).shift);
     dmat4 transform = shift * rotate;
@@ -1352,65 +1472,63 @@ void LumInternal::LumInternalRenderer::map_mesh (InternalMeshModel* mesh, MeshTr
     //todo: clamp here not in shader
     ivec3 map_area = (border.max - border.min);
     struct {mat4 trans; ivec4 shift;} itrans_shift = {mat4 (inverse (transform)), ivec4 (border.min, 0)};
-    vkCmdPushConstants (commandBuffer, mapPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (itrans_shift), &itrans_shift);
+    vkCmdPushConstants (commandBuffer.commandBuffer, mapPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (itrans_shift), &itrans_shift);
     // ivec3 adjusted_size = ivec3(vec3(mesh.size) * vec3(2.0));
 
     // i have no fucking idea why it was  *3+3. Some sort of 3d-cube-diag fix?
-    // vkCmdDispatch (commandBuffer, (map_area.x * 3 + 3) / 4, (map_area.y * 3 + 3) / 4, (map_area.z * 3 + 3) / 4);
+    // commandBuffer.cmdDispatch ((map_area.x * 3 + 3) / 4, (map_area.y * 3 + 3) / 4, (map_area.z * 3 + 3) / 4);
     
-    vkCmdDispatch (commandBuffer, (map_area.x + 3) / 4, (map_area.y + 3) / 4, (map_area.z + 3) / 4);
+    commandBuffer.cmdDispatch ((map_area.x + 3) / 4, (map_area.y + 3) / 4, (map_area.z + 3) / 4);
 }
 
 void LumInternal::LumInternalRenderer::end_map() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    lumal.cmdExplicitTransLayoutBarrier (commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    commandBuffer.cmdExplicitTransLayoutBarrier (VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         &originBlockPalette.current());
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::end_compute() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
 }
 
 void LumInternal::LumInternalRenderer::start_lightmap() {
-    VkCommandBuffer& commandBuffer = lightmapCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = lightmapCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
     struct unicopy {mat4 trans;} unicopy = {lightTransform};
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
         lightUniform.current());
-    vkCmdUpdateBuffer (commandBuffer, lightUniform.current().buffer, 0, sizeof (unicopy), &unicopy);
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    vkCmdUpdateBuffer (commandBuffer.commandBuffer, lightUniform.current().buffer, 0, sizeof (unicopy), &unicopy);
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
         lightUniform.current());
-    lumal.cmdBeginRenderPass(commandBuffer, &lightmapRpass);
+    commandBuffer.cmdBeginRenderPass(&lightmapRpass);
 }
 
 void LumInternal::LumInternalRenderer::lightmap_start_blocks() {
-    VkCommandBuffer& commandBuffer = lightmapCommandBuffers.current();
-    lumal.cmdBindPipe(commandBuffer, &lightmapBlocksPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapBlocksPipe.lineLayout, 0, 1, &lightmapBlocksPipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = lightmapCommandBuffers.current();
+    commandBuffer.cmdBindPipe(&lightmapBlocksPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapBlocksPipe.lineLayout, 0, 1, &lightmapBlocksPipe.sets.current(), 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::lightmap_start_models() {
-    VkCommandBuffer& commandBuffer = lightmapCommandBuffers.current();
-    lumal.cmdBindPipe(commandBuffer, &lightmapModelsPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapModelsPipe.lineLayout, 0, 1, &lightmapModelsPipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = lightmapCommandBuffers.current();
+    commandBuffer.cmdBindPipe(&lightmapModelsPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, lightmapModelsPipe.lineLayout, 0, 1, &lightmapModelsPipe.sets.current(), 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::end_lightmap() {
-    VkCommandBuffer& commandBuffer = lightmapCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    lumal.cmdEndRenderPass (commandBuffer, &lightmapRpass);
+    CommandBuffer& commandBuffer = lightmapCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdEndRenderPass (&lightmapRpass);
 }
 
 void LumInternal::LumInternalRenderer::start_raygen() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
     
     struct unicopy {
         mat4 trans_w2s; vec4 campos; vec4 camdir;
@@ -1425,23 +1543,21 @@ void LumInternal::LumInternalRenderer::start_raygen() {
         vec2 (lumal.swapChainExtent.width, lumal.swapChainExtent.height),
         lumal.iFrame
     };
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
         uniform.current());
-    vkCmdUpdateBuffer (commandBuffer, uniform.current().buffer, 0, sizeof (unicopy), &unicopy);
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    vkCmdUpdateBuffer (commandBuffer.commandBuffer, uniform.current().buffer, 0, sizeof (unicopy), &unicopy);
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
         uniform.current());
-    lumal.cmdBeginRenderPass(commandBuffer, &gbufferRpass);
+    commandBuffer.cmdBeginRenderPass(&gbufferRpass);
 }
 
 void LumInternal::LumInternalRenderer::raygen_start_blocks() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    lumal.cmdBindPipe(commandBuffer, &raygenBlocksPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.lineLayout, 0, 1, &raygenBlocksPipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdBindPipe(&raygenBlocksPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, raygenBlocksPipe.lineLayout, 0, 1, &raygenBlocksPipe.sets.current(), 0, 0);
 }
 
 static VkBuffer old_buff = NULL;
@@ -1454,7 +1570,7 @@ if(is_face_visible(i8vec3(__norm), camera.cameraDir)) {\
     draw_block_face(__norm, (*block_mesh).triangles.__dir, block_id);\
 }
 void LumInternal::LumInternalRenderer::draw_block_face (i8vec3 normal, IndexedVertices& buff, int block_id) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     // assert (buff.indexes.data());
     assert (block_id);
     i8 sum = normal.x + normal.y + normal.z;
@@ -1469,19 +1585,20 @@ void LumInternal::LumInternalRenderer::draw_block_face (i8vec3 normal, IndexedVe
                  absnorm.z << 2);
     //signBit_4EmptyBits_xBit_yBit_zBit
     struct {u8vec4 inorm;} norms = {u8vec4 (pbn, 0, 0, 0)};
-    vkCmdPushConstants (commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+    vkCmdPushConstants (commandBuffer.commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         8, sizeof (norms), &norms);
-    vkCmdDrawIndexed (commandBuffer, buff.icount, 1, buff.offset, 0, 0);
+
+    commandBuffer.cmdDrawIndexed (buff.icount, 1, buff.offset, 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::raygen_block (InternalMeshModel* block_mesh, int block_id, ivec3 shift) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     VkBuffer vertexBuffers[] = {(*block_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
     DEBUG_LOG((*block_mesh).triangles.vertexes.buffer)
 
-    lumal.cmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets);
-    lumal.cmdBindIndexBuffer (commandBuffer, (*block_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
+    commandBuffer.cmdBindVertexBuffers (0, 1, vertexBuffers, offsets);
+    commandBuffer.cmdBindIndexBuffer ((*block_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     ;
 
     /*
@@ -1490,7 +1607,7 @@ void LumInternal::LumInternalRenderer::raygen_block (InternalMeshModel* block_me
         i8vec4 inorm;
     */
     struct {i16 block; i16vec3 shift;} blockshift = {i16 (block_id), i16vec3 (shift)};
-    vkCmdPushConstants (commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+    vkCmdPushConstants (commandBuffer.commandBuffer, raygenBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         0, sizeof (blockshift), &blockshift);
     CHECK_N_DRAW_BLOCK (i8vec3 (+1, 0, 0), Pzz);
     CHECK_N_DRAW_BLOCK (i8vec3 (-1, 0, 0), Nzz);
@@ -1501,10 +1618,10 @@ void LumInternal::LumInternalRenderer::raygen_block (InternalMeshModel* block_me
 }
 
 void LumInternal::LumInternalRenderer::raygen_start_models() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &raygenModelsPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.lineLayout, 0, 1, &raygenModelsPipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&raygenModelsPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.lineLayout, 0, 1, &raygenModelsPipe.sets.current(), 0, 0);
 }
 
 #define CHECK_N_DRAW_MODEL(__norm, __dir) \
@@ -1512,32 +1629,33 @@ if(is_face_visible(model_trans->rot*__norm, camera.cameraDir)) {\
     draw_model_face(__norm, (*model_mesh).triangles.__dir);\
 }
 void LumInternal::LumInternalRenderer::draw_model_face (vec3 normal, IndexedVertices& buff) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     // assert (buff.indexes.data());
     struct {vec4 fnorm;} norms = {vec4 (normal, 0)};
-    vkCmdPushConstants (commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+    vkCmdPushConstants (commandBuffer.commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         32, sizeof (norms), &norms);
-    vkCmdDrawIndexed (commandBuffer, buff.icount, 1, buff.offset, 0, 0);
+    commandBuffer.cmdDrawIndexed (buff.icount, 1, buff.offset, 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::raygen_model (InternalMeshModel* model_mesh, MeshTransform* model_trans) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     VkBuffer vertexBuffers[] = { (*model_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
 
-    lumal.cmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets);
-    lumal.cmdBindIndexBuffer (commandBuffer, (*model_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
+    commandBuffer.cmdBindVertexBuffers (0, 1, vertexBuffers, offsets);
+    // vkCmdBindVertexBuffers (commandBuffer, 0, 1, vertexBuffers, offsets);
+    commandBuffer.cmdBindIndexBuffer ((*model_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     /*
         vec4 rot;
         vec4 shift;
         vec4 fnormal; //not encoded
     */
     struct {quat rot; vec4 shift;} rotshift = {model_trans->rot, vec4 (model_trans->shift, 0)};
-    vkCmdPushConstants (commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+    vkCmdPushConstants (commandBuffer.commandBuffer, raygenModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
         0, sizeof (rotshift), &rotshift);
     VkDescriptorImageInfo
         modelVoxelsInfo = {};
-        modelVoxelsInfo.imageView = (*model_mesh).voxels.current().view; //CHANGE ME
+        modelVoxelsInfo.imageView = (*model_mesh).voxels.current().view; //CHANGE ME 
         modelVoxelsInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         modelVoxelsInfo.sampler = unnormNearest;
     VkWriteDescriptorSet
@@ -1548,14 +1666,17 @@ void LumInternal::LumInternalRenderer::raygen_model (InternalMeshModel* model_me
         modelVoxelsWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         modelVoxelsWrite.descriptorCount = 1;
         modelVoxelsWrite.pImageInfo = &modelVoxelsInfo;
-    vector<VkWriteDescriptorSet> descriptorWrites = {modelVoxelsWrite};
-    vkCmdPushDescriptorSetKHR (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
+        
+    auto descriptorWrites = _make_array<VkWriteDescriptorSet>(modelVoxelsWrite);
+    vkCmdPushDescriptorSetKHR (commandBuffer.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenModelsPipe.lineLayout, 1, descriptorWrites.size(), descriptorWrites.data());
+    
     CHECK_N_DRAW_MODEL (vec3 (+1, 0, 0), Pzz);
     CHECK_N_DRAW_MODEL (vec3 (-1, 0, 0), Nzz);
     CHECK_N_DRAW_MODEL (vec3 (0, +1, 0), zPz);
     CHECK_N_DRAW_MODEL (vec3 (0, -1, 0), zNz);
     CHECK_N_DRAW_MODEL (vec3 (0, 0, +1), zzP);
     CHECK_N_DRAW_MODEL (vec3 (0, 0, -1), zzN);
+    // long long _ = 0x0'c001babeface;
 }
 
 #define CHECK_N_LIGHTMAP_BLOCK(__norm, __dir) \
@@ -1563,25 +1684,25 @@ if(is_face_visible(i8vec3(__norm), lightDir)){\
     lightmap_block_face(__norm, (*block_mesh).triangles.__dir, block_id);\
 }
 void LumInternal::LumInternalRenderer::lightmap_block_face (i8vec3 normal, IndexedVertices& buff, int block_id) {
-    VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
-    vkCmdDrawIndexed (lightmap_commandBuffer, buff.icount, 1, buff.offset, 0, 0);
+    CommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
+    vkCmdDrawIndexed (lightmap_commandBuffer.commandBuffer, buff.icount, 1, buff.offset, 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::lightmap_block (InternalMeshModel* block_mesh, int block_id, ivec3 shift) {
-    VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
+    CommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
     VkBuffer vertexBuffers[] = {(*block_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
     // DEBUG_LOG((*block_mesh).triangles.vertexes.buffer)
 
-    lumal.cmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
-    lumal.cmdBindIndexBuffer (lightmap_commandBuffer, (*block_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
+    lightmap_commandBuffer.cmdBindVertexBuffers (0, 1, vertexBuffers, offsets);
+    lightmap_commandBuffer.cmdBindIndexBuffer ((*block_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     /*
         int16_t block;
         i16vec3 shift;
         i8vec4 inorm;
     */
     struct {i16vec4 shift;} blockshift = {i16vec4 (shift, 0)};
-    vkCmdPushConstants (lightmap_commandBuffer, lightmapBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+    vkCmdPushConstants (lightmap_commandBuffer.commandBuffer, lightmapBlocksPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT,
         0, sizeof (blockshift), &blockshift);
     CHECK_N_LIGHTMAP_BLOCK (i8vec3 (+1, 0, 0), Pzz);
     CHECK_N_LIGHTMAP_BLOCK (i8vec3 (-1, 0, 0), Nzz);
@@ -1596,24 +1717,24 @@ if(is_face_visible(model_trans->rot*(__norm), lightDir)){\
     lightmap_model_face(__norm, (*model_mesh).triangles.__dir);\
 }
 void LumInternal::LumInternalRenderer::lightmap_model_face (vec3 normal, IndexedVertices& buff) {
-    VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
-    vkCmdDrawIndexed (lightmap_commandBuffer, buff.icount, 1, buff.offset, 0, 0);
+    CommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
+    vkCmdDrawIndexed (lightmap_commandBuffer.commandBuffer, buff.icount, 1, buff.offset, 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::lightmap_model (InternalMeshModel* model_mesh, MeshTransform* model_trans) {
-    VkCommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
+    CommandBuffer& lightmap_commandBuffer = lightmapCommandBuffers.current();
     VkBuffer vertexBuffers[] = {(*model_mesh).triangles.vertexes.buffer};
     VkDeviceSize offsets[] = {0};
 
-    lumal.cmdBindVertexBuffers (lightmap_commandBuffer, 0, 1, vertexBuffers, offsets);
-    lumal.cmdBindIndexBuffer (lightmap_commandBuffer, (*model_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
+    lightmap_commandBuffer.cmdBindVertexBuffers (0, 1, vertexBuffers, offsets);
+    lightmap_commandBuffer.cmdBindIndexBuffer ((*model_mesh).triangles.indices.buffer, 0, VK_INDEX_TYPE_UINT16);
     /*
         vec4 rot;
         vec4 shift;
         vec4 fnormal; //not encoded
     */
     struct {quat rot; vec4 shift;} rotshift = {model_trans->rot, vec4 (model_trans->shift, 0)};
-    vkCmdPushConstants (lightmap_commandBuffer, lightmapModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+    vkCmdPushConstants (lightmap_commandBuffer.commandBuffer, lightmapModelsPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT,
         0, sizeof (rotshift), &rotshift);
     CHECK_N_LIGHTMAP_MODEL (vec3 (+1, 0, 0), Pzz);
     CHECK_N_LIGHTMAP_MODEL (vec3 (-1, 0, 0), Nzz);
@@ -1642,128 +1763,121 @@ void LumInternal::LumInternalRenderer::update_particles() {
 }
 
 void LumInternal::LumInternalRenderer::raygen_map_particles() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     //go to next no matter what
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
     if (!particles.empty()) { //just for safity
-        lumal.cmdBindPipe(commandBuffer, &raygenParticlesPipe);
-        /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.lineLayout, 0, 1, &raygenParticlesPipe.sets.current(), 0, 0);
+        commandBuffer.cmdBindPipe(&raygenParticlesPipe);
+        // commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, raygenParticlesPipe.lineLayout, 0, 1, &raygenParticlesPipe.sets.current(), 0, 0);
+        // vkCmdBindVertexBuffers (commandBuffer, 0, 1, &gpuParticles.current().buffer, offsets);
         VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers (commandBuffer, 0, 1, &gpuParticles.current().buffer, offsets);
-        vkCmdDraw (commandBuffer, particles.size(), 1, 0, 0);
+        commandBuffer.cmdBindVertexBuffers(0, 1, &gpuParticles.current().buffer, offsets);
+        commandBuffer.cmdDraw (particles.size(), 1, 0, 0);
     }
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::raygen_start_grass() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     // render.cmdBindPipe(commandBuffer, &raygenGrassPipe);
-    // /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.lineLayout, 0, 1, &raygenGrassPipe.sets.current(), 0, 0);
+    // /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, raygenGrassPipe.lineLayout, 0, 1, &raygenGrassPipe.sets.current(), 0, 0);
 }
 
 //DOES NOT run in renderpass. Placed here cause spatially makes sense
 void LumInternal::LumInternalRenderer::updade_grass (vec2 windDirection) {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    lumal.cmdBindPipe(commandBuffer, &updateGrassPipe);
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    commandBuffer.cmdBindPipe(&updateGrassPipe);
     struct {vec2 wd, cp; float dt;} pushconstant = {windDirection, {}, float (lumal.iFrame)};
-    vkCmdPushConstants (commandBuffer, updateGrassPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateGrassPipe.lineLayout, 0, 1, &updateGrassPipe.sets[0], 0, 0);
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    vkCmdPushConstants (commandBuffer.commandBuffer, updateGrassPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, updateGrassPipe.lineLayout, 0, 1, &updateGrassPipe.sets[0], 0, 0);
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
         grassState.current());
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         grassState.current());
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDispatch (commandBuffer, (world_size.x * 2 + 7) / 8, (world_size.y * 2 + 7) / 8, 1); //2x8 2x8 1x1
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDispatch ((world_size.x * 2 + 7) / 8, (world_size.y * 2 + 7) / 8, 1); //2x8 2x8 1x1
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::updade_water() {
-    VkCommandBuffer& commandBuffer = computeCommandBuffers.current();
-    lumal.cmdBindPipe(commandBuffer, &updateWaterPipe);
+    CommandBuffer& commandBuffer = computeCommandBuffers.current();
+    commandBuffer.cmdBindPipe(&updateWaterPipe);
     struct {vec2 wd; float dt;} pushconstant = {{}, float (lumal.iFrame)};
-    vkCmdPushConstants (commandBuffer, updateWaterPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
-    vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, updateWaterPipe.lineLayout, 0, 1, &updateWaterPipe.sets[0], 0, 0);
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    vkCmdPushConstants (commandBuffer.commandBuffer, updateWaterPipe.lineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof (pushconstant), &pushconstant);
+    commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_COMPUTE, updateWaterPipe.lineLayout, 0, 1, &updateWaterPipe.sets[0], 0, 0);
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
         waterState.current());
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
         waterState.current());
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDispatch (commandBuffer, (world_size.x * 2 + 7) / 8, (world_size.y * 2 + 7) / 8, 1); //2x8 2x8 1x1
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDispatch ((world_size.x * 2 + 7) / 8, (world_size.y * 2 + 7) / 8, 1); //2x8 2x8 1x1
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 //blade is hardcoded but it does not really increase perfomance
 //done this way for simplicity, can easilly be replaced with any vertex buffer
 void LumInternal::LumInternalRenderer::raygen_map_grass (InternalMeshFoliage* grass, ivec3 pos) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     int size = 10;
     // int size = grass.dencity;
     bool x_flip = camera.cameraDir.x < 0;
     bool y_flip = camera.cameraDir.y < 0;
 
     // it is somewhat cached
-    lumal.cmdBindPipe(commandBuffer, &grass->pipe);
+    commandBuffer.cmdBindPipe(&grass->pipe);
 
     struct {vec4 _shift; int _size, _time; int xf, yf;} raygen_pushconstant = {vec4(pos,0), size, lumal.iFrame, x_flip, y_flip};
-    vkCmdPushConstants (commandBuffer, grass->pipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
+    vkCmdPushConstants (commandBuffer.commandBuffer, grass->pipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
     const int verts_per_blade = grass->vertices; //for triangle strip
     const int blade_per_instance = 1; //for triangle strip
-    vkCmdDraw (commandBuffer,
-               verts_per_blade* blade_per_instance,
+    commandBuffer.cmdDraw (verts_per_blade* blade_per_instance,
                (size * size + (blade_per_instance - 1)) / blade_per_instance,
                0, 0);
 }
 
 void LumInternal::LumInternalRenderer::raygen_start_water() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &raygenWaterPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.lineLayout, 0, 1, &raygenWaterPipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&raygenWaterPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, raygenWaterPipe.lineLayout, 0, 1, &raygenWaterPipe.sets.current(), 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::raygen_map_water (InternalMeshLiquid water, ivec3 pos) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     int qualitySize = 32;
     struct {vec4 _shift; int _size, _time;} raygen_pushconstant = {vec4(pos,0), qualitySize, lumal.iFrame};
-    vkCmdPushConstants (commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
+    vkCmdPushConstants (commandBuffer.commandBuffer, raygenWaterPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (raygen_pushconstant), &raygen_pushconstant);
     const int verts_per_water_tape = qualitySize * 2 + 2;
     const int tapes_per_block = qualitySize;
-    vkCmdDraw (commandBuffer,
-               verts_per_water_tape,
-               tapes_per_block,
-               0, 0);
+    commandBuffer.cmdDraw(verts_per_water_tape,
+                          tapes_per_block,
+                          0, 0);
 }
 
 void LumInternal::LumInternalRenderer::end_raygen() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    lumal.cmdEndRenderPass (commandBuffer, &gbufferRpass);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    commandBuffer.cmdEndRenderPass (&gbufferRpass);
 }
 
 void LumInternal::LumInternalRenderer::start_2nd_spass() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vector<AoLut> ao_lut = generateLUT (8, 16.0 / 1000.0,
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    auto ao_lut = generateLUT<8> (16.0 / 1000.0,
                         dvec2 (lumal.swapChainExtent.width, lumal.swapChainExtent.height),
                         dvec3 (camera.horizline* camera.viewSize.x / 2.0), dvec3 (camera.vertiline* camera.viewSize.y / 2.0));
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
         aoLutUniform.current());
-    vkCmdUpdateBuffer (commandBuffer, aoLutUniform.current().buffer, 0, sizeof (AoLut)*ao_lut.size(), ao_lut.data());
-    lumal.cmdPipelineBarrier (commandBuffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    vkCmdUpdateBuffer (commandBuffer.commandBuffer, aoLutUniform.current().buffer, 0, sizeof (AoLut)*ao_lut.size(), ao_lut.data());
+    commandBuffer.cmdPipelineBarrier (        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT,
         aoLutUniform.current());
     VkClearValue
@@ -1799,103 +1913,104 @@ void LumInternal::LumInternalRenderer::start_2nd_spass() {
     //     renderPassInfo.clearValueCount = Lumal::clearColors.size();
     //     renderPassInfo.pLumal::ClearValues = Lumal::clearColors.data();
     // vkCmdBeginRenderPass (commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBeginRenderPass(commandBuffer, &shadeRpass);
+    commandBuffer.cmdBeginRenderPass(&shadeRpass);
 
     // cmdSetViewport(commandBuffer, render.swapChainExtent);
 }
 
 void LumInternal::LumInternalRenderer::diffuse() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    lumal.cmdBindPipe(commandBuffer, &diffusePipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, diffusePipe.lineLayout, 0, 1, &diffusePipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdBindPipe(&diffusePipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, diffusePipe.lineLayout, 0, 1, &diffusePipe.sets.current(), 0, 0);
     struct rtpc {vec4 v1, v2; mat4 lp;} pushconstant = {vec4 (camera.cameraPos, intBitsToFloat (lumal.iFrame)), vec4 (camera.cameraDir, 0), lightTransform};
-    vkCmdPushConstants (commandBuffer, diffusePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    vkCmdPushConstants (commandBuffer.commandBuffer, diffusePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (3, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::ambient_occlusion() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &aoPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, aoPipe.lineLayout, 0, 1, &aoPipe.sets.current(), 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&aoPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, aoPipe.lineLayout, 0, 1, &aoPipe.sets.current(), 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (3, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::glossy_raygen() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &fillStencilGlossyPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilGlossyPipe.lineLayout, 0, 1, &fillStencilGlossyPipe.sets.current(), 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&fillStencilGlossyPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilGlossyPipe.lineLayout, 0, 1, &fillStencilGlossyPipe.sets.current(), 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (3, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::raygen_start_smoke() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &fillStencilSmokePipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilSmokePipe.lineLayout, 0, 1, &fillStencilSmokePipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&fillStencilSmokePipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, fillStencilSmokePipe.lineLayout, 0, 1, &fillStencilSmokePipe.sets.current(), 0, 0);
 }
 
 void LumInternal::LumInternalRenderer::raygen_map_smoke(InternalMeshVolumetric smoke, ivec3 pos) {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     struct rtpc {vec4 centerSize;} pushconstant = {vec4 (vec3 (pos) * 16.f, 32)};
     specialRadianceUpdates.push_back (ivec4 (11, 11, 1, 0));
-    vkCmdPushConstants (commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 36, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    vkCmdPushConstants (commandBuffer.commandBuffer, fillStencilSmokePipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (36, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::smoke() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &smokePipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, smokePipe.lineLayout, 0, 1, &smokePipe.sets.current(), 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&smokePipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, smokePipe.lineLayout, 0, 1, &smokePipe.sets.current(), 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (3, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::glossy() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &glossyPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, glossyPipe.lineLayout, 0, 1, &glossyPipe.sets.current(), 0, 0);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&glossyPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, glossyPipe.lineLayout, 0, 1, &glossyPipe.sets.current(), 0, 0);
     struct rtpc {vec4 v1, v2;} pushconstant = {vec4 (camera.cameraPos, 0), vec4 (camera.cameraDir, 0)};
-    vkCmdPushConstants (commandBuffer, glossyPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    vkCmdPushConstants (commandBuffer.commandBuffer, glossyPipe.lineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof (pushconstant), &pushconstant);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (3, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::tonemap() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
-    lumal.cmdBindPipe(commandBuffer, &tonemapPipe);
-    /**/ vkCmdBindDescriptorSets (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipe.lineLayout, 0, 1, &tonemapPipe.sets.current(), 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdDraw (commandBuffer, 3, 1, 0, 0);
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    commandBuffer.cmdBindPipe(&tonemapPipe);
+    /**/ commandBuffer.cmdBindDescriptorSets (VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipe.lineLayout, 0, 1, &tonemapPipe.sets.current(), 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    commandBuffer.cmdDraw (3, 1, 0, 0);
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::end_2nd_spass() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     // render.cmdEndRenderPass(commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::start_ui() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
-    vkCmdNextSubpass (commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
+    vkCmdNextSubpass (commandBuffer.commandBuffer, VK_SUBPASS_CONTENTS_INLINE);
     //no dset
-    vkCmdBindPipeline (commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipe.line);
+    commandBuffer.cmdBindPipeline (VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipe.line);
+    commandBuffer.CACHED_BOUND_PIPELINE = overlayPipe.line;
     VkViewport 
         viewport = {};
         viewport.x = 0.0f;
@@ -1904,31 +2019,31 @@ void LumInternal::LumInternalRenderer::start_ui() {
         viewport.height = (float) (lumal.swapChainExtent.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
-    vkCmdSetViewport (commandBuffer, 0, 1, &viewport);
+    vkCmdSetViewport (commandBuffer.commandBuffer, 0, 1, &viewport);
         ui_render_interface->last_scissors.offset = {0, 0};
         ui_render_interface->last_scissors.extent = lumal.swapChainExtent;
-    vkCmdSetScissor (commandBuffer, 0, 1, &ui_render_interface->last_scissors);
+    vkCmdSetScissor (commandBuffer.commandBuffer, 0, 1, &ui_render_interface->last_scissors);
 }
 
 void LumInternal::LumInternalRenderer::end_ui() {
-    VkCommandBuffer& commandBuffer = graphicsCommandBuffers.current();
-    lumal.cmdEndRenderPass (commandBuffer, &shadeRpass); //end of blur2present rpass
-    PLACE_TIMESTAMP_OUTSIDE(commandBuffer);
+    CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
+    commandBuffer.cmdEndRenderPass (&shadeRpass); //end of blur2present rpass
+    PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
 }
 
 void LumInternal::LumInternalRenderer::end_frame() {
 TRACE();
-    // lumal.cmdExplicitTransLayoutBarrier (graphicsCommandBuffers.current(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    // graphicsCommandBuffers.cmdExplicitTransLayoutBarrier (urrent(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
     //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
     //     &lumal.swapchainImages.current());    
 
-    // lumal.cmdExplicitTransLayoutBarrier (graphicsCommandBuffers.current(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    // graphicsCommandBuffers.cmdExplicitTransLayoutBarrier (urrent(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
     //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
     //     &lumal.swapchainImages.previous());    
 
-    // lumal.cmdExplicitTransLayoutBarrier (graphicsCommandBuffers.current(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    // graphicsCommandBuffers.cmdExplicitTransLayoutBarrier (urrent(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     //     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
     //     VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
     //     &lumal.swapchainImages.next());    
@@ -1973,7 +2088,9 @@ TRACE();
 TRACE();
     world.move(); //can i really use just one?
 TRACE();
-    radianceCache.move();
+    // Does not move because purely gpu-side, so no duplication needed
+    // other in ring are used as temporal images when copying, so be careful
+    // radianceCache.move(); 
 TRACE();
     originBlockPalette.move();
 TRACE();
