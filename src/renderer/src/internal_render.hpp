@@ -254,6 +254,7 @@ struct LumInternalRenderer {
     double deltaTime = 0;
 
     bool resized = false;
+    bool did_resize = false;
 
     dvec3 lightDir = normalize (vec3 (0.5, 0.5, -0.9));
     dmat4 lightTransform = glm::identity<mat4>();

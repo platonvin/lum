@@ -241,22 +241,28 @@ struct ECManager {
 
     template <typename Func>
     constexpr inline void forEachEntityWith_MT(Func&& func) {
-        thread_pool& pool = thread_pool::instance();
-        int numThreads = pool.thread_count();
+        // thread_pool& pool = thread_pool::instance();
+        // int numThreads = pool.thread_count();
 
-        // Divide the entities into sections
-        size_t totalEntities = componentArrays.size();
-        size_t sectionSize = (totalEntities + numThreads - 1) / numThreads;
+        // // Divide the entities into sections
+        // size_t totalEntities = componentArrays.size();
+        // size_t sectionSize = (totalEntities + numThreads - 1) / numThreads;
 
-        // Dispatch tasks to the thread pool
-        pool.dispatch([this, &func, numThreads, sectionSize, totalEntities](int threadID) {
-            size_t start = threadID * sectionSize;
-            size_t end = std::min(start + sectionSize, totalEntities);
+        // // Dispatch tasks to the thread pool
+        // pool.dispatch([this, &func, numThreads, sectionSize, totalEntities](int threadID) {
+        //     size_t start = threadID * sectionSize;
+        //     size_t end = std::min(start + sectionSize, totalEntities);
 
-            for (size_t i = start; i < end; i++) {
-                loadAndInvoke(std::forward<Func>(func), (InternalIndex)(i));
-            }
-        });
+        //     for (size_t i = start; i < end; i++) {
+        //         loadAndInvoke(std::forward<Func>(func), (InternalIndex)(i));
+        //     }
+        // });
+
+        #pragma simd
+        // #pragma GCC ivdep
+        for (size_t i = 0; i < componentArrays.size(); ++i) {
+            loadAndInvoke(std::forward<Func>(func), i);
+        }
     }
 
     template <typename Func>

@@ -585,7 +585,7 @@ void* Lum::Renderer::getGLFWptr() const noexcept {
 void Lum::Renderer::updateTime() noexcept {
     auto now = std::chrono::high_resolution_clock::now();
     delta_time = std::chrono::duration<double>(now - curr_time).count();
-    // delta_time = 1/75.0; // used for testing when no-reason lag occures
+    delta_time = 1/75.0; // used for testing when no-reason lag occures
     curr_time = now;
     assert(delta_time > 0);
 }

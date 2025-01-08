@@ -53,7 +53,7 @@ private:
     thread_pool() : threads_active(0), should_stop(false) {
         
         // num_threads = std::thread::hardware_concurrency() - 4;
-        num_threads = std::thread::hardware_concurrency()/2;
+        num_threads = std::thread::hardware_concurrency()-1;
         
         if (num_threads <= 0) {
             num_threads = 1;

@@ -595,16 +595,19 @@ TRACE();
 TRACE();
     lumal.createComputePipeline (&genPerlin3dPipe, 0, find_shader("perlin3.comp.spv").c_str(), 0, 0);
 TRACE();
+    lumal.createComputePipeline (&mapPipe, mapPushLayout, find_shader("map.comp.spv").c_str(), sizeof (mat4) + sizeof (ivec4), 0);
     // render.createComputePipeline(&dfxPipe,0, find_asset("/dfx.spv", ).c_str()0, 0);
     // render.createComputePipeline(&dfyPipe,0, find_asset("/dfy.spv", ).c_str()0, 0);
     // render.createComputePipeline(&dfzPipe,0, find_asset("/dfz.spv", ).c_str()0, 0);
     // render.createComputePipeline(&bitmaskPipe,0, find_asset("bit.mask.spv").c_str(), 0, 0);
-    lumal.createComputePipeline (&mapPipe, mapPushLayout, find_shader("map.comp.spv").c_str(), sizeof (mat4) + sizeof (ivec4), 0);
 TRACE();
 }
 
 VkResult LumInternal::LumInternalRenderer::createSwapchainDependent() {
     lumal.deviceWaitIdle();
+
+    did_resize = true;
+    // return VK_SUCCESS;
 
     // vkResetCommandPool(render.device, render.commandPool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT);
     vkResetCommandPool(lumal.device, lumal.commandPool, 0);
@@ -619,49 +622,82 @@ VkResult LumInternal::LumInternalRenderer::createSwapchainDependent() {
 
     createSwapchainDependentImages();
 
-    vector<Lumal::RasterPipe*> foliage_pipes = {};
-    for (auto* fol : registered_foliage) {
-        foliage_pipes.push_back(&fol->pipe);
+    starr<Lumal::RasterPipe*> foliage_pipes STARR_ALLOC(Lumal::RasterPipe*, registered_foliage.size());
+    
+    for (int i = 0; i < registered_foliage.size(); i++) {
+        foliage_pipes[i] = &registered_foliage[i]->pipe; 
     }
-        lumal.createRenderPass({
-            {&lightmap, Lumal::Clear, Lumal::Store, Lumal::DontCare, Lumal::DontCare, {.depthStencil = {.depth = 1}}}
-        }, {
-            {{&lightmapBlocksPipe, &lightmapModelsPipe}, {}, {}, &lightmap}
-        }, &lightmapRpass);
+        lumal.createRenderPass(as_span<Lumal::AttachmentDescription>({
+            {&lightmap, Lumal::Clear, Lumal::Store, Lumal::DontCare, Lumal::DontCare, {.depthStencil = {.depth = 1}}, VK_IMAGE_LAYOUT_GENERAL} 
+        }), as_span<Lumal::SubpassAttachments>({
+            Lumal::SubpassAttachments {as_span({&lightmapBlocksPipe, &lightmapModelsPipe}), {}, {}, &lightmap} 
+        }), &lightmapRpass);
 TRACE();
-    lumal.createRenderPass({
-            {&highresMatNorm,      Lumal::DontCare, Lumal::Store, Lumal::DontCare, Lumal::DontCare},
+    lumal.createRenderPass(as_span<Lumal::AttachmentDescription>({
+            {&highresMatNorm,      Lumal::DontCare, Lumal::Store, Lumal::DontCare, Lumal::DontCare, {0}, VK_IMAGE_LAYOUT_GENERAL},
             {&highresDepthStencil, Lumal::Clear,    Lumal::Store, Lumal::Clear,    Lumal::Store, {.depthStencil = {.depth = 1}}},
-        }, {
-            {{&raygenBlocksPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenModelsPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenParticlesPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-            {foliage_pipes, {}, {&highresMatNorm}, &highresDepthStencil},
-            {{&raygenWaterPipe}, {}, {&highresMatNorm}, &highresDepthStencil},
-        }, &gbufferRpass);
+        }), as_span<Lumal::SubpassAttachments>({
+            {as_span({&raygenBlocksPipe}), {}, as_span({&highresMatNorm}), &highresDepthStencil},
+            {as_span({&raygenModelsPipe}), {}, as_span({&highresMatNorm}), &highresDepthStencil},
+            {as_span({&raygenParticlesPipe}), {}, as_span({&highresMatNorm}), &highresDepthStencil},
+            {span(foliage_pipes), {}, as_span({&highresMatNorm}), &highresDepthStencil},
+            {as_span({&raygenWaterPipe}), {}, as_span({&highresMatNorm}), &highresDepthStencil},
+        }), &gbufferRpass);
 TRACE();
-    lumal.createRenderPass({
-            {&highresMatNorm,        Lumal::Load    , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare},
-            {&highresFrame,          Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, Lumal::DontCare},
-            {&lumal.swapchainImages, Lumal::DontCare, Lumal::Store   , Lumal::DontCare, Lumal::DontCare, {}, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
-            {&highresDepthStencil,   Lumal::Load    , Lumal::DontCare, Lumal::Load    , Lumal::DontCare, {.depthStencil = {.depth = 1}}},
-            {&farDepth,              Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {-1000.0,-1000.0,-1000.0,-1000.0}}}},
-            {&nearDepth,             Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {+1000.0,+1000.0,+1000.0,+1000.0}}}},
-        }, {
-            {{&diffusePipe},           {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
-            {{&aoPipe},                {&highresMatNorm, &highresDepthStencil}, {&highresFrame},         NULL},
-            {{&fillStencilGlossyPipe}, {&highresMatNorm},                       {/*empty*/},             &highresDepthStencil},
-            {{&fillStencilSmokePipe }, {/*empty*/},                             {&farDepth, &nearDepth}, &highresDepthStencil},
-            {{&glossyPipe},            {/*empty*/},                             {&highresFrame},         &highresDepthStencil},
-            {{&smokePipe},             {&nearDepth, &farDepth},                 {&highresFrame},         &highresDepthStencil},
-            {{&tonemapPipe},           {&highresFrame},                         {&lumal.swapchainImages},   NULL},
-            {{&overlayPipe},           {/*empty*/},                             {&lumal.swapchainImages},   NULL},
-        }, &shadeRpass);
+    lumal.createRenderPass(as_span<Lumal::AttachmentDescription>({
+            {&highresMatNorm,        Lumal::Load    , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {0}, VK_IMAGE_LAYOUT_GENERAL},
+            {&highresFrame,          Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {0}, VK_IMAGE_LAYOUT_GENERAL},
+            {&lumal.swapchainImages, Lumal::DontCare, Lumal::Store   , Lumal::DontCare, Lumal::DontCare, {0}, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            {&highresDepthStencil,   Lumal::Load    , Lumal::DontCare, Lumal::Load    , Lumal::DontCare, {.depthStencil = {.depth = 1}}, VK_IMAGE_LAYOUT_GENERAL},
+            {&farDepth,              Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {-1000.0,-1000.0,-1000.0,-1000.0}}}, VK_IMAGE_LAYOUT_GENERAL},
+            {&nearDepth,             Lumal::Clear   , Lumal::DontCare, Lumal::DontCare, Lumal::DontCare, {.color = {.float32 = {+1000.0,+1000.0,+1000.0,+1000.0}}}, VK_IMAGE_LAYOUT_GENERAL},
+        }), as_span<Lumal::SubpassAttachments>({
+            {as_span({&diffusePipe}),           as_span({&highresMatNorm, &highresDepthStencil}), as_span({&highresFrame}),          NULL},
+            {as_span({&aoPipe}),                as_span({&highresMatNorm, &highresDepthStencil}), as_span({&highresFrame}),          NULL},
+            {as_span({&fillStencilGlossyPipe}), as_span({&highresMatNorm}),                               {/*empty*/},               &highresDepthStencil}, 
+            {as_span({&fillStencilSmokePipe }),         {/*empty*/},                              as_span({&farDepth, &nearDepth}),  &highresDepthStencil},
+            {as_span({&glossyPipe}),                    {/*empty*/},                              as_span({&highresFrame}),          &highresDepthStencil},
+            {as_span({&smokePipe}),             as_span({&nearDepth, &farDepth}),                 as_span({&highresFrame}),          &highresDepthStencil},
+            {as_span({&tonemapPipe}),           as_span({&highresFrame}),                         as_span({&lumal.swapchainImages}), NULL},
+            {as_span({&overlayPipe}),                   {/*empty*/},                              as_span({&lumal.swapchainImages}), NULL},
+        }), &shadeRpass);
 TRACE();
     setupDescriptors();
 TRACE();
     createPipilines();
     
+    // computeCommandBuffers.reset();
+    // lightmapCommandBuffers.reset();
+    // graphicsCommandBuffers.reset();
+    // copyCommandBuffers.reset(); //runtime copies for ui. Also does first frame resources
+    // lightmap.reset();
+    // highresFrame.reset();
+    // highresDepthStencil.reset();
+    // highresMatNorm.reset();
+    // stencilViewForDS.reset();
+
+    // farDepth.reset(); //represents how much should smoke traversal for
+    // nearDepth.reset(); //represents how much should smoke traversal for
+    // maskFrame.reset(); //where lowres renders to. Blends with highres afterwards
+    // stagingWorld.reset();
+    // world.reset(); //can i really use just one?
+    // radianceCache.reset();
+    // originBlockPalette.reset();
+    // distancePalette.reset();
+    // bitPalette.reset(); //bitmask of originBlockPalette
+    // materialPalette.reset();
+    // lightUniform.reset();
+    // uniform.reset();
+    // aoLutUniform.reset();
+    // gpuRadianceUpdates.reset();
+    // stagingRadianceUpdates.reset();
+    // gpuParticles.reset(); //multiple because cpu-related work
+    // perlinNoise2d.reset(); //full-world grass shift (~direction) texture sampled in grass
+    // grassState.reset(); //full-world grass shift (~direction) texture sampled in grass
+    // waterState.reset(); //~same but water
+    // perlinNoise3d.reset(); //4 channels of different tileable noise for volumetrics
+
+
     return VK_SUCCESS;
 }
 
@@ -1530,6 +1566,17 @@ void LumInternal::LumInternalRenderer::start_raygen() {
     CommandBuffer& commandBuffer = graphicsCommandBuffers.current();
     PLACE_TIMESTAMP_OUTSIDE(commandBuffer.commandBuffer);
     
+    static dvec3 new_pos = ivec3(0);
+
+    // ivec3 diff = abs(ivec3(camera.cameraPos - new_pos)); 
+    // ivec3 adiff = abs(ivec3(camera.cameraPos - new_pos)); 
+    // if(adiff.x + adiff.y + adiff.z > 0){
+    //     LOG(camera.cameraPos.x)
+    //     // LOG(camera.cameraPos.y)
+    //     // LOG(camera.cameraPos.z)
+    //     new_pos = camera.cameraPos;
+    // }
+
     struct unicopy {
         mat4 trans_w2s; vec4 campos; vec4 camdir;
         vec4 horizline_scaled; vec4 vertiline_scaled;
@@ -2122,7 +2169,9 @@ TRACE();
 TRACE();
 
     double timestampPeriod = lumal.physicalDeviceProperties.limits.timestampPeriod;
-    timeTakenByRadiance = float (lumal.timestamps[1] - lumal.timestamps[0]) * timestampPeriod / 1000000.0f;
+    // if((lumal.timestamps[1].first != 0) and (lumal.timestamps[0].second != 0)){
+        timeTakenByRadiance = float (lumal.timestamps[1].first - lumal.timestamps[0].first) * timestampPeriod / 1000000.0f;
+    // }
 
     // #ifdef MEASURE_PERFOMANCE
     // #endif
